@@ -5,6 +5,7 @@ Loads system prompt from intent_parser_system_prompt.md at startup.
 Returns structured IntentResult dataclass.
 """
 import json
+import re
 from dataclasses import dataclass, field
 from pathlib import Path
 
@@ -110,13 +111,16 @@ def parse_intent(
 
     raw = response.text.strip()
 
-    if raw.startswith("```"):
-        raw = raw.split("```")[1]
-        if raw.startswith("json"):
-            raw = raw[4:]
-    raw = raw.strip()
+    # Extract first JSON object regardless of surrounding markdown or thinking text
+    json_match = re.search(r'\{.*\}', raw, re.DOTALL)
+    if json_match:
+        raw = json_match.group(0)
 
-    parsed = json.loads(raw)
+    try:
+        parsed = json.loads(raw)
+    except json.JSONDecodeError:
+        # Gemini returned unparseable output — return low-confidence fallback
+        return IntentResult(raw_query=user_query, ics=0.3, recognized=False)
 
     valid_fields = IntentResult.__dataclass_fields__
     filtered = {k: v for k, v in parsed.items() if k in valid_fields}

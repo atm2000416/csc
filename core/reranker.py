@@ -4,7 +4,8 @@ Reranker — uses Gemini to reorder and annotate results for relevance.
 Fires when result pool is large or intent confidence is low.
 """
 import json
-import google.generativeai as genai
+import google.genai as genai
+from google.genai import types
 from config import get_secret
 
 
@@ -73,10 +74,11 @@ def rerank(
     )
 
     try:
-        model = genai.GenerativeModel("gemini-2.0-flash")
-        response = model.generate_content(
-            prompt,
-            generation_config={"temperature": 0.1, "max_output_tokens": 1500},
+        client = genai.Client(api_key=get_secret("GEMINI_API_KEY", ""))
+        response = client.models.generate_content(
+            model="gemini-2.5-flash",
+            contents=prompt,
+            config=types.GenerateContentConfig(temperature=0.1, max_output_tokens=1500),
         )
         raw = response.text.strip()
         if raw.startswith("```"):

@@ -6,12 +6,8 @@ session merge → cache check → CSSL → decision matrix → results.
 """
 import datetime
 import streamlit as st
-import google.generativeai as genai
 
 from config import get_secret
-
-# ── Gemini setup ──────────────────────────────────────────────────────────────
-genai.configure(api_key=get_secret("GEMINI_API_KEY", ""))
 
 # ── Page config ───────────────────────────────────────────────────────────────
 st.set_page_config(

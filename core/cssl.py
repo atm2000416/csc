@@ -60,9 +60,12 @@ def query(params: dict, limit: int = 100) -> tuple[list[dict], float]:
         conditions.append("c.province = %(province)s")
         args["province"] = params["province"]
 
-    # Age overlap
+    # Age overlap — NULL age_from/age_to means the program accepts any age
     if params.get("age_from") is not None and params.get("age_to") is not None:
-        conditions.append("p.age_from <= %(age_to)s AND p.age_to >= %(age_from)s")
+        conditions.append(
+            "(p.age_from IS NULL OR p.age_from <= %(age_to)s) AND "
+            "(p.age_to IS NULL OR p.age_to >= %(age_from)s)"
+        )
         args["age_from"] = params["age_from"]
         args["age_to"] = params["age_to"]
 

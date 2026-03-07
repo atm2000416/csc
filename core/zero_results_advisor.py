@@ -71,10 +71,11 @@ def diagnose(
     )
 
     if same_province and nearest["city"] != searched_city:
+        location_label = searched_city or searched_province or "your location"
         return {
             "type": "geo_broaden_specific",
             "message": (
-                f"No results found in {searched_city}, but I found "
+                f"No results found in {location_label}, but I found "
                 f"{nearest['program_count']} program(s) in {nearest['city']}. "
                 f"Want me to show those instead?"
             ),
@@ -90,10 +91,11 @@ def diagnose(
         province_total = sum(
             loc["program_count"] for loc in locations if loc["province"] == province
         )
+        location_label = searched_city or searched_province or "your location"
         return {
             "type": "geo_broaden_province",
             "message": (
-                f"No results found near {searched_city or 'your location'}. "
+                f"No results found near {location_label}. "
                 f"There are {province_total} programs across {province} though — "
                 f"want me to search province-wide instead?"
             ),

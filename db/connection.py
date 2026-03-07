@@ -15,9 +15,16 @@ _ssl_ca_path: str | None = None
 
 
 def _prepare_ssl_ca() -> str | None:
-    local_ca = os.path.join(os.path.dirname(__file__), "..", "ca.pem")
+    base = os.path.dirname(__file__)
+    # 1. Local dev: ca.pem at project root (gitignored)
+    local_ca = os.path.abspath(os.path.join(base, "..", "ca.pem"))
     if os.path.exists(local_ca):
-        return os.path.abspath(local_ca)
+        return local_ca
+    # 2. Streamlit Cloud: collaterals/ca.pem is committed to the repo
+    collaterals_ca = os.path.abspath(os.path.join(base, "..", "collaterals", "ca.pem"))
+    if os.path.exists(collaterals_ca):
+        return collaterals_ca
+    # 3. Fallback: cert content from secret → write to tempfile
     cert = get_secret("DB_SSL_CA_CERT")
     if cert and cert.strip():
         tf = tempfile.NamedTemporaryFile(suffix=".pem", delete=False, mode="w", newline="\n")

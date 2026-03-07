@@ -21,7 +21,7 @@ def _prepare_ssl_ca() -> str | None:
     cert = get_secret("DB_SSL_CA_CERT")
     if cert and cert.strip():
         tf = tempfile.NamedTemporaryFile(suffix=".pem", delete=False, mode="w")
-        tf.write(cert)
+        tf.write(cert.strip() + "\n")
         tf.close()
         return tf.name
     return None

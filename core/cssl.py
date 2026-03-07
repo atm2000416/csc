@@ -159,9 +159,10 @@ def resolve_tag_ids(slugs: list[str], cursor) -> list[int]:
     """Convert slug list to DB tag IDs."""
     if not slugs:
         return []
+    ph = ", ".join(["%s"] * len(slugs))
     cursor.execute(
-        "SELECT id FROM activity_tags WHERE slug IN %s AND is_active = 1",
-        (tuple(slugs),),
+        f"SELECT id FROM activity_tags WHERE slug IN ({ph}) AND is_active = 1",
+        tuple(slugs),
     )
     return [row["id"] for row in cursor.fetchall()]
 
@@ -170,8 +171,9 @@ def resolve_trait_ids(slugs: list[str], cursor) -> list[int]:
     """Convert trait slug list to DB trait IDs."""
     if not slugs:
         return []
+    ph = ", ".join(["%s"] * len(slugs))
     cursor.execute(
-        "SELECT id FROM traits WHERE slug IN %s",
-        (tuple(slugs),),
+        f"SELECT id FROM traits WHERE slug IN ({ph})",
+        tuple(slugs),
     )
     return [row["id"] for row in cursor.fetchall()]

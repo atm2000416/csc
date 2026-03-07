@@ -36,13 +36,14 @@ def diagnose(
         order_by = "program_count DESC"
         order_args = []
 
+    ph = ", ".join(["%s"] * len(tag_ids))
     cursor.execute(
         f"""
         SELECT c.city, c.province, COUNT(p.id) AS program_count
         FROM programs p
         JOIN program_tags pt ON p.id = pt.program_id
         JOIN camps c ON p.camp_id = c.id
-        WHERE pt.tag_id IN %s
+        WHERE pt.tag_id IN ({ph})
           AND p.status = 1
           AND c.status = 1
           AND (p.end_date IS NULL OR p.end_date >= CURDATE())
@@ -50,7 +51,7 @@ def diagnose(
         ORDER BY {order_by}
         LIMIT 10
         """,
-        [tuple(tag_ids)] + order_args,
+        list(tag_ids) + order_args,
     )
 
     locations = cursor.fetchall()

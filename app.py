@@ -305,7 +305,11 @@ def _run_search(merged_params: dict, raw_query: str, session: dict, sidebar_filt
             final = process_results(results, raw_query, merged_params)
             display_results(final)
             st.session_state["_last_results"] = final
-        render_clarification(decision.clarification_dimensions)
+        if decision.clarification_dimensions:
+            render_clarification(decision.clarification_dimensions)
+        else:
+            # No clarification dims and no results — treat as zero results
+            _handle_zero_results(merged_params, intent, session)
 
     # Handle clarification answer
     answer = st.session_state.pop("_clarification_answer", None)

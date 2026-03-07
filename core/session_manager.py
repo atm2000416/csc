@@ -31,6 +31,11 @@ def merge_intent(intent: IntentResult) -> dict:
     acc = session["accumulated_params"].copy()
     new = asdict(intent)
 
+    # When the parser completely failed, don't let stale activity params bleed in
+    if not intent.recognized:
+        for k in ("tags", "exclude_tags", "type"):
+            acc.pop(k, None)
+
     # Override with new non-null values
     for key in [
         "tags", "exclude_tags", "age_from", "age_to", "city", "cities",

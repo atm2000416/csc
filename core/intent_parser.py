@@ -67,7 +67,7 @@ def parse_intent(
     session_context: dict | None = None,
     fuzzy_hints: dict | None = None,
     current_date: str | None = None,
-    model_name: str = "gemini-1.5-flash",
+    model_name: str = "gemini-2.0-flash",
 ) -> IntentResult:
     """
     Call Gemini to parse user query into structured search parameters.

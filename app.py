@@ -28,6 +28,7 @@ from core.semantic_cache import build_cache_key, get_cached, set_cache
 from core.interaction_logger import log_search
 from core.casl import expand as casl_expand
 from core.zero_results_advisor import diagnose
+from core.tracer import init_trace, record, render_trace
 from ui.results_card import render_card
 from ui.filter_sidebar import render_filters
 from ui.clarification_widget import render_clarification
@@ -164,8 +165,12 @@ def main():
 
     clear_suggestion()
 
+    init_trace()
+    record("input", {"raw_query": user_input, "sidebar_filters": sidebar_filters})
+
     # Fuzzy preprocessing
     fuzzy_hints = preprocess(user_input)
+    record("fuzzy_preprocessor", {"hints": fuzzy_hints})
 
     # Intent parsing
     with st.spinner("Thinking..."):
@@ -175,12 +180,32 @@ def main():
             fuzzy_hints=fuzzy_hints,
             current_date=datetime.date.today().isoformat(),
         )
+    record("intent_parser", {
+        "tags": intent.tags,
+        "exclude_tags": intent.exclude_tags,
+        "city": intent.city,
+        "cities": intent.cities,
+        "province": intent.province,
+        "age_from": intent.age_from,
+        "age_to": intent.age_to,
+        "type": intent.type,
+        "gender": intent.gender,
+        "cost_max": intent.cost_max,
+        "traits": intent.traits,
+        "is_special_needs": intent.is_special_needs,
+        "is_virtual": intent.is_virtual,
+        "language_immersion": intent.language_immersion,
+        "ics": intent.ics,
+        "needs_clarification": intent.needs_clarification,
+        "recognized": intent.recognized,
+    })
 
     # Merge with session
     merged_params = merge_intent(intent)
 
     # Apply sidebar filters (override intent with explicit UI filters)
     merged_params.update(sidebar_filters)
+    record("merged_params", {"params": merged_params})
 
     _run_search(merged_params, user_input, session, sidebar_filters, intent=intent)
 
@@ -192,13 +217,24 @@ def _run_search(merged_params: dict, raw_query: str, session: dict, sidebar_filt
     cache_key = build_cache_key({**merged_params, "_q": raw_query})
     cached = get_cached(cache_key)
     if cached:
+        record("cache", {"hit": True, "result_count": len(cached["results"])})
+        render_trace()
         display_results(cached["results"])
         st.session_state["_last_results"] = cached["results"]
         return
 
+    record("cache", {"hit": False})
+
     # CSSL query
     with st.spinner("Searching camps..."):
         results, rcs = cssl_query(merged_params, limit=pool_size)
+
+    record("cssl", {
+        "pool_size": pool_size,
+        "results_returned": len(results),
+        "rcs": rcs,
+        "sample_camps": [r.get("camp_name") for r in results[:5]],
+    })
 
     ics = getattr(intent, "ics", 1.0) if intent else 1.0
     decision = decide(
@@ -206,10 +242,14 @@ def _run_search(merged_params: dict, raw_query: str, session: dict, sidebar_filt
         rcs=rcs,
         needs_clarification=getattr(intent, "needs_clarification", []) if intent else [],
     )
+    record("decision_matrix", {"ics": ics, "rcs": rcs, "route": decision.route.name})
 
     # Route handlers
     if decision.route == Route.SHOW_RESULTS:
         final = process_results(results, raw_query, merged_params)
+        record("output", {"route": "SHOW_RESULTS", "final_count": len(final),
+                          "top_camps": [r.get("camp_name") for r in final]})
+        render_trace()
         display_results(final)
         st.session_state["_last_results"] = final
         set_cache(cache_key, {"results": final})
@@ -220,8 +260,12 @@ def _run_search(merged_params: dict, raw_query: str, session: dict, sidebar_filt
     elif decision.route == Route.BROADEN_SEARCH:
         expanded = casl_expand(merged_params, limit=pool_size)
         all_results = results + [r for r in expanded if r not in results]
+        record("casl_expand", {"expanded_count": len(expanded), "combined_count": len(all_results)})
         if all_results:
             final = process_results(all_results, raw_query, merged_params)
+            record("output", {"route": "BROADEN_SEARCH", "final_count": len(final),
+                               "top_camps": [r.get("camp_name") for r in final]})
+            render_trace()
             st.info("Showing results across related activities.")
             display_results(final)
             st.session_state["_last_results"] = final
@@ -230,15 +274,23 @@ def _run_search(merged_params: dict, raw_query: str, session: dict, sidebar_filt
             if intent:
                 log_search(session, intent, rcs, len(final))
         else:
+            record("output", {"route": "ZERO_RESULTS"})
+            render_trace()
             _handle_zero_results(merged_params, intent, session)
 
     elif decision.route == Route.SHOW_CLARIFY:
         final = process_results(results, raw_query, merged_params)
+        record("output", {"route": "SHOW_CLARIFY", "final_count": len(final),
+                          "clarification_dims": decision.clarification_dimensions})
+        render_trace()
         display_results(final)
         st.session_state["_last_results"] = final
         render_clarification(decision.clarification_dimensions)
 
     elif decision.route == Route.CLARIFY_LOOP:
+        record("output", {"route": "CLARIFY_LOOP",
+                          "clarification_dims": decision.clarification_dimensions})
+        render_trace()
         if results:
             final = process_results(results, raw_query, merged_params)
             display_results(final)

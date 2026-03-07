@@ -130,6 +130,9 @@ def main():
     if st.session_state.get("_pending_query") and not user_input:
         user_input = st.session_state.pop("_pending_query")
         st.session_state["_surprise_results_heading"] = True
+        # Fresh context — don't carry city/filters from prior search
+        st.session_state.session_context["accumulated_params"] = {}
+        st.session_state.session_context["pending_suggestion"] = None
     else:
         st.session_state.pop("_surprise_results_heading", None)
 

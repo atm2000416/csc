@@ -5,9 +5,10 @@ ui/surprise_me.py
 import random
 import streamlit as st
 
+# Only provinces with meaningful camp data in our DB
 _PROVINCES = [
-    "Ontario", "British Columbia", "Quebec", "Alberta",
-    "Manitoba", "Saskatchewan", "Nova Scotia",
+    "Ontario", "Ontario", "Ontario",  # weighted — ~85% of inventory
+    "British Columbia", "Quebec", "Alberta",
 ]
 
 

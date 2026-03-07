@@ -29,23 +29,29 @@ def query(params: dict, limit: int = 100) -> tuple[list[dict], float]:
     tag_ids = resolve_tag_ids(params.get("tags", []), cursor)
     if tag_ids:
         joins.append("JOIN program_tags pt ON p.id = pt.program_id")
-        conditions.append("pt.tag_id IN %(tag_ids)s")
-        args["tag_ids"] = tuple(tag_ids)
+        ph = ", ".join(f"%(tag_{i})s" for i in range(len(tag_ids)))
+        conditions.append(f"pt.tag_id IN ({ph})")
+        for i, tid in enumerate(tag_ids):
+            args[f"tag_{i}"] = tid
 
     # Exclude tags
     exclude_ids = resolve_tag_ids(params.get("exclude_tags", []), cursor)
     if exclude_ids:
+        ph = ", ".join(f"%(ex_{i})s" for i in range(len(exclude_ids)))
         conditions.append(
-            "p.id NOT IN ("
-            "  SELECT program_id FROM program_tags WHERE tag_id IN %(exclude_ids)s"
-            ")"
+            f"p.id NOT IN ("
+            f"  SELECT program_id FROM program_tags WHERE tag_id IN ({ph})"
+            f")"
         )
-        args["exclude_ids"] = tuple(exclude_ids)
+        for i, eid in enumerate(exclude_ids):
+            args[f"ex_{i}"] = eid
 
     # Location — cities list takes precedence over single city
     if params.get("cities"):
-        conditions.append("c.city IN %(cities)s")
-        args["cities"] = tuple(params["cities"])
+        ph = ", ".join(f"%(city_{i})s" for i in range(len(params["cities"])))
+        conditions.append(f"c.city IN ({ph})")
+        for i, city in enumerate(params["cities"]):
+            args[f"city_{i}"] = city
     elif params.get("city"):
         conditions.append("c.city = %(city)s")
         args["city"] = params["city"]
@@ -91,8 +97,10 @@ def query(params: dict, limit: int = 100) -> tuple[list[dict], float]:
     trait_ids = resolve_trait_ids(params.get("traits", []), cursor)
     if trait_ids:
         joins.append("JOIN program_traits ptrait ON p.id = ptrait.program_id")
-        conditions.append("ptrait.trait_id IN %(trait_ids)s")
-        args["trait_ids"] = tuple(trait_ids)
+        ph = ", ".join(f"%(trait_{i})s" for i in range(len(trait_ids)))
+        conditions.append(f"ptrait.trait_id IN ({ph})")
+        for i, tid in enumerate(trait_ids):
+            args[f"trait_{i}"] = tid
 
     # Temporal filter — suppress expired programs
     conditions.append("(p.end_date IS NULL OR p.end_date >= CURDATE())")

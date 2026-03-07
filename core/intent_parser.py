@@ -16,6 +16,9 @@ from config import get_secret
 # Module-level cache for system prompt
 _SYSTEM_PROMPT: str | None = None
 
+# Module-level cache for active tag slugs (fetched once per process)
+_ACTIVE_SLUGS: set[str] | None = None
+
 
 @dataclass
 class IntentResult:
@@ -64,6 +67,24 @@ def load_system_prompt() -> str:
     return _SYSTEM_PROMPT
 
 
+def _get_active_slugs() -> set[str]:
+    """Fetch all active tag slugs from DB. Cached for process lifetime."""
+    global _ACTIVE_SLUGS
+    if _ACTIVE_SLUGS is None:
+        try:
+            from db.connection import get_connection
+            conn = get_connection()
+            cur = conn.cursor(dictionary=True)
+            cur.execute("SELECT slug FROM activity_tags WHERE is_active = 1")
+            _ACTIVE_SLUGS = {row["slug"] for row in cur.fetchall()}
+            cur.close()
+            conn.close()
+        except Exception:
+            # If DB is unreachable, return empty set — validation is skipped gracefully
+            _ACTIVE_SLUGS = set()
+    return _ACTIVE_SLUGS
+
+
 def parse_intent(
     user_query: str,
     session_context: dict | None = None,
@@ -85,6 +106,7 @@ def parse_intent(
         IntentResult dataclass with all extracted parameters
     """
     system_prompt = load_system_prompt()
+    active_slugs = _get_active_slugs()
 
     context_block = ""
     if session_context and session_context.get("accumulated_params"):
@@ -95,6 +117,8 @@ def parse_intent(
         context_block += f"\nFUZZY_HINTS: {json.dumps(fuzzy_hints)}"
     if current_date:
         context_block += f"\nCURRENT_DATE: {current_date}"
+    if active_slugs:
+        context_block += f"\nVALID_SLUGS: {', '.join(sorted(active_slugs))}"
 
     user_message = f"{user_query}{context_block}" if context_block else user_query
 
@@ -104,7 +128,7 @@ def parse_intent(
         contents=user_message,
         config=types.GenerateContentConfig(
             system_instruction=system_prompt,
-            temperature=0.1,
+            temperature=0.2,
             max_output_tokens=1000,
         ),
     )
@@ -121,6 +145,18 @@ def parse_intent(
     except json.JSONDecodeError:
         # Gemini returned unparseable output — return low-confidence fallback
         return IntentResult(raw_query=user_query, ics=0.3, recognized=False)
+
+    # Validate tags against live DB slugs; strip any hallucinated slugs
+    if active_slugs and "tags" in parsed:
+        raw_tags = parsed.get("tags") or []
+        valid_tags = [t for t in raw_tags if t in active_slugs]
+        stripped = [t for t in raw_tags if t not in active_slugs]
+        if stripped:
+            parsed["_stripped_tags"] = stripped  # preserved for trace only
+        parsed["tags"] = valid_tags
+        # If model thought it recognised an activity but all tags were hallucinated
+        if raw_tags and not valid_tags:
+            parsed["recognized"] = False
 
     valid_fields = IntentResult.__dataclass_fields__
     filtered = {k: v for k, v in parsed.items() if k in valid_fields}

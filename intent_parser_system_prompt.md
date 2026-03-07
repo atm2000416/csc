@@ -39,6 +39,9 @@ Never guess or assume a parameter that is not evident from the query.
 Map the activity or topic the user mentioned to canonical slug(s) from the TAXONOMY below.
 Rules:
 - Only use slugs that exist in the TAXONOMY. Never invent a slug.
+- If FUZZY_HINTS are provided in the input, treat them as high-confidence tag
+  candidates from a validated preprocessor. Use them unless the query clearly
+  contradicts them (e.g., FUZZY_HINTS says "cooking" and user says "coding").
 - If the activity is specific (e.g. "ballet"), use the specific slug (e.g. "ballet"), not the parent ("dance-multi").
 - If the activity is general (e.g. "dance camp"), use the parent slug (e.g. "dance-multi").
 - If the query mentions multiple activities, include all of them.

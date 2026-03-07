@@ -36,6 +36,12 @@ def merge_intent(intent: IntentResult) -> dict:
         for k in ("tags", "exclude_tags", "type"):
             acc.pop(k, None)
 
+    # RC-4: Clear stale exclude_tags when user switches to a completely different activity
+    new_tags = new.get("tags") or []
+    acc_tags = acc.get("tags") or []
+    if new_tags and acc_tags and not (set(new_tags) & set(acc_tags)):
+        acc.pop("exclude_tags", None)
+
     # Override with new non-null values
     for key in [
         "tags", "exclude_tags", "age_from", "age_to", "city", "cities",

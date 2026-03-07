@@ -4,6 +4,7 @@ Fuzzy Pre-processor — runs BEFORE Intent Parser, zero API cost.
 Catches common misspellings, aliases, and domain-specific terms.
 Returns hints dict injected into Intent Parser call.
 """
+import re
 from taxonomy_mapping import FUZZY_ALIASES, TRAIT_ALIASES, GEO_ALIASES
 
 # Build AGE_ALIASES by filtering FUZZY_ALIASES for dict values (age brackets)
@@ -44,9 +45,14 @@ def preprocess(raw_query: str) -> dict:
         "needs_geolocation": False,
     }
 
+    def word_match(term: str, text: str) -> bool:
+        """Match term as whole word(s) within text."""
+        pattern = r'(?<![a-z0-9])' + re.escape(term) + r'(?![a-z0-9])'
+        return bool(re.search(pattern, text))
+
     # Check geo aliases (longest match first)
     for region, cities in _SORTED_GEO:
-        if region.lower() in normalized:
+        if word_match(region.lower(), normalized):
             if cities is None:
                 hints["needs_geolocation"] = True
             else:
@@ -55,20 +61,20 @@ def preprocess(raw_query: str) -> dict:
 
     # Check age aliases (longest match first)
     for term, bracket in _SORTED_AGE:
-        if term in normalized:
+        if word_match(term, normalized):
             hints["age_bracket"] = bracket
             break
 
     # Check trait aliases (longest match first, accumulate)
     for term, slugs in _SORTED_TRAIT:
-        if term in normalized:
+        if word_match(term, normalized):
             for s in slugs:
                 if s not in hints["trait_hints"]:
                     hints["trait_hints"].append(s)
 
     # Check activity aliases from FUZZY_ALIASES (lists only, longest match first)
     for term, mapping in _SORTED_FUZZY:
-        if term in normalized:
+        if word_match(term, normalized):
             for s in mapping:
                 if s not in hints["tag_hints"]:
                     hints["tag_hints"].append(s)

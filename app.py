@@ -207,6 +207,16 @@ def main():
     merged_params.update(sidebar_filters)
     record("merged_params", {"params": merged_params})
 
+    # Geolocation needed but no location in params — ask the user
+    if intent.needs_geolocation and not merged_params.get("city") and not merged_params.get("province"):
+        record("output", {"route": "NEEDS_GEOLOCATION"})
+        render_trace()
+        with st.chat_message("assistant"):
+            st.markdown(
+                "I'd love to find camps near you! Which city or province are you in?"
+            )
+        return
+
     _run_search(merged_params, user_input, session, sidebar_filters, intent=intent)
 
 

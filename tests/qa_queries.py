@@ -151,8 +151,8 @@ QA_QUERIES = [
     },
     {
         "query": "camps in cottage country",
-        "expect_cities_include": ["Muskoka", "Haliburton"],
-        "note": "Cottage country geo alias",
+        "expect_cities_include": ["Bracebridge", "Haliburton"],
+        "note": "Cottage country geo alias — model resolves to actual towns",
     },
     # ── AGE LANGUAGE ─────────────────────────────────────────────────────────
     {

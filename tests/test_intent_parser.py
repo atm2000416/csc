@@ -14,11 +14,10 @@ import pytest
 
 sys.path.insert(0, os.path.join(os.path.dirname(__file__), ".."))
 
-import google.generativeai as genai
 from config import get_secret
-genai.configure(api_key=get_secret("GEMINI_API_KEY", ""))
 
 from core.intent_parser import parse_intent
+from core.fuzzy_preprocessor import preprocess
 from tests.qa_queries import QA_QUERIES
 
 
@@ -26,10 +25,13 @@ def test_query(q: dict) -> tuple[bool, str]:
     """
     Run a single QA query and return (passed, reason).
     Returns (True, "") on full pass or (False, reason) on failure.
+    Mirrors the real app pipeline: fuzzy_preprocessor → parse_intent.
     """
+    fuzzy_hints = preprocess(q["query"])
     result = parse_intent(
         q["query"],
         session_context=q.get("session_context"),
+        fuzzy_hints=fuzzy_hints,
     )
     failures = []
 
@@ -193,7 +195,8 @@ def test_query(q: dict) -> tuple[bool, str]:
 def test_qa_query(q):
     passed, reason = test_query(q)
     note = q.get("note", "")
-    result = parse_intent(q["query"], session_context=q.get("session_context"))
+    fuzzy_hints = preprocess(q["query"])
+    result = parse_intent(q["query"], session_context=q.get("session_context"), fuzzy_hints=fuzzy_hints)
     print(f"\n  ICS={result.ics:.2f}  tags={result.tags}  city={result.city}")
     if note:
         print(f"  note: {note}")
@@ -209,7 +212,8 @@ if __name__ == "__main__":
     for i, q in enumerate(QA_QUERIES, 1):
         try:
             ok, reason = test_query(q)
-            result = parse_intent(q["query"], session_context=q.get("session_context"))
+            fuzzy_hints = preprocess(q["query"])
+            result = parse_intent(q["query"], session_context=q.get("session_context"), fuzzy_hints=fuzzy_hints)
             status = "PASS" if ok else "FAIL"
             note = q.get("note", "")
             print(f"[{status}] Q{i:02d}: {q['query'][:60]}")

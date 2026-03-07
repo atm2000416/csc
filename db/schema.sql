@@ -3,9 +3,6 @@
 -- MySQL 8.0 InnoDB, utf8mb4_unicode_ci
 -- ─────────────────────────────────────────────────────────────────────────────
 
-CREATE DATABASE IF NOT EXISTS camp_sc_db CHARACTER SET utf8mb4 COLLATE utf8mb4_unicode_ci;
-USE camp_sc_db;
-
 -- 1. CAMPS
 CREATE TABLE IF NOT EXISTS camps (
     id              INT UNSIGNED AUTO_INCREMENT PRIMARY KEY,

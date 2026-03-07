@@ -3,9 +3,9 @@ core/decision_matrix.py
 2x2 Decision Matrix — routes based on ICS x RCS scores.
 Returns routing decision and action parameters.
 """
-import os
 from dataclasses import dataclass
 from enum import Enum
+from config import get_secret
 
 
 class Route(Enum):
@@ -25,8 +25,8 @@ class Decision:
 
 
 def _get_thresholds() -> tuple[float, float]:
-    ics_t = float(os.getenv("ICS_HIGH_THRESHOLD", 0.70))
-    rcs_t = float(os.getenv("RCS_HIGH_THRESHOLD", 0.70))
+    ics_t = float(get_secret("ICS_HIGH_THRESHOLD", "0.70"))
+    rcs_t = float(get_secret("RCS_HIGH_THRESHOLD", "0.70"))
     return ics_t, rcs_t
 
 

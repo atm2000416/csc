@@ -14,11 +14,9 @@ import pytest
 
 sys.path.insert(0, os.path.join(os.path.dirname(__file__), ".."))
 
-from dotenv import load_dotenv
-load_dotenv()
-
 import google.generativeai as genai
-genai.configure(api_key=os.getenv("GEMINI_API_KEY", ""))
+from config import get_secret
+genai.configure(api_key=get_secret("GEMINI_API_KEY", ""))
 
 from core.intent_parser import parse_intent
 from tests.qa_queries import QA_QUERIES

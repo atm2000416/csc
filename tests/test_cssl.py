@@ -115,6 +115,22 @@ def test_cssl_gender_filter():
 
 
 @DB_SKIP
+def test_gender_filter_exact_match():
+    """Gender filter for Girls should return ONLY Girls programs (gender=2), not Coed."""
+    from core.cssl import query
+
+    params = {"gender": "Girls"}
+    results, _ = query(params, limit=20)
+
+    for r in results:
+        gender = r.get("gender")
+        if gender is not None:
+            assert gender == 2, (
+                f"Gender filter 'Girls' returned program with gender={gender} (expected 2=Girls only)"
+            )
+
+
+@DB_SKIP
 def test_cssl_location_filter():
     """City filter should only return programs from that city."""
     from core.cssl import query

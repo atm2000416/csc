@@ -77,7 +77,7 @@ def query(params: dict, limit: int = 100) -> tuple[list[dict], float]:
     # Gender (0=Coed, 1=Boys, 2=Girls)
     gender_map = {"Boys": 1, "Girls": 2, "Coed": 0}
     if params.get("gender") and params["gender"] != "Coed":
-        conditions.append("p.gender IN (%(gender)s, 0)")
+        conditions.append("p.gender = %(gender)s")
         args["gender"] = gender_map.get(params["gender"], 0)
 
     # Cost

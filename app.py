@@ -29,6 +29,7 @@ from core.interaction_logger import log_search
 from core.casl import expand as casl_expand
 from core.zero_results_advisor import diagnose
 from core.tracer import init_trace, record, render_trace
+from core.category_disambiguator import get_broad_parent, get_viable_children
 from ui.results_card import render_card
 from ui.filter_sidebar import render_filters
 from ui.clarification_widget import render_clarification
@@ -127,6 +128,13 @@ def main():
     # Chat input
     user_input = st.chat_input("Describe what you're looking for (e.g. hockey camp Toronto for my 10 year old)")
 
+    # Handle category disambiguation button choice (no new chat input needed)
+    if st.session_state.get("_disambiguation_choice") and not user_input:
+        choice = st.session_state.pop("_disambiguation_choice")
+        _run_search(choice["params"], choice["raw_query"],
+                    st.session_state.session_context, sidebar_filters)
+        return
+
     # Handle surprise query injection
     if st.session_state.get("_pending_query") and not user_input:
         user_input = st.session_state.pop("_pending_query")
@@ -206,6 +214,20 @@ def main():
     # Apply sidebar filters (override intent with explicit UI filters)
     merged_params.update(sidebar_filters)
     record("merged_params", {"params": merged_params})
+
+    # Category disambiguation — fires when a single broad parent tag was found
+    # and there are meaningful child options to offer the user
+    broad_parent = get_broad_parent(merged_params.get("tags", []))
+    if broad_parent:
+        options = get_viable_children(broad_parent)
+        if len(options) >= 2:
+            record("category_disambiguator", {
+                "parent": broad_parent,
+                "options": [o["slug"] for o in options],
+            })
+            render_trace()
+            _render_category_picker(broad_parent, options, merged_params, user_input)
+            return
 
     # Geolocation needed but no location in params — ask the user
     if intent.needs_geolocation and not merged_params.get("city") and not merged_params.get("province"):
@@ -352,6 +374,37 @@ def _handle_zero_results(merged_params: dict, intent, session: dict):
 
     if diagnosis.get("pending_suggestion"):
         store_suggestion(diagnosis["pending_suggestion"])
+
+
+def _render_category_picker(parent_slug: str, options: list[dict],
+                             merged_params: dict, raw_query: str):
+    """
+    Concierge disambiguation: show child category buttons so the user can
+    narrow down before a search runs.  Stores the confirmed params in session
+    state and reruns so _run_search executes on the next pass.
+    """
+    # Derive a readable parent name from the slug
+    parent_name = parent_slug.replace("-multi", "").replace("-", " ").title()
+
+    with st.chat_message("assistant"):
+        st.markdown(
+            f"**{parent_name}** covers a lot of ground! "
+            f"Which area interests you most?"
+        )
+        # Build button row: up to 4 child options + an "All" fallback
+        display_options = options[:4]
+        btn_labels = [opt["name"] for opt in display_options] + [f"All {parent_name}"]
+        btn_slugs  = [opt["slug"] for opt in display_options] + [None]  # None = keep parent
+
+        cols = st.columns(len(btn_labels))
+        for col, label, slug in zip(cols, btn_labels, btn_slugs):
+            if col.button(label, key=f"disambig_{slug or 'all'}"):
+                chosen_tags = [slug] if slug else merged_params.get("tags", [parent_slug])
+                st.session_state["_disambiguation_choice"] = {
+                    "params": {**merged_params, "tags": chosen_tags},
+                    "raw_query": raw_query,
+                }
+                st.rerun()
 
 
 if __name__ == "__main__":

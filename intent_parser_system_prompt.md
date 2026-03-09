@@ -86,6 +86,7 @@ The city name as a proper noun. Use the most specific location mentioned.
 - "downtown" → null (needs city context — flag needs_clarification: "location")
 - "near me" → null (flag needs_geolocation: true)
 - GTA → expand to list: ["Toronto","Mississauga","Brampton","Markham","Vaughan","Richmond Hill","Oakville","Etobicoke","Scarborough","North York"]
+- Etobicoke, Scarborough, North York → expand to cities list: ["Etobicoke","Toronto"] / ["Scarborough","Toronto"] / ["North York","Toronto"] (these are Toronto districts; always include "Toronto" to catch city-wide programs)
 - If a region is mentioned (e.g. "Muskoka", "cottage country"), expand to city list.
 
 ### province (string)

@@ -70,8 +70,12 @@ def rerank(
 
     prompt = (
         f"User query: {raw_query}\n\n"
-        f"Rank these camp programs by relevance to the query. "
-        f"Preserve specificity. "
+        f"Rank these camp programs by relevance to the query. Preserve specificity.\n"
+        f"For each program, write a 'blurb': 1-2 sentences describing why the CAMP "
+        f"(not a specific program's theme or title) matches the user's query. "
+        f"Use direct, confident, factual language. "
+        f"Do not reference internal program names, session themes, or specific week titles. "
+        f"Do not use hedging phrases like 'sounds like', 'might be', or 'could be'.\n"
         f"Return JSON only: {{\"ranked\": [{{\"id\": int, \"score\": float, \"blurb\": str}}]}}\n"
         f"Programs:\n{json.dumps(compact, ensure_ascii=False)}"
     )

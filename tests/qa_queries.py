@@ -112,7 +112,7 @@ QA_QUERIES = [
     {
         "query": "hockey camp not too competitive",
         "expect_tags": ["hockey"],
-        "expect_exclude_tags_include": ["sports-instructional-and-training"],
+        "expect_exclude_tags_include": ["sports-instructional-training"],
         "note": "Negative intent extraction",
     },
     # ── MULTILINGUAL ─────────────────────────────────────────────────────────

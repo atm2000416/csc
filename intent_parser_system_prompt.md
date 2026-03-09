@@ -67,7 +67,7 @@ Rules:
 - "outdoor", "outdoors" → ["adventure-multi"] or ["nature-environment"] — use context
 
 ### exclude_tags (array of strings)
-If user expresses what they DON'T want. Example: "not too competitive" → ["sports-instructional-and-training"].
+If user expresses what they DON'T want. Example: "not too competitive" → ["sports-instructional-training"].
 Use same slug rules as tags.
 
 ### age_from, age_to (integers)
@@ -263,7 +263,7 @@ Format: slug | Display Name | top aliases
 
 === ARTS ===
   arts-multi | Arts (multi) | aliases: multi arts, mixed arts, general arts, all arts, variety arts
-  bakingdecorating | Baking/Decorating | aliases: baking, cake decorating, pastry, cupcake, bake
+  baking-decorating | Baking/Decorating | aliases: baking, cake decorating, pastry, cupcake, bake
   circus | Circus | aliases: circus arts, circus camp, juggling, acrobatics, clown
   comedy | Comedy | aliases: comedy camp, stand up, standup, improv comedy, sketch comedy
   cooking | Cooking | aliases: culinary, chef, food, cook, culinary arts
@@ -321,7 +321,7 @@ Format: slug | Display Name | top aliases
     knitting-and-crochet | Knitting and Crochet | aliases: knitting, crochet, yarn crafts, knit
     mixed-media | Mixed Media | aliases: mixed media art, collage, multimedia art, experimental art
     painting | Painting | aliases: paint, watercolor, acrylic, oil painting
-    papier-mch | Papier-mache | aliases: papier mache, paper mache, paper craft, paper sculpture
+    papier-mache | Papier-mache | aliases: papier mache, paper mache, paper craft, paper sculpture
     photography | Photography | aliases: photo, photos, camera, learn photography
     pottery | Pottery | aliases: pottery camp, wheel pottery, hand pottery, ceramics pottery
     videography | Videography | aliases: video, shoot video, video camp, camera work
@@ -339,7 +339,7 @@ Format: slug | Display Name | top aliases
   drone-technology | Drone Technology | aliases: drone, drones, uav, fly drone, drone camp
   gaming | Gaming | aliases: video games, game, games, gaming camp, esports
   mechatronics | Mechatronics | aliases: mechatronics camp, mechanical electronics, automation, electromechanical, systems engineering
-  microbit | micro:bit | aliases: microbit, micro bit, bbc microbit, microcontroller beginner, basic electronics coding
+  micro-bit | micro:bit | aliases: microbit, micro bit, bbc microbit, microcontroller beginner, basic electronics coding
   minecraft | Minecraft | aliases: mine craft, mincraft, minecraft camp, minecraft coding, mc
   programming-multi | Programming (multi) | aliases: coding, code, programming, learn to code, computer coding
     arduino | Arduino | aliases: arduino camp, arduino programming, hardware programming, microcontroller
@@ -348,6 +348,8 @@ Format: slug | Display Name | top aliases
     python | Python | aliases: python programming, learn python, python coding, python camp
     scratch | Scratch | aliases: scratch coding, mit scratch, scratch junior, scratch programming
     swift-apple | Swift (Apple) | aliases: swift, apple coding, ios development, iphone app
+    c-sharp | C# | aliases: c#, csharp, c sharp, c# programming, c# coding
+    c-plus-plus | C++ | aliases: c++, cpp, c plus plus, c++ programming, c++ coding
   raspberry-pi | Raspberry Pi | aliases: raspberry pi camp, pi computer, raspi, raspberry pi project, single board computer
   roblox | Roblox | aliases: roblox camp, roblox studio, roblox game, roblox coding, roblox development
   robotics | Robotics | aliases: robots, robot, robot building, lego robotics, vex robotics
@@ -408,7 +410,7 @@ Format: slug | Display Name | top aliases
   writing | Writing | aliases: writing camp, learn to write, creative writing, author, write
 
 === HEALTH & FITNESS ===
-  health-and-fitness-multi | Health and Fitness (multi) | aliases: general fitness, multi fitness, health program, fitness camp, wellness camp
+  health-fitness-multi | Health and Fitness (multi) | aliases: general fitness, multi fitness, health program, fitness camp, wellness camp
   behavioral-therapy | Behavioral Therapy | aliases: ABA, behavioral, behaviour therapy, autism support, behavioural camp
   bronze-cross | Bronze Cross | aliases: bronze cross camp, lifesaving bronze, aquatic safety award, lifeguard bronze, swim bronze
   first-aid-lifesaving | First Aid / Lifesaving | aliases: first aid, CPR, lifesaving, emergency response, safety training
@@ -465,7 +467,7 @@ Format: slug | Display Name | top aliases
   ping-pong | Ping Pong | aliases: ping pong camp, table tennis, table tennis camp, tt camp, ping-pong
   rock-climbing | Rock Climbing | aliases: rock climbing camp, climb, climbing, wall climbing, bouldering
   scooter | Scooter | aliases: scooter camp, kick scooter, scooter tricks, scooter park, pro scooter
-  sports-instructional-and-training | Sports – Instructional and Training | aliases: sport instruction, sports training, athlete training, elite sport, sport development
+  sports-instructional-training | Sports – Instructional and Training | aliases: sport instruction, sports training, athlete training, elite sport, sport development
   taekwondo | Taekwondo | aliases: taekwondo camp, tae kwon do, TKD, tkd camp, korean martial art
   track-and-field | Track and Field | aliases: track camp, field events, running camp, sprinting, long jump
   trampoline | Trampoline | aliases: trampoline camp, trampolining, trampoline park, jump, bounce
@@ -573,7 +575,7 @@ Input: "hockey camps but not too competitive, somewhere in Ontario"
 Output:
 {
   "tags": ["hockey"],
-  "exclude_tags": ["sports-instructional-and-training"],
+  "exclude_tags": ["sports-instructional-training"],
   "province": "Ontario",
   "voice": "parent",
   "detected_language": "en",

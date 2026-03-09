@@ -251,4 +251,49 @@ QA_QUERIES = [
         "expect_accepted_suggestion": True,
         "note": "Fix 10: affirmative accepts pending suggestion",
     },
+    # ── V1 QA REMEDIATION — 8 NEW CASES ─────────────────────────────────────
+    {
+        "query": "overnight all girls camp Ontario",
+        "expect_gender": "Girls",
+        "expect_type": "Overnight",
+        "note": "V1 QA: All girls = gender=Girls only, no coed",
+    },
+    {
+        "query": "horse camps in Ontario",
+        "expect_tags": ["horseback-riding-equestrian"],
+        "note": "V1 QA: Horse → equestrian slug",
+    },
+    {
+        "query": "ballet camps for kids in Vaughan",
+        "expect_tags": ["ballet"],
+        "expect_city": "Vaughan",
+        "note": "V1 QA: Ballet is specific sub-slug of dance",
+    },
+    {
+        "query": "french tutoring camps",
+        "expect_tags": ["language-instruction"],
+        "note": "V1 QA: French tutoring → language-instruction",
+    },
+    {
+        "query": "university prep camps in toronto",
+        "expect_tags_include": ["test-preparation"],
+        "expect_city": "Toronto",
+        "note": "V1 QA: University prep → test-preparation + credit-courses",
+    },
+    {
+        "query": "camps that build self-confidence",
+        "expect_traits_include": ["empowerment"],
+        "note": "V1 QA: Self-confidence → empowerment trait",
+    },
+    {
+        "query": "financial literacy camps in toronto",
+        "expect_tags": ["financial-literacy"],
+        "expect_city": "Toronto",
+        "note": "V1 QA: Financial literacy slug direct match",
+    },
+    {
+        "query": "cheer camps in etobicoke",
+        "expect_tags": ["cheer"],
+        "note": "V1 QA: Cheer + etobicoke geo",
+    },
 ]

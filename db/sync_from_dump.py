@@ -3,32 +3,34 @@ db/sync_from_dump.py
 Sync the new CSC database from a fresh SQL dump of the legacy camp directory.
 
 What this syncs:
-  1. NEW camps   — cids in dump (active, with city) not present in new DB → INSERT
-  2. DEACTIVATED — cids in new DB that are now status=0 in dump → UPDATE status=0
-  3. RE-ACTIVATED — cids in new DB status=0 that are now status=1 in dump → UPDATE status=1
-  4. METADATA     — tier/website/description changes for active camps (--update-meta flag)
-  5. LOCATIONS    — new extra_locations not yet in new DB → INSERT (same logic as fix_extra_locations)
+  1. NEW camps      — cids in dump (active, with city) not present in new DB → INSERT
+  2. RE-ACTIVATED   — cids status=0 in new DB, now status=1 in dump → UPDATE status=1
+  3. DEACTIVATED    — cids status=1 in new DB, now status=0 in dump → UPDATE status=0
+                      (requires --deactivate flag; only touches camps whose ID came from
+                       the old DB, not manually-created location branches)
+  4. METADATA       — tier/website changes for active camps (--update-meta flag)
+  5. LOCATIONS      — new extra_locations not yet in new DB → INSERT
 
 What this does NOT touch:
   - activity_tags / program_tags / categories (curated in new DB)
   - Programs for existing camps (tags/descriptions curated post-migration)
-  - Any camp added manually in new DB (not in old DB)
+  - Camps added manually in new DB (IDs not present in dump)
 
 Usage:
-  # Dry run — see what would change
-  python3 db/sync_from_dump.py --dry-run
+  # Dry run — see what would change (always do this first)
+  python3 db/sync_from_dump.py --dump /path/to/new_dump.sql --dry-run
 
-  # Apply all changes
-  python3 db/sync_from_dump.py
+  # Apply standard sync (new camps + re-activations + new locations)
+  python3 db/sync_from_dump.py --dump /path/to/new_dump.sql
 
-  # Apply only status changes (safest first pass)
-  python3 db/sync_from_dump.py --only status
+  # Also deactivate camps that left the client list
+  python3 db/sync_from_dump.py --dump /path/to/new_dump.sql --deactivate
 
-  # Also update tier/website/description for existing camps
-  python3 db/sync_from_dump.py --update-meta
+  # Full sync: new + deactivations + metadata + locations
+  python3 db/sync_from_dump.py --dump /path/to/new_dump.sql --deactivate --update-meta
 
-  # Custom dump path
-  python3 db/sync_from_dump.py --dump /path/to/dump.sql
+  # Run only a specific section
+  python3 db/sync_from_dump.py --dump /path/to/new_dump.sql --only status
 """
 import re
 import sys
@@ -233,7 +235,7 @@ def ensure_unique_slug(cursor, slug_base):
 
 # ── Main sync logic ───────────────────────────────────────────────────────────
 
-def run(dump_path, dry_run, only, update_meta):
+def run(dump_path, dry_run, only, update_meta, deactivate=False, skip_ids=None):
     print(f"Reading dump: {dump_path}")
     with open(dump_path, 'r', encoding='utf-8', errors='replace') as f:
         content = f.read()
@@ -253,6 +255,8 @@ def run(dump_path, dry_run, only, update_meta):
     # Load all new-DB camps
     cursor.execute("SELECT id, camp_name, city, province, status, tier, website FROM camps")
     new_db_all = {r['id']: r for r in cursor.fetchall()}
+
+    skip_ids = set(skip_ids or [])
 
     stats = {
         'new_camps': 0,
@@ -274,16 +278,25 @@ def run(dump_path, dry_run, only, update_meta):
             new_active = new['status'] == 1
 
             if old_active and not new_active:
-                # Re-activate: old DB says active, new DB says inactive
+                # Re-activate: dump says active, new DB says inactive
                 print(f"  RE-ACTIVATE id={cid}: {new['camp_name']!r}")
                 if not dry_run:
                     cursor.execute("UPDATE camps SET status=1 WHERE id=%s", (cid,))
                 stats['reactivated'] += 1
                 changed += 1
-            elif not old_active and new_active:
-                # Old DB inactive, new DB active — we deliberately activated this
-                # camp (e.g. Canlan sub-locations). Do NOT deactivate.
-                pass
+            elif not old_active and new_active and deactivate:
+                # Dump says inactive (camp left client list), new DB still active.
+                # Only deactivate camps whose ID came from the old DB (cid in dump).
+                # Manually-created location branches (IDs assigned post-migration)
+                # won't appear in dump_camps at all, so they're never touched here.
+                if cid in skip_ids:
+                    print(f"  SKIPPED     id={cid}: {new['camp_name']!r}  (in --skip-ids)")
+                    continue
+                print(f"  DEACTIVATE  id={cid}: {new['camp_name']!r}")
+                if not dry_run:
+                    cursor.execute("UPDATE camps SET status=0 WHERE id=%s", (cid,))
+                stats['deactivated'] += 1
+                changed += 1
 
         if not changed:
             print("  No status changes.")
@@ -507,6 +520,8 @@ def run(dump_path, dry_run, only, update_meta):
     print(f"{prefix}Sync complete")
     print(f"  New camps {'would be ' if dry_run else ''}inserted:       {stats['new_camps']}")
     print(f"  Camps {'would be ' if dry_run else ''}re-activated:       {stats['reactivated']}")
+    if deactivate:
+        print(f"  Camps {'would be ' if dry_run else ''}deactivated:        {stats['deactivated']}")
     if update_meta:
         print(f"  Metadata {'would be ' if dry_run else ''}updated:        {stats['meta_updated']}")
     print(f"  Locations {'would be ' if dry_run else ''}added:          {stats['locations_added']}")
@@ -525,7 +540,15 @@ if __name__ == "__main__":
                         help="Run only a specific sync section")
     parser.add_argument("--update-meta", action="store_true",
                         help="Also update tier/website for existing camps")
+    parser.add_argument("--deactivate", action="store_true",
+                        help="Deactivate camps whose status is now 0 in the dump "
+                             "(i.e. they left the client list). Always dry-run first "
+                             "to review the list before applying.")
+    parser.add_argument("--skip-ids",
+                        help="Comma-separated camp IDs to skip during deactivation "
+                             "(e.g. manually-promoted sub-locations: 422,529,579)")
     parser.add_argument("--dump", default=DEFAULT_DUMP,
                         help="Path to SQL dump file")
     args = parser.parse_args()
-    run(args.dump, args.dry_run, args.only, args.update_meta)
+    skip_ids = set(int(x) for x in args.skip_ids.split(",")) if args.skip_ids else None
+    run(args.dump, args.dry_run, args.only, args.update_meta, args.deactivate, skip_ids)

@@ -4,9 +4,12 @@ Reranker — uses Gemini to reorder and annotate results for relevance.
 Fires when result pool is large or intent confidence is low.
 """
 import json
+import logging
 import google.genai as genai
 from google.genai import types
 from config import get_secret
+
+_log = logging.getLogger(__name__)
 
 
 def _should_rerank(results: list[dict], intent_ics: float) -> bool:
@@ -68,7 +71,7 @@ def rerank(
     prompt = (
         f"User query: {raw_query}\n\n"
         f"Rank these camp programs by relevance to the query. "
-        f"Preserve specificity. Gold tier programs should receive a +5% bonus if score >= 0.70. "
+        f"Preserve specificity. "
         f"Return JSON only: {{\"ranked\": [{{\"id\": int, \"score\": float, \"blurb\": str}}]}}\n"
         f"Programs:\n{json.dumps(compact, ensure_ascii=False)}"
     )
@@ -87,10 +90,11 @@ def rerank(
                 raw = raw[4:]
         raw = raw.strip()
         ranked_data = json.loads(raw).get("ranked", [])
-    except Exception:
+    except Exception as exc:
+        _log.warning("Reranker Gemini call failed: %s", exc)
         for r in results[:top_n]:
             r.setdefault("blurb", r.get("mini_description", ""))
-            r.setdefault("rerank_score", 1.0)
+            r.setdefault("rerank_score", 0.5)
         return results[:top_n]
 
     id_to_rank = {item["id"]: item for item in ranked_data}

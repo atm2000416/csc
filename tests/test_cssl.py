@@ -127,21 +127,31 @@ def test_cssl_location_filter():
 
 
 @DB_SKIP
-def test_cssl_tier_ordering():
-    """Results should be ordered gold > silver > bronze by tier."""
+def test_cssl_review_avg_ordering():
+    """Results should be ordered by review_avg DESC (not tier first)."""
     from core.cssl import query
 
     results, _ = query({}, limit=50)
 
-    tier_order = {"gold": 0, "silver": 1, "bronze": 2}
-    previous_rank = -1
-    for r in results:
-        tier = r.get("tier", "bronze")
-        rank = tier_order.get(tier, 2)
-        assert rank >= previous_rank, (
-            f"Tier ordering violated: {tier!r} after rank {previous_rank}"
+    # review_avg may be None — treat None as 0.0 for comparison
+    review_avgs = [float(r.get("review_avg") or 0) for r in results]
+    for i in range(len(review_avgs) - 1):
+        assert review_avgs[i] >= review_avgs[i + 1] or review_avgs[i] == 0.0, (
+            f"review_avg ordering violated at index {i}: "
+            f"{review_avgs[i]} before {review_avgs[i + 1]}"
         )
-        previous_rank = rank
+
+
+@DB_SKIP
+def test_no_duplicate_ids():
+    """CSSL results should contain no duplicate program IDs."""
+    from core.cssl import query
+
+    results, _ = query({}, limit=100)
+    ids = [r["id"] for r in results]
+    assert len(ids) == len(set(ids)), (
+        f"Duplicate program IDs found: {len(ids) - len(set(ids))} duplicates"
+    )
 
 
 @DB_SKIP

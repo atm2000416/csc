@@ -4,6 +4,7 @@ Non-critical async logging of search interactions to interaction_log table.
 Never raises — all errors are silently swallowed.
 """
 import json
+import logging
 import uuid
 from config import get_secret
 
@@ -61,5 +62,5 @@ def log_search(
         conn.commit()
         cursor.close()
         conn.close()
-    except Exception:
-        pass
+    except Exception as exc:
+        logging.getLogger(__name__).error("interaction_logger: DB write failed: %s", exc)

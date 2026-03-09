@@ -112,7 +112,7 @@ def query(params: dict, limit: int = 100) -> tuple[list[dict], float]:
     joins_str = " ".join(joins)
 
     sql = f"""
-        SELECT
+        SELECT DISTINCT
             p.id, p.camp_id, p.name, p.type,
             p.age_from, p.age_to, p.cost_from, p.cost_to,
             p.mini_description, p.description,
@@ -123,8 +123,8 @@ def query(params: dict, limit: int = 100) -> tuple[list[dict], float]:
         {joins_str}
         WHERE {where}
         ORDER BY
-            FIELD(c.tier, 'gold', 'silver', 'bronze') ASC,
-            c.review_avg DESC
+            c.review_avg DESC,
+            FIELD(c.tier, 'gold', 'silver', 'bronze') ASC
         LIMIT %(limit)s
     """
     args["limit"] = limit
@@ -133,6 +133,15 @@ def query(params: dict, limit: int = 100) -> tuple[list[dict], float]:
     results = cursor.fetchall()
     cursor.close()
     conn.close()
+
+    # Belt-and-suspenders dedup in case DISTINCT doesn't cover all join paths
+    seen = set()
+    deduped = []
+    for r in results:
+        if r["id"] not in seen:
+            seen.add(r["id"])
+            deduped.append(r)
+    results = deduped
 
     rcs = calculate_rcs(results, params, tag_ids)
     return list(results), rcs
@@ -162,6 +171,18 @@ def calculate_rcs(results: list, params: dict, tag_ids: list) -> float:
 
     if tag_ids and count < 3:
         base = max(0.30, base - 0.20)
+
+    # Age-filter coverage penalty: if fewer than half results cover the requested age range
+    if params.get("age_from") is not None and params.get("age_to") is not None:
+        age_matched = sum(
+            1 for r in results
+            if r.get("age_from") is not None
+            and r["age_from"] <= params["age_to"]
+            and r.get("age_to", 99) >= params["age_from"]
+        )
+        age_coverage = age_matched / count if count else 0
+        if age_coverage < 0.5:
+            base = max(0.30, base - 0.10)
 
     return round(base, 2)
 

@@ -29,7 +29,7 @@ def diagnose(
     conn = get_connection()
     cursor = conn.cursor(dictionary=True)
 
-    if user_lat and user_lon:
+    if user_lat is not None and user_lon is not None:
         order_by = "ST_Distance_Sphere(POINT(c.lon, c.lat), POINT(%s, %s)) ASC"
         order_args = [user_lon, user_lat]
     else:

@@ -235,3 +235,7 @@ if __name__ == "__main__":
     print(f"\n{'='*60}")
     print(f"RESULTS: {passed_count}/{total} passed ({failed_count} failed)")
     print(f"{'='*60}")
+
+
+# ── Note: Pure unit tests for _coerce_parsed and parse_intent error handling
+# are in tests/test_intent_parser_unit.py (mocks google.genai, no network needed)

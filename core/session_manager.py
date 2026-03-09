@@ -42,14 +42,20 @@ def merge_intent(intent: IntentResult) -> dict:
     if new_tags and acc_tags and not (set(new_tags) & set(acc_tags)):
         acc.pop("exclude_tags", None)
 
-    # Override with new non-null values
+    # Scalars: override on any non-None value (allows setting False, 0, etc.)
     for key in [
-        "tags", "exclude_tags", "age_from", "age_to", "city", "cities",
-        "province", "type", "gender", "cost_max", "traits",
-        "is_special_needs", "is_virtual", "language_immersion",
+        "age_from", "age_to", "cost_max", "is_special_needs", "is_virtual",
+        "language_immersion", "city", "province", "type", "gender",
     ]:
-        if new.get(key):
-            acc[key] = new[key]
+        val = new.get(key)
+        if val is not None:
+            acc[key] = val
+
+    # Lists: override only if non-empty (empty list = "no new info")
+    for key in ["tags", "exclude_tags", "cities", "traits"]:
+        val = new.get(key)
+        if val:
+            acc[key] = val
 
     # Store raw_query immutably
     session["raw_query"] = intent.raw_query

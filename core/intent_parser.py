@@ -85,6 +85,50 @@ def _get_active_slugs() -> set[str]:
     return _ACTIVE_SLUGS
 
 
+def _coerce_parsed(parsed: dict) -> dict:
+    """Coerce Gemini JSON output to expected Python types before constructing IntentResult."""
+    # List fields — ensure list, never None
+    for key in ("tags", "exclude_tags", "cities", "traits", "needs_clarification"):
+        val = parsed.get(key)
+        if val is None:
+            parsed[key] = []
+        elif not isinstance(val, list):
+            parsed[key] = []
+
+    # Integer fields
+    for key in ("age_from", "age_to", "cost_max"):
+        val = parsed.get(key)
+        if val is not None:
+            try:
+                parsed[key] = int(val)
+            except (TypeError, ValueError):
+                parsed[key] = None
+
+    # Float fields
+    for key in ("ics",):
+        val = parsed.get(key)
+        if val is not None:
+            try:
+                parsed[key] = float(val)
+            except (TypeError, ValueError):
+                parsed[key] = 0.0
+
+    # Boolean fields
+    for key in ("recognized", "cost_sensitive", "is_special_needs", "is_virtual",
+                "needs_geolocation", "accepted_suggestion"):
+        val = parsed.get(key)
+        if val is not None and not isinstance(val, bool):
+            parsed[key] = bool(val)
+
+    # String fields
+    for key in ("city", "province", "type", "gender", "language_immersion", "voice", "detected_language"):
+        val = parsed.get(key)
+        if val is not None and not isinstance(val, str):
+            parsed[key] = str(val)
+
+    return parsed
+
+
 def parse_intent(
     user_query: str,
     session_context: dict | None = None,
@@ -122,18 +166,22 @@ def parse_intent(
 
     user_message = f"{user_query}{context_block}" if context_block else user_query
 
-    client = genai.Client(api_key=get_secret("GEMINI_API_KEY", ""))
-    response = client.models.generate_content(
-        model=model_name,
-        contents=user_message,
-        config=types.GenerateContentConfig(
-            system_instruction=system_prompt,
-            temperature=0.2,
-            max_output_tokens=1000,
-        ),
-    )
-
-    raw = response.text.strip()
+    try:
+        client = genai.Client(api_key=get_secret("GEMINI_API_KEY", ""))
+        response = client.models.generate_content(
+            model=model_name,
+            contents=user_message,
+            config=types.GenerateContentConfig(
+                system_instruction=system_prompt,
+                temperature=0.2,
+                max_output_tokens=1000,
+            ),
+        )
+        raw = response.text.strip()
+    except Exception as exc:
+        import logging
+        logging.getLogger(__name__).warning("Gemini API call failed: %s", exc)
+        return IntentResult(raw_query=user_query, ics=0.3, recognized=False)
 
     # Extract first JSON object regardless of surrounding markdown or thinking text
     json_match = re.search(r'\{.*\}', raw, re.DOTALL)
@@ -157,6 +205,8 @@ def parse_intent(
         # If model thought it recognised an activity but all tags were hallucinated
         if raw_tags and not valid_tags:
             parsed["recognized"] = False
+
+    parsed = _coerce_parsed(parsed)
 
     valid_fields = IntentResult.__dataclass_fields__
     filtered = {k: v for k, v in parsed.items() if k in valid_fields}

@@ -247,6 +247,8 @@ def _run_search(merged_params: dict, raw_query: str, session: dict, sidebar_filt
     })
 
     ics = getattr(intent, "ics", 1.0) if intent else 1.0
+    if intent:
+        merged_params["ics"] = intent.ics
     decision = decide(
         ics=ics,
         rcs=rcs,

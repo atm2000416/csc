@@ -5,8 +5,11 @@ TTL controlled by CACHE_TTL_MINUTES secret.
 """
 import hashlib
 import json
+import logging
 import time
 from config import get_secret
+
+_log = logging.getLogger(__name__)
 
 
 def build_cache_key(params: dict) -> str:
@@ -37,7 +40,8 @@ def get_cached(key: str) -> dict | None:
             del store[key]
             return None
         return entry["data"]
-    except Exception:
+    except Exception as exc:
+        _log.warning("Cache get failed for key %s: %s", key, exc)
         return None
 
 
@@ -46,5 +50,5 @@ def set_cache(key: str, data: dict):
     try:
         store = _get_cache_store()
         store[key] = {"data": data, "ts": time.time()}
-    except Exception:
-        pass
+    except Exception as exc:
+        _log.warning("Cache set failed for key %s: %s", key, exc)

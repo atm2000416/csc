@@ -25,8 +25,9 @@ def query(params: dict, limit: int = 100) -> tuple[list[dict], float]:
     joins = ["JOIN camps c ON p.camp_id = c.id"]
     args = {}
 
-    # Tags
-    tag_ids = resolve_tag_ids(params.get("tags", []), cursor)
+    # Tags — expand via categories hierarchy before resolving IDs
+    expanded_tags = expand_via_categories(params.get("tags", []), cursor)
+    tag_ids = resolve_tag_ids(expanded_tags, cursor)
     if tag_ids:
         joins.append("JOIN program_tags pt ON p.id = pt.program_id")
         ph = ", ".join(f"%(tag_{i})s" for i in range(len(tag_ids)))
@@ -185,6 +186,39 @@ def calculate_rcs(results: list, params: dict, tag_ids: list) -> float:
             base = max(0.30, base - 0.10)
 
     return round(base, 2)
+
+
+def expand_via_categories(slugs: list[str], cursor) -> list[str]:
+    """
+    Hierarchical tag expansion via the categories table.
+
+    For each slug, if a categories row exists, its filter_activity_tags replaces
+    the single slug with the full child tree.  Example: "dance-multi" expands to
+    [dance-multi, ballet, jazz, hip-hop, ...] so programs tagged with any dance
+    style are included in results.
+
+    Leaf slugs (level-3 or standalone level-2) have filter_activity_tags = self,
+    so they pass through unchanged.
+    """
+    if not slugs:
+        return slugs
+    ph = ", ".join(["%s"] * len(slugs))
+    cursor.execute(
+        f"SELECT slug, filter_activity_tags FROM categories "
+        f"WHERE slug IN ({ph}) AND is_active = 1",
+        tuple(slugs),
+    )
+    rows = cursor.fetchall()
+
+    # Build a map of slug → expanded set; slugs with no category row keep themselves
+    expanded: set[str] = set(slugs)
+    for row in rows:
+        if row["filter_activity_tags"]:
+            for s in row["filter_activity_tags"].split(","):
+                s = s.strip()
+                if s:
+                    expanded.add(s)
+    return list(expanded)
 
 
 def resolve_tag_ids(slugs: list[str], cursor) -> list[int]:

@@ -275,6 +275,12 @@ def _run_search(merged_params: dict, raw_query: str, session: dict, sidebar_filt
         record("casl_expand", {"expanded_count": len(expanded), "combined_count": len(all_results)})
         if all_results:
             final = process_results(all_results, raw_query, merged_params)
+            max_score = max((r.get("rerank_score", 0.0) for r in final), default=0.0)
+            if max_score < 0.45 and not results:
+                record("output", {"route": "ZERO_RESULTS", "reason": "casl_low_relevance"})
+                render_trace()
+                _handle_zero_results(merged_params, intent, session)
+                return
             record("output", {"route": "BROADEN_SEARCH", "final_count": len(final),
                                "top_camps": [r.get("camp_name") for r in final]})
             render_trace()

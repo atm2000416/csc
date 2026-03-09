@@ -131,6 +131,8 @@ def main():
     # Handle category disambiguation button choice (no new chat input needed)
     if st.session_state.get("_disambiguation_choice") and not user_input:
         choice = st.session_state.pop("_disambiguation_choice")
+        init_trace()
+        record("input", {"raw_query": choice["raw_query"], "source": "category_disambiguation"})
         _run_search(choice["params"], choice["raw_query"],
                     st.session_state.session_context, sidebar_filters)
         return

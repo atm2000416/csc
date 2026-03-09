@@ -70,16 +70,32 @@ def query(params: dict, limit: int = 100) -> tuple[list[dict], float]:
         args["age_from"] = params["age_from"]
         args["age_to"] = params["age_to"]
 
-    # Type
-    if params.get("type"):
+    # Type — DB stores legacy numeric codes, not strings
+    # '1'='Day Camp', '2'='Overnight', '3'='Day+Overnight', '4'='Virtual'
+    # 'Day Camp' also appears as a string from the migration
+    _TYPE_MAP = {
+        "Day":       ("p.type IN ('1','1,3','Day Camp')", {}),
+        "Overnight": ("p.type IN ('2','3','1,3')", {}),
+        "Both":      ("p.type IN ('3','1,3')", {}),
+        "Virtual":   ("p.type = '4'", {}),
+    }
+    if params.get("type") and params["type"] in _TYPE_MAP:
+        cond, extra_args = _TYPE_MAP[params["type"]]
+        conditions.append(cond)
+        args.update(extra_args)
+    elif params.get("type"):
+        # Fallback: literal match (handles 'Day Camp' string passed directly)
         conditions.append("p.type = %(type)s")
         args["type"] = params["type"]
 
-    # Gender (0=Coed, 1=Boys, 2=Girls)
-    gender_map = {"Boys": 1, "Girls": 2, "Coed": 0}
-    if params.get("gender") and params["gender"] != "Coed":
-        conditions.append("p.gender = %(gender)s")
-        args["gender"] = gender_map.get(params["gender"], 0)
+    # Gender (NULL/0=Coed, 1=Boys, 2=Girls)
+    # Gender data is sparse in the DB (most programs have NULL = all genders).
+    # Apply as a soft filter: match explicit gender OR NULL (coed/unspecified).
+    gender_map = {"Boys": 1, "Girls": 2}
+    if params.get("gender") and params["gender"] in gender_map:
+        gval = gender_map[params["gender"]]
+        conditions.append("(p.gender = %(gender)s OR p.gender IS NULL OR p.gender = 0)")
+        args["gender"] = gval
 
     # Cost
     if params.get("cost_max"):

@@ -171,8 +171,13 @@ Guidelines:
 - 0.00-0.09 : Nothing useful extracted
 
 ### recognized (boolean)
-true if at least one activity tag was found in the taxonomy.
-false if no tags were extracted or all attempted tags were not in taxonomy.
+true if the query is a valid camp search request with at least one structured parameter extracted:
+  activity tags, type (Day/Overnight), gender, city, province, age range, or cost.
+false only if the query is completely unrecognisable as a camp search (greetings, gibberish,
+  off-topic questions) OR if the user is resetting the session with no new intent.
+
+Examples of recognized=true with NO tags: "overnight girls camp", "day camps in Toronto",
+  "camps for 8 year olds", "cheap summer camps". These have type/city/age/cost but no activity tag.
 
 ### raw_query (string)
 The EXACT original user input, unchanged. Copy verbatim. Never modify.

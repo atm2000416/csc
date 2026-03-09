@@ -202,9 +202,15 @@ def parse_intent(
         if stripped:
             parsed["_stripped_tags"] = stripped  # preserved for trace only
         parsed["tags"] = valid_tags
-        # If model thought it recognised an activity but all tags were hallucinated
+        # If model thought it recognised an activity but all tags were hallucinated,
+        # only flip recognized=False when there are no other structured params either
         if raw_tags and not valid_tags:
-            parsed["recognized"] = False
+            has_other_params = any(parsed.get(k) for k in (
+                "type", "gender", "city", "cities", "province",
+                "age_from", "age_to", "cost_max", "traits",
+            ))
+            if not has_other_params:
+                parsed["recognized"] = False
 
     parsed = _coerce_parsed(parsed)
 

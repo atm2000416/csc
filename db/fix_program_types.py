@@ -63,11 +63,17 @@ def parse_session_types(content) -> dict[int, str]:
 
     result = {}
     for cid, types in session_types.items():
-        core = types & {1, 2, 3}
-        if not core:
+        # Old session type codes:
+        #   1 = Day Camp
+        #   2 = Overnight / Residential
+        #   3 = Year-round / ongoing (swim lessons, karate, music — NOT "Both")
+        #   4 = Virtual / Online
+        #   5 = Other (treated as Day)
+        # "Both day+overnight" = camp has BOTH type=1 AND type=2 sessions
+        has_day   = bool(types & {1, 3, 5})  # type 3 (year-round) maps to Day
+        has_night = 2 in types
+        if not has_day and not has_night:
             continue
-        has_day   = bool(core & {1, 3})
-        has_night = bool(core & {2, 3})
         if has_day and has_night:
             result[cid] = BOTH
         elif has_night:

@@ -55,6 +55,10 @@ Rules:
 - "sea kayaking", "ocean kayaking" → ["kayaking-sea-kayaking"]
 - "kayaking" alone → ["kayaking-sea-kayaking", "canoeing"]
 - "horses", "riding", "horse" → ["horseback-riding-equestrian"]
+- "puppy", "puppies", "dog", "dogs", "cat", "cats", "pets", "animals" in a camp search
+  context → ["animals"]. In children's summer camps, "puppy camp" always means
+  animal-care activities for kids, NOT dog training. Set recognized=true, tags=["animals"].
+  Do NOT add needs_clarification for pet-related queries.
 - "building things", "maker", "making" → ["makerspace"]
 - "drama", "acting" → ["theatre-arts", "acting-film-tv"]
 - "tech", "technology" → ["computer-multi"] or ["technology"] — use context
@@ -198,6 +202,12 @@ Apply these rules:
 
 5. REFINEMENT: "cheaper ones", "closer ones", "more options" →
    Inherit all session params, add/modify the refined dimension only.
+
+6. ACTIVITY RESET: When the user explicitly says they no longer want a previous activity
+   ("not looking for X anymore", "forget the X", "never mind the X", "instead of X"):
+   - If a new activity IS named in the same query → set recognized=true with only the new tags.
+   - If NO new activity is named → set recognized=false, tags=[]. The session manager will
+     then clear accumulated activity tags from the session.
 
 ---
 

@@ -104,29 +104,13 @@ html, body, [class*="css"] {
     padding: 0 1.2rem;
 }
 
-/* ── Chat messages — iMessage blue bubble for assistant ── */
+/* ── Chat messages (user input echo, if any) ── */
 [data-testid="stChatMessage"] {
     background: transparent;
     border: none;
     box-shadow: none;
     padding: 0;
-    margin-bottom: 0.6rem;
-}
-/* Blue iMessage bubble: targets the inner content div of assistant messages */
-[data-testid="stChatMessage"]:has([data-testid="chatAvatarIcon-assistant"]) .stChatMessageContent,
-[data-testid="stChatMessage"]:has([data-testid="chatAvatarIcon-assistant"]) [data-testid="stMarkdownContainer"] {
-    background: #007AFF;
-    border-radius: 18px 18px 18px 4px;
-    padding: 10px 16px;
-    display: inline-block;
-    max-width: 75%;
-}
-[data-testid="stChatMessage"]:has([data-testid="chatAvatarIcon-assistant"]) p,
-[data-testid="stChatMessage"]:has([data-testid="chatAvatarIcon-assistant"]) li {
-    color: white !important;
-    font-size: 0.95rem;
-    line-height: 1.55;
-    margin: 0;
+    margin-bottom: 0.4rem;
 }
 
 /* ── Chat input ── */
@@ -280,10 +264,22 @@ def display_results(results: list[dict]):
 
 
 def _speak(message: str):
-    """Render a concierge narrative in the assistant chat bubble."""
+    """Render a concierge narrative as an iMessage-style blue bubble."""
     if message:
-        with st.chat_message("assistant"):
-            st.markdown(message)
+        st.markdown(
+            f'<div style="'
+            f'background:#007AFF; color:white; '
+            f'border-radius:18px 18px 18px 4px; '
+            f'padding:12px 16px; '
+            f'display:inline-block; '
+            f'max-width:75%; '
+            f'margin:0 0 0.8rem 0; '
+            f'font-family:Source Sans 3,sans-serif; '
+            f'font-size:0.95rem; '
+            f'line-height:1.55;'
+            f'">{message}</div>',
+            unsafe_allow_html=True,
+        )
 
 
 # ── Affirmative suggestion check ──────────────────────────────────────────────
@@ -502,10 +498,7 @@ def main():
     if intent.needs_geolocation:
         record("output", {"route": "NEEDS_GEOLOCATION"})
         render_trace()
-        with st.chat_message("assistant"):
-            st.markdown(
-                "I'd love to find camps near you! Which city or province are you in?"
-            )
+        _speak("I'd love to find camps near you! Which city or province are you in?")
         return
 
     _run_search(merged_params, user_input, session, sidebar_filters, intent=intent)
@@ -692,8 +685,7 @@ def _diagnose_zero_results(merged_params: dict) -> dict:
 def _show_zero_results(diagnosis: dict):
     """Display zero-results message and store pending suggestion."""
     msg = diagnosis.get("message", "No camps found matching your search.")
-    with st.chat_message("assistant"):
-        st.markdown(msg)
+    _speak(msg)
     if diagnosis.get("pending_suggestion"):
         store_suggestion(diagnosis["pending_suggestion"])
 
@@ -708,11 +700,7 @@ def _render_category_picker(parent_slug: str, options: list[dict],
     # Derive a readable parent name from the slug
     parent_name = parent_slug.replace("-multi", "").replace("-", " ").title()
 
-    with st.chat_message("assistant"):
-        st.markdown(
-            f"**{parent_name}** covers a lot of ground! "
-            f"Which area interests you most?"
-        )
+    _speak(f"**{parent_name}** covers a lot of ground! Which area interests you most?")
         # Build button row: up to 4 child options + an "All" fallback
         display_options = options[:4]
         btn_labels = [opt["name"] for opt in display_options] + [f"All {parent_name}"]

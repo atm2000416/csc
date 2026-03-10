@@ -59,12 +59,14 @@ def _serialisable(obj):
 
 def render_trace():
     """
-    Render the debug panel.
+    Render the debug panel (only when the Debug checkbox is enabled in Filters).
 
     Shows:
       - Current turn steps (collapsible per-step JSON)
       - Full session dump (all turns) as copy-pasteable JSON code block
     """
+    if not st.session_state.get("filter_debug", False):
+        return
     trace = st.session_state.get("_trace")
     if not trace or not trace.get("steps"):
         return
@@ -82,7 +84,7 @@ def render_trace():
         + (f"  |  Session: {len(all_turns)} turn(s)" if len(all_turns) > 1 else "")
     )
 
-    with st.expander(label, expanded=True):
+    with st.expander(label, expanded=False):
 
         # ── Current turn step-by-step ─────────────────────────────────────────
         st.markdown("### Current turn")

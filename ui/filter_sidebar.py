@@ -22,7 +22,7 @@ def render_filters() -> dict:
     Only non-default values are included in the returned dict.
     """
     with st.expander("🔍 Filters", expanded=False):
-        col1, col2, col3, col4 = st.columns(4)
+        col1, col2, col3, col4, col5 = st.columns([2, 2, 2, 2, 1])
         with col1:
             age_range = st.slider("Age", min_value=4, max_value=18, value=(4, 18),
                                   key="filter_age")
@@ -33,6 +33,9 @@ def render_filters() -> dict:
                                        key="filter_cost")
         with col4:
             province = st.selectbox("Province", _PROVINCES, key="filter_province")
+        with col5:
+            st.markdown("<br>", unsafe_allow_html=True)
+            debug = st.checkbox("Debug", value=False, key="filter_debug")
 
     params = {}
 

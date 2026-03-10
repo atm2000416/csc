@@ -5,6 +5,7 @@ Fires when result pool is large or intent confidence is low.
 """
 import json
 import logging
+import re
 import google.genai as genai
 from google.genai import types
 from config import get_secret
@@ -88,12 +89,11 @@ def rerank(
             config=types.GenerateContentConfig(temperature=0.1, max_output_tokens=1500),
         )
         raw = response.text.strip()
-        if raw.startswith("```"):
-            raw = raw.split("```")[1]
-            if raw.startswith("json"):
-                raw = raw[4:]
-        raw = raw.strip()
-        ranked_data = json.loads(raw).get("ranked", [])
+        # Extract first JSON object — handles markdown fences and thinking preamble
+        json_match = re.search(r'\{.*\}', raw, re.DOTALL)
+        if not json_match:
+            raise ValueError("No JSON object found in reranker response")
+        ranked_data = json.loads(json_match.group(0)).get("ranked", [])
     except Exception as exc:
         _log.warning("Reranker Gemini call failed: %s", exc)
         for r in results[:top_n]:

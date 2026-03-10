@@ -187,6 +187,8 @@ def main():
         elif pending.get("type") == "geo_broaden_province":
             merged_params.pop("city", None)
             merged_params["province"] = pending["to_province"]
+        # Write accepted params back to session so next typed turn inherits them
+        session["accumulated_params"] = merged_params
         record("input", {
             "raw_query": user_input,
             "path": "affirmative",
@@ -354,9 +356,11 @@ def _run_search(merged_params: dict, raw_query: str, session: dict, sidebar_filt
             final = process_results(all_results, raw_query, merged_params)
             max_score = max((r.get("rerank_score", 0.0) for r in final), default=0.0)
             if max_score < 0.45 and not results:
-                record("output", {"route": "ZERO_RESULTS", "reason": "casl_low_relevance"})
+                diag = _diagnose_zero_results(merged_params)
+                record("output", {"route": "ZERO_RESULTS", "reason": "casl_low_relevance",
+                                  "advisor_type": diag.get("type")})
                 render_trace()
-                _handle_zero_results(merged_params, intent, session)
+                _show_zero_results(diag)
                 return
             msg = generate_concierge_response(final, raw_query, merged_params, "BROADEN_SEARCH")
             record("output", {"route": "BROADEN_SEARCH", "final_count": len(final),
@@ -371,9 +375,10 @@ def _run_search(merged_params: dict, raw_query: str, session: dict, sidebar_filt
             if intent:
                 log_search(session, intent, rcs, len(final))
         else:
-            record("output", {"route": "ZERO_RESULTS"})
+            diag = _diagnose_zero_results(merged_params)
+            record("output", {"route": "ZERO_RESULTS", "advisor_type": diag.get("type")})
             render_trace()
-            _handle_zero_results(merged_params, intent, session)
+            _show_zero_results(diag)
 
     elif decision.route == Route.SHOW_CLARIFY:
         final = process_results(results, raw_query, merged_params)
@@ -391,22 +396,30 @@ def _run_search(merged_params: dict, raw_query: str, session: dict, sidebar_filt
 
     elif decision.route == Route.CLARIFY_LOOP:
         clarify_final_count = 0
+        clarify_msg = ""
+        zero_diag = None
         if results:
             final = process_results(results, raw_query, merged_params)
             clarify_final_count = len(final)
+            clarify_msg = generate_concierge_response(final, raw_query, merged_params, "SHOW_CLARIFY")
+        elif not decision.clarification_dimensions:
+            # No results and no clarification dims — pre-diagnose before render_trace
+            zero_diag = _diagnose_zero_results(merged_params)
         record("output", {"route": "CLARIFY_LOOP", "final_count": clarify_final_count,
-                          "clarification_dims": decision.clarification_dimensions})
+                          "clarification_dims": decision.clarification_dimensions,
+                          "concierge_msg": clarify_msg[:200] if clarify_msg else "",
+                          "advisor_type": zero_diag.get("type") if zero_diag else None})
         render_trace()
         if results:
+            _speak(clarify_msg)
             display_results(final)
             st.session_state["_last_results"] = final
             if intent:
                 log_search(session, intent, rcs, clarify_final_count)
         if decision.clarification_dimensions:
             render_clarification(decision.clarification_dimensions)
-        else:
-            # No clarification dims and no results — treat as zero results
-            _handle_zero_results(merged_params, intent, session)
+        elif zero_diag:
+            _show_zero_results(zero_diag)
 
     # Handle clarification answer
     answer = st.session_state.pop("_clarification_answer", None)
@@ -416,7 +429,12 @@ def _run_search(merged_params: dict, raw_query: str, session: dict, sidebar_filt
         st.rerun()
 
 
-def _handle_zero_results(merged_params: dict, intent, session: dict):
+def _diagnose_zero_results(merged_params: dict) -> dict:
+    """
+    Run zero-results diagnosis and record the advisor step.
+    Must be called BEFORE render_trace() so the record appears in the debug panel.
+    Returns the diagnosis dict for display by _show_zero_results().
+    """
     from core.cssl import resolve_tag_ids
     from db.connection import get_connection
 
@@ -434,6 +452,8 @@ def _handle_zero_results(merged_params: dict, intent, session: dict):
         tag_ids=tag_ids,
         searched_city=merged_params.get("city"),
         searched_province=merged_params.get("province"),
+        user_lat=merged_params.get("lat"),
+        user_lon=merged_params.get("lon"),
     )
 
     ps = diagnosis.get("pending_suggestion") or {}
@@ -443,11 +463,14 @@ def _handle_zero_results(merged_params: dict, intent, session: dict):
         "suggestion_type": ps.get("type"),
         "suggestion_city": ps.get("to_city") or ps.get("to_province"),
     })
+    return diagnosis
 
+
+def _show_zero_results(diagnosis: dict):
+    """Display zero-results message and store pending suggestion."""
     msg = diagnosis.get("message", "No camps found matching your search.")
     with st.chat_message("assistant"):
         st.markdown(msg)
-
     if diagnosis.get("pending_suggestion"):
         store_suggestion(diagnosis["pending_suggestion"])
 

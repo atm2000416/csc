@@ -83,40 +83,35 @@ def get_surprise_results(tag_slug: str, province: str | None, top_n: int = 10):
         return [], 0.0
 
 
+def run_surprise():
+    """
+    Execute a surprise search and write results into session state.
+    Caller must call st.rerun() afterwards.
+    """
+    tag_slug = _pick_tag_with_camps()
+    province = random.choice(_PROVINCES)
+
+    if tag_slug:
+        results, _ = get_surprise_results(tag_slug, province)
+        if not results:
+            results, _ = get_surprise_results(tag_slug, None)
+            province = None
+    else:
+        results = []
+
+    label = _slug_to_label(tag_slug) if tag_slug else "Summer"
+    display_query = f"{label} camps in {province}" if province else f"{label} camps"
+
+    st.session_state["_surprise_direct_results"]  = results
+    st.session_state["_surprise_query_label"]     = display_query
+    st.session_state["_surprise_tag"]             = tag_slug
+    st.session_state["_surprise_province"]        = province
+    st.session_state["_input_path_pending"]       = "surprise_me"
+    st.session_state["_surprise_results_heading"] = True
+
+
 def render_surprise_me(on_search_callback):
-    """
-    Render the Surprise Me button. On click, picks a tag with active DB camps,
-    runs a direct CSSL query (bypassing the LLM pipeline), and stores results in
-    session state for display by app.py.
-
-    on_search_callback is kept for API compatibility but is not called.
-    """
+    """Legacy entry point kept for compatibility — delegates to run_surprise()."""
     if st.button("Surprise Me!", key="surprise_me_btn"):
-        tag_slug = _pick_tag_with_camps()
-        province = random.choice(_PROVINCES)
-
-        if tag_slug:
-            results, _ = get_surprise_results(tag_slug, province)
-            # If no results for that province, retry without province filter
-            if not results:
-                results, _ = get_surprise_results(tag_slug, None)
-                province = None
-        else:
-            results = []
-
-        label = _slug_to_label(tag_slug) if tag_slug else "Summer"
-        if province:
-            display_query = f"{label} camps in {province}"
-        else:
-            display_query = f"{label} camps"
-
-        st.session_state["_surprise_direct_results"] = results
-        st.session_state["_surprise_query_label"]    = display_query
-        st.session_state["_surprise_tag"]            = tag_slug
-        st.session_state["_surprise_province"]       = province
-        st.session_state["_input_path_pending"]      = "surprise_me"
-        st.session_state["_surprise_results_heading"] = True
+        run_surprise()
         st.rerun()
-
-    if st.session_state.get("_surprise_results_heading"):
-        st.markdown("### You might also love...")

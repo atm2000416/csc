@@ -216,6 +216,30 @@ section[data-testid="stBottom"] > div,
     box-shadow: 0 2px 8px rgba(47,79,79,0.06);
 }
 
+/* ── Topbar action buttons ── */
+.topbar-btn {
+    display: inline-flex;
+    align-items: center;
+    padding: 7px 18px;
+    border-radius: 24px;
+    background: rgba(255,255,255,0.18);
+    color: white !important;
+    font-family: 'Nunito', sans-serif;
+    font-weight: 700;
+    font-size: 0.84rem;
+    text-decoration: none !important;
+    border: 1.5px solid rgba(255,255,255,0.4);
+    cursor: pointer;
+    transition: background 0.15s ease;
+    letter-spacing: 0.2px;
+    white-space: nowrap;
+}
+.topbar-btn:hover {
+    background: rgba(255,255,255,0.32) !important;
+    color: white !important;
+    text-decoration: none !important;
+}
+
 /* ── Dividers ── */
 hr { border-color: #d8e4d0 !important; margin: 0.8rem 0 !important; }
 </style>
@@ -239,7 +263,7 @@ from core.concierge_response import generate as generate_concierge_response
 from ui.results_card import render_card
 from ui.filter_sidebar import render_filters, get_filter_values
 from ui.clarification_widget import render_clarification
-from ui.surprise_me import render_surprise_me
+from ui.surprise_me import render_surprise_me  # noqa: F401 — kept for compat
 
 
 # ── DB health check ───────────────────────────────────────────────────────────
@@ -361,13 +385,29 @@ def is_affirmative(text: str) -> bool:
 
 # ── Main app ──────────────────────────────────────────────────────────────────
 def main():
+    # Handle header button actions (HTML links pass ?action=... as query params)
+    _action = st.query_params.get("action", "")
+    if _action == "reset":
+        st.query_params.clear()
+        st.session_state.clear()
+        st.rerun()
+    if _action == "surprise":
+        st.query_params.clear()
+        from ui.surprise_me import run_surprise
+        run_surprise()
+        st.rerun()
+
     init_session()
 
-    # Branded topbar
+    # Branded topbar with action buttons
     st.markdown("""
     <div class="camps-topbar">
         <span class="logo">camps<em>.ca</em></span>
         <span class="badge">Camp Finder</span>
+        <div style="margin-left:auto; display:flex; align-items:center; gap:8px;">
+            <a href="?action=surprise" class="topbar-btn">✨ Surprise Me</a>
+            <a href="?action=reset" class="topbar-btn">↺ Start Over</a>
+        </div>
     </div>
     <div class="main-content">
     """, unsafe_allow_html=True)
@@ -392,17 +432,9 @@ def main():
     # Read current filter values (widgets rendered later, inside display_results)
     sidebar_filters = get_filter_values()
 
-    # Surprise Me button
-    def on_surprise_search(query: str):
-        st.session_state["_pending_query"] = query
-
-    col1, col2, col3 = st.columns([3, 1.3, 1.3])
-    with col2:
-        render_surprise_me(on_surprise_search)
-    with col3:
-        if st.button("Start Over", key="reset_btn", help="Clear all searches and start fresh"):
-            st.session_state.clear()
-            st.rerun()
+    # "You might also love..." heading (shown after a Surprise Me result)
+    if st.session_state.get("_surprise_results_heading"):
+        st.markdown("### You might also love...")
 
     # Chat input
     user_input = st.chat_input("Describe what you're looking for (e.g. hockey camp Toronto for my 10 year old)")

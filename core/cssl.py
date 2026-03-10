@@ -138,20 +138,53 @@ def query(params: dict, limit: int = 100) -> tuple[list[dict], float]:
     where = " AND ".join(conditions)
     joins_str = " ".join(joins)
 
+    # Relevance sort:
+    # 1. Exact gender match first (gender-specific camp beats coed when gender is requested)
+    # 2. Exact type match first (pure overnight beats "Both" when overnight is requested)
+    # 3. Tier (gold > silver > bronze)
+    # 4. Review average
+    gender_db = {"Girls": 2, "Boys": 1}.get(params.get("gender", ""), 0)
+    type_db    = {"Overnight": "'2'", "Day": "'1'"}.get(params.get("type", ""), None)
+
+    gender_boost = (
+        f"CASE WHEN p.gender = {gender_db} THEN 0 ELSE 1 END,"
+        if gender_db else ""
+    )
+    type_boost = (
+        f"CASE WHEN p.type = {type_db} THEN 0 ELSE 1 END,"
+        if type_db else ""
+    )
+
+    # Build boost expressions for SELECT (required by DISTINCT + ORDER BY)
+    gender_select = (
+        f"CASE WHEN p.gender = {gender_db} THEN 0 ELSE 1 END AS _gender_boost,"
+        if gender_db else ""
+    )
+    type_select = (
+        f"CASE WHEN p.type = {type_db} THEN 0 ELSE 1 END AS _type_boost,"
+        if type_db else ""
+    )
+
     sql = f"""
         SELECT DISTINCT
             p.id, p.camp_id, p.name, p.type,
             p.age_from, p.age_to, p.cost_from, p.cost_to,
+            p.gender, p.is_special_needs, p.is_virtual, p.language_immersion,
             p.mini_description, p.description,
             p.start_date, p.end_date,
             c.camp_name, c.tier, c.review_avg, c.city, c.province,
-            c.lat, c.lon, c.website, c.lgbtq_welcoming, c.accessibility
+            c.lat, c.lon, c.website, c.lgbtq_welcoming, c.accessibility,
+            {gender_select}
+            {type_select}
+            FIELD(c.tier, 'gold', 'silver', 'bronze') AS _tier_score
         FROM programs p
         {joins_str}
         WHERE {where}
         ORDER BY
-            c.review_avg DESC,
-            FIELD(c.tier, 'gold', 'silver', 'bronze') ASC
+            {gender_boost}
+            {type_boost}
+            _tier_score ASC,
+            c.review_avg DESC
         LIMIT %(limit)s
     """
     args["limit"] = limit

@@ -11,10 +11,197 @@ from config import get_secret
 
 # ── Page config ───────────────────────────────────────────────────────────────
 st.set_page_config(
-    page_title="Camp Search Concierge",
-    page_icon="",
+    page_title="Camp Finder | camps.ca",
+    page_icon="🏕️",
     layout="wide",
 )
+
+st.markdown("""
+<style>
+@import url('https://fonts.googleapis.com/css2?family=Montserrat:wght@400;600;700;800;900&family=Source+Sans+3:wght@400;500;600&display=swap');
+
+/* ── Base ── */
+html, body, [class*="css"] {
+    font-family: 'Source Sans 3', sans-serif;
+    color: #2c3e50;
+    background-color: #f5f6f8;
+}
+#MainMenu, footer, header { visibility: hidden; }
+.block-container { padding: 0 !important; max-width: 100% !important; }
+
+/* ── Custom topbar ── */
+.camps-topbar {
+    background: #1b5e20;
+    padding: 0 1.5rem;
+    height: 56px;
+    display: flex;
+    align-items: center;
+    position: sticky;
+    top: 0;
+    z-index: 1000;
+    box-shadow: 0 2px 6px rgba(0,0,0,0.25);
+    margin-bottom: 0;
+}
+.camps-topbar .logo {
+    font-family: 'Montserrat', sans-serif;
+    font-weight: 900;
+    font-size: 1.4rem;
+    color: white;
+    letter-spacing: -0.3px;
+}
+.camps-topbar .logo em {
+    color: #f9a825;
+    font-style: normal;
+}
+.camps-topbar .badge {
+    margin-left: 10px;
+    background: #f9a825;
+    color: #1b5e20;
+    font-family: 'Montserrat', sans-serif;
+    font-weight: 800;
+    font-size: 0.65rem;
+    padding: 2px 7px;
+    border-radius: 10px;
+    letter-spacing: 0.3px;
+    text-transform: uppercase;
+}
+
+/* ── Sidebar ── */
+[data-testid="stSidebar"] {
+    background: white !important;
+    border-right: 1px solid #e0e4ea;
+}
+[data-testid="stSidebar"] h1,
+[data-testid="stSidebar"] h2,
+[data-testid="stSidebar"] h3 {
+    font-family: 'Montserrat', sans-serif;
+    font-weight: 800;
+    font-size: 0.95rem;
+    color: white;
+    background: #1b5e20;
+    margin: -1rem -1rem 1rem -1rem;
+    padding: 0.9rem 1rem;
+    border-radius: 0 0 10px 10px;
+}
+[data-testid="stSidebar"] label {
+    font-size: 0.82rem !important;
+    font-weight: 600 !important;
+    color: #37474f !important;
+    font-family: 'Montserrat', sans-serif !important;
+    text-transform: uppercase;
+    letter-spacing: 0.5px;
+}
+[data-testid="stSidebar"] .stSlider,
+[data-testid="stSidebar"] .stSelectbox,
+[data-testid="stSidebar"] .stNumberInput {
+    margin-bottom: 0.8rem;
+}
+
+/* ── Main content area ── */
+.main-content {
+    max-width: 860px;
+    margin: 1.5rem auto 6rem;
+    padding: 0 1.2rem;
+}
+
+/* ── Chat messages ── */
+[data-testid="stChatMessage"] {
+    background: white;
+    border: 1px solid #e5eaef;
+    border-radius: 12px;
+    padding: 1rem 1.2rem;
+    margin-bottom: 0.8rem;
+    box-shadow: 0 1px 4px rgba(0,0,0,0.05);
+}
+[data-testid="stChatMessage"][data-testid*="assistant"] {
+    border-left: 4px solid #2e7d32;
+}
+[data-testid="stChatMessage"] p {
+    font-size: 0.95rem;
+    line-height: 1.6;
+    margin: 0;
+}
+
+/* ── Chat input ── */
+[data-testid="stChatInput"] textarea {
+    border: 2px solid #c8e6c9 !important;
+    border-radius: 25px !important;
+    font-family: 'Source Sans 3', sans-serif !important;
+    font-size: 0.92rem !important;
+    padding: 0.55rem 1.1rem !important;
+    background: white !important;
+}
+[data-testid="stChatInput"] textarea:focus {
+    border-color: #2e7d32 !important;
+    box-shadow: 0 0 0 3px rgba(46,125,50,0.12) !important;
+}
+
+/* ── Buttons ── */
+.stButton > button {
+    font-family: 'Montserrat', sans-serif !important;
+    font-weight: 700 !important;
+    border-radius: 20px !important;
+    font-size: 0.82rem !important;
+    padding: 0.35rem 0.9rem !important;
+    border: 1.5px solid #2e7d32 !important;
+    color: #2e7d32 !important;
+    background: white !important;
+    transition: all 0.15s ease;
+}
+.stButton > button:hover {
+    background: #e8f5e9 !important;
+    border-color: #1b5e20 !important;
+    color: #1b5e20 !important;
+}
+
+/* ── Link buttons (camps.ca / Camp Website) ── */
+.stLinkButton a {
+    font-family: 'Montserrat', sans-serif !important;
+    font-weight: 700 !important;
+    font-size: 0.78rem !important;
+    border-radius: 20px !important;
+    background: linear-gradient(135deg, #2e7d32, #388e3c) !important;
+    color: white !important;
+    border: none !important;
+    padding: 0.3rem 0.85rem !important;
+    box-shadow: 0 2px 6px rgba(46,125,50,0.25) !important;
+    transition: all 0.15s ease;
+}
+.stLinkButton a:hover {
+    background: linear-gradient(135deg, #1b5e20, #2e7d32) !important;
+    box-shadow: 0 4px 12px rgba(46,125,50,0.35) !important;
+    transform: translateY(-1px);
+}
+
+/* ── Result count ── */
+.result-count {
+    font-family: 'Montserrat', sans-serif;
+    font-size: 0.78rem;
+    font-weight: 700;
+    color: #558b2f;
+    text-transform: uppercase;
+    letter-spacing: 0.5px;
+    margin-bottom: 0.8rem;
+}
+
+/* ── Spinner ── */
+.stSpinner > div {
+    border-top-color: #2e7d32 !important;
+}
+
+/* ── Selectbox / inputs ── */
+[data-testid="stSelectbox"] > div > div,
+[data-testid="stNumberInput"] input,
+[data-testid="stTextInput"] input {
+    border: 1.5px solid #c8e6c9 !important;
+    border-radius: 7px !important;
+    font-size: 0.88rem !important;
+}
+
+/* ── Dividers ── */
+hr { border-color: #e8edf2 !important; margin: 0.8rem 0 !important; }
+</style>
+""", unsafe_allow_html=True)
 
 # ── Imports (after page config) ───────────────────────────────────────────────
 from core.session_manager import init_session, merge_intent, store_suggestion, clear_suggestion, store_results
@@ -79,7 +266,8 @@ def display_results(results: list[dict]):
     if not results:
         st.info("No camps found matching your search. Try adjusting your filters.")
         return
-    st.markdown(f"**{len(results)} result(s) found**")
+    st.markdown(f'<p class="result-count">{len(results)} result{"s" if len(results) != 1 else ""} found</p>',
+                unsafe_allow_html=True)
     for result in results:
         render_card(result)
 
@@ -109,8 +297,14 @@ def is_affirmative(text: str) -> bool:
 def main():
     init_session()
 
-    st.title("Camp Search Concierge")
-    st.caption("Find the perfect summer camp for your child.")
+    # Branded topbar
+    st.markdown("""
+    <div class="camps-topbar">
+        <span class="logo">camps<em>.ca</em></span>
+        <span class="badge">Camp Finder</span>
+    </div>
+    <div class="main-content">
+    """, unsafe_allow_html=True)
 
     # DB health check on first load
     db_ok, db_err = _check_db()

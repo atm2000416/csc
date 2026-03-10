@@ -56,17 +56,22 @@ def render_card(result: dict):
 
     card_style = (
         f"border-left: 4px solid {tier_col}; "
-        "border-radius: 6px; "
-        "background: #FAFAFA; "
-        "padding: 14px 16px 10px 16px; "
-        "margin-bottom: 12px;"
+        "border-radius: 8px; "
+        "background: #ffffff; "
+        "padding: 14px 16px 12px 16px; "
+        "margin-bottom: 10px; "
+        "box-shadow: 0 1px 4px rgba(0,0,0,0.06);"
     )
 
     with st.container():
         st.markdown(f'<div style="{card_style}">', unsafe_allow_html=True)
 
         # Line 1 — Program Name
-        st.markdown(f"### {program_name}")
+        st.markdown(
+            f'<p style="margin:0 0 2px 0; font-family:Montserrat,sans-serif; font-weight:800; '
+            f'font-size:1.1rem; color:#1b5e20;">{program_name}</p>',
+            unsafe_allow_html=True,
+        )
 
         # Line 2 — Camp Name
         st.markdown(

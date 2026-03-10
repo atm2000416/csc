@@ -141,8 +141,9 @@ def query(params: dict, limit: int = 100) -> tuple[list[dict], float]:
     # Relevance sort:
     # 1. Exact gender match first (gender-specific camp beats coed when gender is requested)
     # 2. Exact type match first (pure overnight beats "Both" when overnight is requested)
-    # 3. Tier (gold > silver > bronze)
-    # 4. Review average
+    # 3. Activity specialization (is_primary tag match > low tag count > generalist)
+    # 4. Tier (gold > silver > bronze)
+    # 5. Review average
     gender_db = {"Girls": 2, "Boys": 1}.get(params.get("gender", ""), 0)
     type_db    = {"Overnight": "'2'", "Day": "'1'"}.get(params.get("type", ""), None)
 
@@ -165,6 +166,23 @@ def query(params: dict, limit: int = 100) -> tuple[list[dict], float]:
         if type_db else ""
     )
 
+    # Specialty boost — ranks specialist programs above generalist programs.
+    # Only meaningful when specific activity tags are searched.
+    # _primary_match: 0 if any searched tag is marked is_primary for this program, else 1
+    # _tag_count: total tags on program (fewer = more specialized)
+    if tag_ids:
+        ph_sp = ", ".join(f"%(tag_{i})s" for i in range(len(tag_ids)))
+        specialty_select = f"""
+            (SELECT MIN(CASE WHEN pt2.is_primary = 1 THEN 0 ELSE 1 END)
+             FROM program_tags pt2
+             WHERE pt2.program_id = p.id AND pt2.tag_id IN ({ph_sp})
+            ) AS _primary_match,
+            (SELECT COUNT(*) FROM program_tags WHERE program_id = p.id) AS _tag_count,"""
+        specialty_boost = "_primary_match ASC, _tag_count ASC,"
+    else:
+        specialty_select = ""
+        specialty_boost = ""
+
     sql = f"""
         SELECT DISTINCT
             p.id, p.camp_id, p.name, p.type,
@@ -176,6 +194,7 @@ def query(params: dict, limit: int = 100) -> tuple[list[dict], float]:
             c.lat, c.lon, c.website, c.lgbtq_welcoming, c.accessibility,
             {gender_select}
             {type_select}
+            {specialty_select}
             FIELD(c.tier, 'gold', 'silver', 'bronze') AS _tier_score
         FROM programs p
         {joins_str}
@@ -183,6 +202,7 @@ def query(params: dict, limit: int = 100) -> tuple[list[dict], float]:
         ORDER BY
             {gender_boost}
             {type_boost}
+            {specialty_boost}
             _tier_score ASC,
             c.review_avg DESC
         LIMIT %(limit)s

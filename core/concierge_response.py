@@ -4,7 +4,8 @@ Concierge Response Generator — produces a short spoken narrative for each
 search result set. The concierge acknowledges the request, highlights what
 makes the top picks relevant, and offers one natural follow-up.
 
-Returns a plain markdown string. Returns "" on failure (cards render silently).
+Gemini is tried first; on any failure a template-based response is returned
+so the concierge always speaks.
 """
 import json
 import logging
@@ -29,11 +30,68 @@ Tone rules:
 - Never start with "Great!" / "Sure!" / "Of course!" or any sycophantic filler
 - Never say "I found X results" mechanically — speak about the camps, not the count
 - Don't list every result — focus on the standout picks
-- If the search was broadened (route=BROADEN), acknowledge it briefly and naturally
+- If the search was broadened (route=BROADEN_SEARCH), acknowledge it briefly and naturally
 - Keep it concise: 2–3 sentences total, then the follow-up question on a new line
 
 Return ONLY the response text. No JSON. No markdown headers. No bullet points.
 """
+
+
+def _template_fallback(results: list[dict], params: dict, route: str) -> str:
+    """
+    Template-based response used when Gemini is unavailable.
+    Always returns a non-empty string.
+    """
+    top = results[0] if results else {}
+    count = len(results)
+
+    tags = params.get("tags") or []
+    activity = tags[0].replace("-", " ") if tags else ""
+
+    cities = params.get("cities") or []
+    location = (
+        params.get("city")
+        or (cities[0] if cities else None)
+        or params.get("province")
+        or ""
+    )
+
+    age_from = params.get("age_from")
+    age_to = params.get("age_to")
+    age_str = ""
+    if age_from and age_to:
+        age_str = f" for ages {age_from}–{age_to}"
+    elif age_from:
+        age_str = f" for ages {age_from}+"
+
+    # Opening line
+    if route == "BROADEN_SEARCH":
+        opener = "I expanded the search to find related programs."
+    elif activity and location:
+        opener = f"Here are the top {activity} programs in {location}{age_str}."
+    elif activity:
+        opener = f"Here are the top {activity} programs{age_str}."
+    elif location:
+        opener = f"Here are camp programs in {location}{age_str}."
+    else:
+        opener = f"Here are {count} programs that match your search."
+
+    # Highlight top camp
+    highlight = ""
+    if top.get("camp_name"):
+        highlight = f" {top['camp_name']} leads the list."
+
+    # Follow-up offer — suggest the most useful missing dimension
+    if not age_from:
+        followup = "\n\nWhat age is your child? I can narrow these down further."
+    elif not params.get("type"):
+        followup = "\n\nWould you prefer day camp or overnight?"
+    elif not location:
+        followup = "\n\nWhich city or area are you looking in?"
+    else:
+        followup = "\n\nWould you like to filter by cost, date, or a specific week?"
+
+    return opener + highlight + followup
 
 
 def generate(
@@ -52,15 +110,14 @@ def generate(
         route:     Decision matrix route name (SHOW_RESULTS, BROADEN_SEARCH, etc.)
 
     Returns:
-        Markdown string for display, or "" on failure.
+        Markdown string for display. Never returns empty string.
     """
     if not results:
         return ""
 
     # Build a compact summary of the top results for the prompt
-    top = results[:3]
     top_summary = []
-    for r in top:
+    for r in results[:3]:
         blurb = r.get("blurb") or r.get("mini_description") or ""
         top_summary.append({
             "camp": r.get("camp_name", ""),
@@ -99,7 +156,11 @@ def generate(
                 max_output_tokens=200,
             ),
         )
-        return response.text.strip()
+        text = response.text.strip() if response.text else ""
+        if text:
+            return text
+        _log.warning("Concierge response: Gemini returned empty text, using template")
     except Exception as exc:
-        _log.warning("Concierge response generation failed: %s", exc)
-        return ""
+        _log.warning("Concierge response: Gemini call failed (%s), using template", exc)
+
+    return _template_fallback(results, params, route)

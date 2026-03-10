@@ -137,12 +137,24 @@ def generate(
         if val:
             active_filters[key] = val
 
+    # Surface gender filter effectiveness so concierge can acknowledge sparse data
+    notes = []
+    if params.get("gender"):
+        all_coed = all(r.get("gender") in (None, 0) for r in results)
+        if all_coed:
+            notes.append(
+                f"Gender filter '{params['gender']}' was applied but all programs "
+                "returned are coed (no gender-specific data) — results are the same "
+                "as without the filter. Acknowledge this briefly and naturally."
+            )
+
     user_message = (
         f"User query: {raw_query}\n"
         f"Active filters: {json.dumps(active_filters, ensure_ascii=False)}\n"
         f"Total results shown: {len(results)}\n"
         f"Route: {route}\n"
-        f"Top results:\n{json.dumps(top_summary, ensure_ascii=False, indent=2)}"
+        + (f"Notes: {' '.join(notes)}\n" if notes else "")
+        + f"Top results:\n{json.dumps(top_summary, ensure_ascii=False, indent=2)}"
     )
 
     try:

@@ -94,13 +94,13 @@ Canadian province or US state full name. Examples: "Ontario", "British Columbia"
 "New York", "California". Extract from city context if possible.
 
 ### type (string)
-One of: "Day", "Overnight", "Class/league/program", "PA day", "Virtual Program"
-- "day camp" → "Day"
-- "overnight", "sleepaway", "sleep away", "residential" → "Overnight"
-- "class", "program", "weekly program", "league" → "Class/league/program"
-- "virtual", "online" → "Virtual Program"
-- "march break", "PA day", "holiday camp" → "PA day"
-- If not mentioned, omit.
+One of: "Day", "Overnight", "Both", "Virtual" — ONLY these four values are valid.
+- "day camp", "day program" → "Day"
+- "overnight", "sleepaway", "sleep away", "residential", "boarding" → "Overnight"
+- "both day and overnight" → "Both"
+- "virtual", "online" → "Virtual"
+- "class", "program", "weekly program", "league", "PA day", "march break" → omit (null); use activity tags instead
+- If not mentioned, omit (null).
 
 ### gender (string)
 One of: "Boys", "Girls", "Coed"

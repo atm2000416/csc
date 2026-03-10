@@ -92,10 +92,17 @@ def _speak(message: str):
 
 
 # ── Affirmative suggestion check ──────────────────────────────────────────────
-_AFFIRMATIVES = {"yes", "sure", "ok", "okay", "yeah", "yep", "please", "go ahead", "show me"}
+_AFFIRMATIVE_WORDS = {"yes", "sure", "ok", "okay", "yeah", "yep", "please",
+                      "go ahead", "show me", "show", "do it", "absolutely", "sounds good"}
 
 def is_affirmative(text: str) -> bool:
-    return text.strip().lower() in _AFFIRMATIVES
+    """Match affirmative responses even when extra words follow (e.g. 'yes, show them')."""
+    normalized = text.strip().lower().rstrip(".,!")
+    if normalized in _AFFIRMATIVE_WORDS:
+        return True
+    # Match if the first word is an affirmative (e.g. "yes please", "yes, show them")
+    first_word = normalized.split()[0].rstrip(",.!") if normalized else ""
+    return first_word in {"yes", "sure", "okay", "yeah", "yep"}
 
 
 # ── Main app ──────────────────────────────────────────────────────────────────

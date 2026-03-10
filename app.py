@@ -205,6 +205,15 @@ def main():
             fuzzy_hints=fuzzy_hints,
             current_date=datetime.date.today().isoformat(),
         )
+
+    # Inject geo coordinates from fuzzy hints directly — bypasses Gemini for
+    # reliable lat/lon resolution without hallucination risk.
+    if fuzzy_hints.get("geo_coords") and intent.lat is None:
+        gc = fuzzy_hints["geo_coords"]
+        intent.lat = gc["lat"]
+        intent.lon = gc["lon"]
+        intent.radius_km = gc["radius_km"]
+
     record("intent_parser", {
         "tags": intent.tags,
         "exclude_tags": intent.exclude_tags,
@@ -220,6 +229,9 @@ def main():
         "is_special_needs": intent.is_special_needs,
         "is_virtual": intent.is_virtual,
         "language_immersion": intent.language_immersion,
+        "lat": intent.lat,
+        "lon": intent.lon,
+        "radius_km": intent.radius_km,
         "ics": intent.ics,
         "needs_clarification": intent.needs_clarification,
         "recognized": intent.recognized,

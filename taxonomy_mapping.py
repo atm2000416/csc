@@ -2099,6 +2099,65 @@ GEO_ALIASES: dict[str, list[str] | None] = {
 
 
 # ─────────────────────────────────────────────────────────────────────────────
+# GEO_COORDS — Location name → (lat, lon, radius_km)
+# Used for proximity/Haversine search instead of fragile city-string matching.
+# radius_km: urban neighbourhood = 15, city = 25, metro/region = 60
+# ─────────────────────────────────────────────────────────────────────────────
+GEO_COORDS: dict[str, tuple[float, float, int]] = {
+    # Toronto districts / neighbourhoods
+    "north york":    (43.7615, -79.4111, 12),
+    "scarborough":   (43.7764, -79.2318, 12),
+    "etobicoke":     (43.6205, -79.5132, 12),
+    "east york":     (43.6896, -79.3304, 10),
+    "york":          (43.6894, -79.4625, 10),
+    "downtown toronto": (43.6532, -79.3832, 8),
+    "midtown toronto":  (43.6976, -79.3980, 8),
+    # GTA cities
+    "toronto":       (43.6532, -79.3832, 25),
+    "mississauga":   (43.5890, -79.6441, 20),
+    "brampton":      (43.7315, -79.7624, 20),
+    "markham":       (43.8561, -79.3370, 15),
+    "vaughan":       (43.8361, -79.4985, 15),
+    "richmond hill": (43.8828, -79.4403, 15),
+    "oakville":      (43.4675, -79.6877, 15),
+    "burlington":    (43.3255, -79.7990, 15),
+    "pickering":     (43.8384, -79.0868, 15),
+    "ajax":          (43.8509, -79.0204, 12),
+    "whitby":        (43.8975, -78.9429, 12),
+    "oshawa":        (43.8971, -78.8658, 15),
+    "aurora":        (44.0065, -79.4504, 12),
+    "newmarket":     (44.0593, -79.4614, 12),
+    "barrie":        (44.3894, -79.6903, 20),
+    "hamilton":      (43.2557, -79.8711, 20),
+    "guelph":        (43.5448, -80.2482, 15),
+    "kitchener":     (43.4516, -80.4925, 20),
+    "waterloo":      (43.4643, -80.5204, 15),
+    "cambridge":     (43.3616, -80.3144, 15),
+    "london":        (42.9849, -81.2453, 20),
+    "windsor":       (42.3149, -83.0364, 20),
+    "kingston":      (44.2312, -76.4860, 20),
+    "ottawa":        (45.4215, -75.6972, 25),
+    # Cottage country
+    "muskoka":       (45.0353, -79.3097, 60),
+    "bracebridge":   (45.0353, -79.3097, 20),
+    "huntsville":    (45.3276, -79.2180, 20),
+    "haliburton":    (45.0538, -78.5200, 20),
+    "parry sound":   (45.3448, -80.0367, 20),
+    # BC
+    "vancouver":     (49.2827, -123.1207, 25),
+    "burnaby":       (49.2488, -122.9805, 12),
+    "richmond":      (49.1666, -123.1336, 12),
+    "surrey":        (49.1044, -122.8011, 20),
+    "coquitlam":     (49.2838, -122.7932, 12),
+    # Quebec
+    "montreal":      (45.5017, -73.5673, 25),
+    "laval":         (45.6066, -73.7124, 15),
+    # Alberta
+    "calgary":       (51.0447, -114.0719, 25),
+    "edmonton":      (53.5461, -113.4938, 25),
+}
+
+# ─────────────────────────────────────────────────────────────────────────────
 # Helper: format compact taxonomy string for Intent Parser system prompt
 # ─────────────────────────────────────────────────────────────────────────────
 def format_taxonomy_for_prompt(taxonomy: dict = TAXONOMY_CONTEXT) -> str:

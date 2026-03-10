@@ -39,6 +39,9 @@ class IntentResult:
     language_immersion: str | None = None
     date_from: str | None = None
     date_to: str | None = None
+    lat: float | None = None
+    lon: float | None = None
+    radius_km: int | None = None
     clear_activity: bool = False
     voice: str = "unknown"
     detected_language: str = "en"
@@ -99,7 +102,7 @@ def _coerce_parsed(parsed: dict) -> dict:
             parsed[key] = []
 
     # Integer fields
-    for key in ("age_from", "age_to", "cost_max"):
+    for key in ("age_from", "age_to", "cost_max", "radius_km"):
         val = parsed.get(key)
         if val is not None:
             try:
@@ -108,7 +111,7 @@ def _coerce_parsed(parsed: dict) -> dict:
                 parsed[key] = None
 
     # Float fields
-    for key in ("ics",):
+    for key in ("ics", "lat", "lon"):
         val = parsed.get(key)
         if val is not None:
             try:

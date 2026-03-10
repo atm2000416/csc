@@ -47,8 +47,22 @@ def query(params: dict, limit: int = 100) -> tuple[list[dict], float]:
         for i, eid in enumerate(exclude_ids):
             args[f"ex_{i}"] = eid
 
-    # Location — cities list takes precedence over single city
-    if params.get("cities"):
+    # Location — lat/lon proximity search takes precedence over city-string matching.
+    # Falls back to cities list, then single city string.
+    if params.get("lat") is not None and params.get("lon") is not None:
+        radius = params.get("radius_km") or 25
+        conditions.append(
+            "c.lat IS NOT NULL AND c.lon IS NOT NULL AND "
+            "(6371 * ACOS(LEAST(1.0, "
+            "COS(RADIANS(%(lat)s)) * COS(RADIANS(c.lat)) "
+            "* COS(RADIANS(c.lon) - RADIANS(%(lon)s)) "
+            "+ SIN(RADIANS(%(lat)s)) * SIN(RADIANS(c.lat))"
+            "))) <= %(radius_km)s"
+        )
+        args["lat"] = params["lat"]
+        args["lon"] = params["lon"]
+        args["radius_km"] = radius
+    elif params.get("cities"):
         ph = ", ".join(f"%(city_{i})s" for i in range(len(params["cities"])))
         conditions.append(f"c.city IN ({ph})")
         for i, city in enumerate(params["cities"]):

@@ -5,7 +5,7 @@ Catches common misspellings, aliases, and domain-specific terms.
 Returns hints dict injected into Intent Parser call.
 """
 import re
-from taxonomy_mapping import FUZZY_ALIASES, TRAIT_ALIASES, GEO_ALIASES
+from taxonomy_mapping import FUZZY_ALIASES, TRAIT_ALIASES, GEO_ALIASES, GEO_COORDS
 
 # Build AGE_ALIASES by filtering FUZZY_ALIASES for dict values (age brackets)
 AGE_ALIASES: dict[str, dict] = {
@@ -41,6 +41,7 @@ def preprocess(raw_query: str) -> dict:
         "tag_hints": [],
         "trait_hints": [],
         "geo_expansion": [],
+        "geo_coords": None,
         "age_bracket": None,
         "needs_geolocation": False,
     }
@@ -57,6 +58,14 @@ def preprocess(raw_query: str) -> dict:
                 hints["needs_geolocation"] = True
             else:
                 hints["geo_expansion"] = cities
+                # If we have coordinates for this location, return them too
+                coords = GEO_COORDS.get(region.lower())
+                if coords:
+                    hints["geo_coords"] = {
+                        "lat": coords[0],
+                        "lon": coords[1],
+                        "radius_km": coords[2],
+                    }
             break
 
     # Check age aliases (longest match first)

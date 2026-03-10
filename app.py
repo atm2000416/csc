@@ -30,6 +30,7 @@ from core.casl import expand as casl_expand
 from core.zero_results_advisor import diagnose
 from core.tracer import init_trace, record, render_trace
 from core.category_disambiguator import get_broad_parent, get_viable_children
+from core.concierge_response import generate as generate_concierge_response
 from ui.results_card import render_card
 from ui.filter_sidebar import render_filters
 from ui.clarification_widget import render_clarification
@@ -81,6 +82,13 @@ def display_results(results: list[dict]):
     st.markdown(f"**{len(results)} result(s) found**")
     for result in results:
         render_card(result)
+
+
+def _speak(message: str):
+    """Render a concierge narrative in the assistant chat bubble."""
+    if message:
+        with st.chat_message("assistant"):
+            st.markdown(message)
 
 
 # ── Affirmative suggestion check ──────────────────────────────────────────────
@@ -253,6 +261,7 @@ def _run_search(merged_params: dict, raw_query: str, session: dict, sidebar_filt
     if cached:
         record("cache", {"hit": True, "result_count": len(cached["results"])})
         render_trace()
+        _speak(cached.get("concierge_message", ""))
         display_results(cached["results"])
         st.session_state["_last_results"] = cached["results"]
         return
@@ -286,9 +295,11 @@ def _run_search(merged_params: dict, raw_query: str, session: dict, sidebar_filt
         record("output", {"route": "SHOW_RESULTS", "final_count": len(final),
                           "top_camps": [r.get("camp_name") for r in final]})
         render_trace()
+        msg = generate_concierge_response(final, raw_query, merged_params, "SHOW_RESULTS")
+        _speak(msg)
         display_results(final)
         st.session_state["_last_results"] = final
-        set_cache(cache_key, {"results": final})
+        set_cache(cache_key, {"results": final, "concierge_message": msg})
         store_results([r["id"] for r in final])
         if intent:
             log_search(session, intent, rcs, len(final))
@@ -308,10 +319,11 @@ def _run_search(merged_params: dict, raw_query: str, session: dict, sidebar_filt
             record("output", {"route": "BROADEN_SEARCH", "final_count": len(final),
                                "top_camps": [r.get("camp_name") for r in final]})
             render_trace()
-            st.info("Showing results across related activities.")
+            msg = generate_concierge_response(final, raw_query, merged_params, "BROADEN_SEARCH")
+            _speak(msg)
             display_results(final)
             st.session_state["_last_results"] = final
-            set_cache(cache_key, {"results": final})
+            set_cache(cache_key, {"results": final, "concierge_message": msg})
             store_results([r["id"] for r in final])
             if intent:
                 log_search(session, intent, rcs, len(final))
@@ -325,6 +337,8 @@ def _run_search(merged_params: dict, raw_query: str, session: dict, sidebar_filt
         record("output", {"route": "SHOW_CLARIFY", "final_count": len(final),
                           "clarification_dims": decision.clarification_dimensions})
         render_trace()
+        msg = generate_concierge_response(final, raw_query, merged_params, "SHOW_CLARIFY")
+        _speak(msg)
         display_results(final)
         st.session_state["_last_results"] = final
         render_clarification(decision.clarification_dimensions)

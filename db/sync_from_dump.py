@@ -3,32 +3,36 @@ db/sync_from_dump.py
 Sync the new CSC database from a fresh SQL dump of the legacy camp directory.
 
 What this syncs:
-  1. NEW camps      — cids in dump (active, with city) not present in new DB → INSERT
-  2. RE-ACTIVATED   — cids status=0 in new DB, now status=1 in dump → UPDATE status=1
-  3. DEACTIVATED    — cids status=1 in new DB, now status=0 in dump → UPDATE status=0
+  1. NEW camps      — cids in dump (is_member=1, with city) not present in new DB → INSERT
+  2. RE-ACTIVATED   — cids status=0 in new DB, now is_member=1 in dump → UPDATE status=1
+  3. DEACTIVATED    — cids status=1 in new DB, now is_member=0 in dump → UPDATE status=0
                       (requires --deactivate flag; only touches camps whose ID came from
                        the old DB, not manually-created location branches)
-  4. METADATA       — tier/website changes for active camps (--update-meta flag)
-  5. LOCATIONS      — new extra_locations not yet in new DB → INSERT
-  6. PROGRAM DATES  — program_dates table refreshed from session_date in dump
+  NOTE: Uses is_member (paying client) not status (published listing) as the activation
+        criterion — this matches what camps.ca actually surfaces in search results.
+  4. SEED PROGRAMS  — for newly-active camps with no programs: create default program
+                      and infer activity tags from dump session names (--seed-programs flag)
+  5. METADATA       — tier/website changes for active camps (--update-meta flag)
+  6. LOCATIONS      — new extra_locations not yet in new DB → INSERT
+  7. PROGRAM DATES  — program_dates table refreshed from session_date in dump
 
 What this does NOT touch:
-  - activity_tags / program_tags / categories (curated in new DB)
-  - Programs for existing camps (tags/descriptions curated post-migration)
+  - activity_tags (curated in new DB)
+  - Programs for camps that ALREADY have programs (existing curation preserved)
   - Camps added manually in new DB (IDs not present in dump)
 
 Usage:
   # Dry run — see what would change (always do this first)
   python3 db/sync_from_dump.py --dump /path/to/new_dump.sql --dry-run
 
-  # Apply standard sync (new camps + re-activations + new locations + program dates)
+  # Standard sync: activate is_member camps + new locations + program dates
   python3 db/sync_from_dump.py --dump /path/to/new_dump.sql
 
-  # Also deactivate camps that left the client list
-  python3 db/sync_from_dump.py --dump /path/to/new_dump.sql --deactivate
+  # Seed programs/tags for newly-active camps that have none
+  python3 db/sync_from_dump.py --dump /path/to/new_dump.sql --seed-programs
 
-  # Full sync: new + deactivations + metadata + locations + program dates
-  python3 db/sync_from_dump.py --dump /path/to/new_dump.sql --deactivate --update-meta
+  # Full sync with deactivations + metadata + seeded programs
+  python3 db/sync_from_dump.py --dump /path/to/new_dump.sql --deactivate --update-meta --seed-programs
 
   # Run only a specific section
   python3 db/sync_from_dump.py --dump /path/to/new_dump.sql --only dates
@@ -102,8 +106,12 @@ def parse_camps(content):
     """
     Old schema: (cid, camp_name, prefix, listingClass, eListingType, status,
                   mod_date, location, Lat, Lon, weight, filename, usePretty,
-                  prettyURL, onlineonly, wentLive, showAnalytics, agate)
-    Returns dict: {cid: {camp_name, tier, status, lat, lon, prettyurl}}
+                  prettyURL, onlineonly, wentLive, is_member, agate)
+    Returns dict: {cid: {camp_name, tier, status, is_member, lat, lon, prettyurl}}
+
+    Activation logic uses is_member (field 17), not status (field 6).
+    status=1 means "listing published" (subset of members);
+    is_member=1 means "paying client" — what camps.ca actually surfaces.
     """
     block = _extract_block(content, 'camps')
     if not block:
@@ -112,12 +120,12 @@ def parse_camps(content):
     rows = re.findall(
         r"\((\d+),'((?:[^'\\]|\\.)*)',('(?:[^'\\]|\\.)*'|NULL),'([^']*)',"
         r"'([^']*)',(\d+),'[^']*','[^']*','([^']*?)','([^']*?)',"
-        r"\d+,'[^']*',\d+,'([^']*?)'",
+        r"\d+,'[^']*',\d+,'([^']*?)',\d+,'[^']*',(\d+),\d+\)",
         block
     )
     result = {}
     for row in rows:
-        cid, camp_name, _, listing_class, e_listing, status, lat, lon, prettyurl = row
+        cid, camp_name, _, listing_class, e_listing, status, lat, lon, prettyurl, is_member = row
         cid = int(cid)
         camp_name = camp_name.replace("\\'", "'")
         tier = TIER_MAP.get(e_listing, 'bronze')
@@ -131,6 +139,7 @@ def parse_camps(content):
             'camp_name': camp_name,
             'tier': tier,
             'status': int(status),
+            'is_member': int(is_member),
             'lat': lat_f,
             'lon': lon_f,
             'prettyurl': prettyurl or None,
@@ -272,9 +281,317 @@ def ensure_unique_slug(cursor, slug_base):
         counter += 1
 
 
+# ── Session parser ────────────────────────────────────────────────────────────
+
+def parse_sessions_by_camp(content, camp_ids: set) -> dict:
+    """
+    Parse session/session_draft names from the dump, grouped by camp_id.
+    Only returns data for camp_ids in the provided set.
+    Returns: {camp_id: [session_name, ...]}
+    """
+    result = defaultdict(list)
+    for m in re.finditer(
+        r"INSERT INTO `sessions(?:_draft)?` VALUES (.*?);\n",
+        content, re.DOTALL
+    ):
+        for sm in re.finditer(r"\(\d+,(\d+),'([^']+)'", m.group(1)):
+            cid = int(sm.group(1))
+            if cid in camp_ids:
+                result[cid].append(sm.group(2).strip())
+    return result
+
+
+# ── Activity tag inference ─────────────────────────────────────────────────────
+# Keyword → [tag_slug, ...] mapping.
+# Validated against camps.ca taxonomy, OurKids.net category pages, and
+# industry sources (summercamps.com, galileo-camps.com, ourkids.net).
+# Rules: longer/more specific phrases take priority over bare keywords.
+# Bare sport/activity names map directly; generic umbrella terms use *-multi tags.
+
+_KEYWORD_TO_TAGS = [
+    # ── Tech / STEM ──────────────────────────────────────────────────────────
+    (["robotics", "robot", "robotic"],                      ["robotics"]),
+    (["coding", "code", "programming", "programmer",
+      "software", "developer", "learn to code"],            ["programming-multi"]),
+    (["stem camp", "stem program", "stem learning",
+      "science tech", "science, tech", "science and tech"], ["stem"]),
+    (["stem"],                                              ["stem"]),
+    (["steam"],                                             ["steam"]),
+    (["minecraft"],                                         ["minecraft", "video-game-design"]),
+    (["roblox"],                                            ["roblox", "video-game-design"]),
+    (["python"],                                            ["python"]),
+    (["scratch coding", "mit scratch", "scratch junior",
+      "block coding", "visual coding", "scratch program",
+      "scratch camp"],                                      ["scratch"]),
+    (["scratch"],                                           ["scratch"]),
+    (["java"],                                              ["java"]),
+    (["arduino"],                                           ["arduino"]),
+    (["raspberry pi"],                                      ["raspberry-pi"]),
+    (["3d printing", "3d-printing"],                        ["3d-printing"]),
+    (["3d design", "3d-design", "3d modelling",
+      "3d modeling"],                                       ["3d-design"]),
+    (["artificial intelligence", "machine learning",
+      "ai camp", "ai program"],                             ["ai-artificial-intelligence"]),
+    (["drone", "uav", "unmanned aerial"],                   ["drone-technology"]),
+    (["virtual reality", "vr camp", "vr headset"],          ["virtual-reality"]),
+    (["lego robotics", "lego mindstorm"],                   ["robotics", "lego"]),
+    (["lego building", "lego engineering"],                 ["lego", "engineering"]),
+    (["lego"],                                              ["lego"]),
+    (["makerspace", "maker space", "maker camp"],           ["makerspace"]),
+    (["mechatronics"],                                      ["mechatronics"]),
+    (["micro:bit", "micro bit", "microbit"],                ["micro-bit"]),
+    (["c++", "c plus plus"],                                ["c-plus-plus"]),
+    (["c#", "c-sharp", "csharp"],                           ["c-sharp"]),
+    (["swift", "ios development", "iphone app"],            ["swift-apple"]),
+    (["pygame"],                                            ["pygame"]),
+    (["web design", "website design"],                      ["web-design"]),
+    (["web dev", "web development"],                        ["web-development"]),
+    (["video game design", "game design", "game dev",
+      "game development", "game creation"],                 ["video-game-design"]),
+    (["video game development"],                            ["video-game-development"]),
+    (["esports", "e-sports", "competitive gaming",
+      "gaming camp", "gaming tournament"],                  ["gaming"]),
+    (["animation"],                                         ["animation"]),
+    (["technology camp", "tech camp"],                      ["technology"]),
+    (["engineering"],                                       ["engineering"]),
+    (["architecture"],                                      ["architecture"]),
+    (["science"],                                           ["science-multi"]),
+    (["math", "mathematics", "algebra", "calculus",
+      "numeracy"],                                          ["math"]),
+    (["space", "astronomy", "astrophysics", "nasa"],        ["space"]),
+    (["forensic", "csi camp"],                              ["forensic-science"]),
+    (["marine biology", "ocean science"],                   ["marine-biology"]),
+    (["meteorology", "weather science"],                    ["meteorology"]),
+    (["health science", "medical science",
+      "medicine camp", "pharmacy"],                         ["health-science"]),
+    (["zoology", "zoo camp"],                               ["zoology"]),
+    (["animals", "animal care", "veterinary"],              ["animals"]),
+    (["nature", "environment", "ecology",
+      "conservation", "environmental"],                     ["nature-environment"]),
+    (["archaeology", "paleontology", "fossil"],             ["archaeology-paleontology"]),
+    # ── Sports ───────────────────────────────────────────────────────────────
+    (["soccer", "football (soccer)", "futsal"],             ["soccer"]),
+    (["basketball"],                                        ["basketball"]),
+    (["tennis"],                                            ["tennis"]),
+    (["volleyball"],                                        ["volleyball"]),
+    (["swimming", "swim lesson", "swim camp",
+      "learn to swim"],                                     ["swimming"]),
+    (["hockey"],                                            ["hockey"]),
+    (["baseball", "softball"],                              ["baseball-softball"]),
+    (["football", "american football", "cfl"],              ["football"]),
+    (["flag football"],                                     ["flag-football"]),
+    (["lacrosse"],                                          ["lacrosse"]),
+    (["gymnastics", "gymnastic"],                           ["gymnastics"]),
+    (["martial arts"],                                      ["martial-arts"]),
+    (["karate"],                                            ["karate"]),
+    (["taekwondo", "tae kwon do"],                          ["taekwondo"]),
+    (["archery"],                                           ["archery"]),
+    (["badminton"],                                         ["badminton"]),
+    (["cycling", "bicycle camp"],                           ["cycling"]),
+    (["golf"],                                              ["golf"]),
+    (["cricket"],                                           ["cricket"]),
+    (["rugby"],                                             ["rugby"]),
+    (["ultimate frisbee", "ultimate disc"],                 ["ultimate-frisbee"]),
+    (["fencing"],                                           ["fencing"]),
+    (["figure skating", "figure skate"],                    ["figure-skating"]),
+    (["ice skating", "skating camp"],                       ["ice-skating"]),
+    (["skiing", "ski camp", "downhill ski"],                ["skiing"]),
+    (["snowboarding"],                                      ["snowboarding"]),
+    (["rock climbing", "climbing wall"],                    ["rock-climbing"]),
+    (["parkour"],                                           ["parkour"]),
+    (["trampoline"],                                        ["trampoline"]),
+    (["track and field", "track & field", "athletics"],     ["track-and-field"]),
+    (["dodgeball"],                                         ["dodgeball"]),
+    (["ping pong", "table tennis"],                         ["ping-pong"]),
+    (["squash"],                                            ["squash"]),
+    (["pickleball"],                                        ["pickleball"]),
+    (["cheerleading", "cheer camp"],                        ["cheer"]),
+    (["disc golf"],                                         ["disc-golf"]),
+    (["gaga ball", "ga-ga"],                                ["gaga"]),
+    (["bmx", "motocross"],                                  ["bmx-motocross"]),
+    (["skateboard"],                                        ["skateboarding"]),
+    (["rollerblad", "rollerblade"],                         ["rollerblading"]),
+    (["mountain bike", "mountain biking"],                  ["mountain-biking"]),
+    (["ninja warrior", "ninja obstacle", "ninja camp",
+      "ninja training", "obstacle course"],                 ["ninja-warrior"]),
+    (["paintball"],                                         ["paintball"]),
+    (["water polo"],                                        ["water-polo"]),
+    (["multi sport", "multi-sport", "multisport",
+      "all sports", "variety sport"],                       ["sport-multi"]),
+    # ── Water sports ─────────────────────────────────────────────────────────
+    (["sailing", "sail camp", "cansail"],                   ["sailing-marine-skills"]),
+    (["canoeing", "canoe camp"],                            ["canoeing"]),
+    (["kayak"],                                             ["kayaking-sea-kayaking"]),
+    (["waterskiing", "water skiing", "wakeboard",
+      "wake board"],                                        ["waterskiing-wakeboarding"]),
+    (["rowing"],                                            ["rowing"]),
+    (["surfing"],                                           ["surfing"]),
+    (["fishing"],                                           ["fishing"]),
+    (["paddle board", "paddleboard", "sup camp"],           ["stand-up-paddle-boarding"]),
+    (["scuba", "diving camp"],                              ["diving"]),
+    (["whitewater", "white water", "rafting"],              ["whitewater-rafting"]),
+    (["board sailing", "windsurfing"],                      ["board-sailing"]),
+    (["tubing"],                                            ["tubing"]),
+    # ── Visual arts ──────────────────────────────────────────────────────────
+    (["arts and crafts", "arts & crafts",
+      "art and craft"],                                     ["arts-crafts"]),
+    (["drawing", "sketching", "illustration"],              ["drawing"]),
+    (["painting"],                                          ["painting"]),
+    (["pottery"],                                           ["pottery"]),
+    (["ceramics"],                                          ["ceramics"]),
+    (["sculpture"],                                         ["sculpture"]),
+    (["photography"],                                       ["photography"]),
+    (["videography"],                                       ["videography"]),
+    (["filmmaking", "film making", "film camp",
+      "movie making"],                                      ["filmmaking"]),
+    (["fashion design", "fashion camp"],                    ["fashion-design"]),
+    (["knitting", "crochet"],                               ["knitting-and-crochet"]),
+    (["mixed media"],                                       ["mixed-media"]),
+    (["papier mache", "papier-mache"],                      ["papier-mache"]),
+    (["cartooning", "cartoon"],                             ["cartooning"]),
+    (["comic art", "comic book"],                           ["comic-art"]),
+    (["woodworking", "wood shop"],                          ["woodworking"]),
+    (["sewing", "textile"],                                 ["sewing"]),
+    # ── Dance ────────────────────────────────────────────────────────────────
+    (["ballet"],                                            ["ballet"]),
+    (["jazz dance", "jazz class"],                          ["jazz"]),
+    (["hip hop", "hip-hop"],                                ["hip-hop"]),
+    (["breakdancing", "break dancing", "breakdance"],       ["breakdancing"]),
+    (["contemporary dance"],                                ["contemporary"]),
+    (["lyrical"],                                           ["lyrical"]),
+    (["tap dance", "tap class"],                            ["tap"]),
+    (["ballroom"],                                          ["ballroom"]),
+    (["acro dance", "acrodance", "acrobatics"],             ["acro-dance"]),
+    (["modern dance"],                                      ["modern"]),
+    (["dance"],                                             ["dance-multi"]),
+    # ── Performing arts / music ──────────────────────────────────────────────
+    (["musical theatre", "musical theater"],                ["musical-theatre"]),
+    (["theatre arts", "theater arts", "theatre camp",
+      "drama camp"],                                        ["theatre-arts"]),
+    (["acting", "film & tv", "film and tv",
+      "screen acting"],                                     ["acting-film-tv"]),
+    (["improv comedy", "sketch comedy"],                    ["comedy", "theatre-arts"]),
+    (["improv"],                                            ["comedy", "theatre-arts"]),
+    (["comedy"],                                            ["comedy"]),
+    (["glee"],                                              ["glee"]),
+    (["magic camp", "magic show"],                          ["magic"]),
+    (["puppetry"],                                          ["puppetry"]),
+    (["playwriting"],                                       ["playwriting"]),
+    (["singing", "vocal", "voice lesson",
+      "choir", "choral"],                                   ["vocal-training-singing"]),
+    (["guitar"],                                            ["guitar"]),
+    (["piano", "keyboard"],                                 ["piano"]),
+    (["percussion", "drums", "drumming"],                   ["percussion"]),
+    (["violin", "cello", "viola", "string"],                ["string"]),
+    (["songwriting", "song writing"],                       ["songwriting"]),
+    (["music recording", "music production",
+      "recording studio"],                                  ["music-recording"]),
+    (["dj", "djing", "turntable"],                          ["djing"]),
+    (["band camp", "jam camp", "rock camp"],                ["jam-camp"]),
+    (["instrument", "musical instrument"],                  ["musical-instrument-training"]),
+    (["music"],                                             ["music-multi"]),
+    (["performing arts"],                                   ["performing-arts-multi"]),
+    # ── Language / academic ──────────────────────────────────────────────────
+    (["chess"],                                             ["chess"]),
+    (["board game", "board-game", "tabletop"],              ["board-games"]),
+    (["dungeons and dragons", "dungeons & dragons", "d&d",
+      "dnd", "d & d"],                                      ["dungeons-and-dragons"]),
+    (["debate"],                                            ["debate"]),
+    (["public speaking", "speech"],                         ["public-speaking"]),
+    (["creative writing"],                                  ["creative-writing"]),
+    (["journalism"],                                        ["journalism"]),
+    (["storytelling"],                                      ["storytelling"]),
+    (["essay writing", "essay camp"],                       ["essay-writing"]),
+    (["reading"],                                           ["reading"]),
+    (["podcasting", "podcast"],                             ["podcasting"]),
+    (["youtube", "vlog", "vlogging"],                       ["youtube-vlogging"]),
+    (["writing"],                                           ["writing"]),
+    (["french immersion", "french camp",
+      "immersion française", "parler français",
+      "francais", "français"],                              ["language-instruction"]),
+    (["english instruction", "esl", "fsl",
+      "language camp", "bilingual", "language immersion",
+      "mandarin", "spanish camp", "learn french",
+      "learn english"],                                     ["language-instruction"]),
+    (["french"],                                            ["language-instruction"]),
+    # Note: bare "english" intentionally excluded — too often used as session-language
+    # descriptor (e.g. "Soccer Camp (English)") rather than English instruction.
+    (["tutoring", "tutor", "academic support",
+      "homework help", "learning centre",
+      "academic enrichment"],                               ["academic-tutoring-multi"]),
+    (["logical thinking", "critical thinking",
+      "logic"],                                             ["logical-thinking"]),
+    (["test prep", "sat prep", "act prep",
+      "standardized test"],                                 ["test-preparation"]),
+    (["credit course", "credit class", "high school credit",
+      "university credit"],                                 ["credit-courses"]),
+    # ── Leadership / personal dev ────────────────────────────────────────────
+    (["leadership"],                                        ["leadership-training"]),
+    (["empowerment"],                                       ["empowerment"]),
+    (["social justice"],                                    ["social-justice"]),
+    (["financial literacy", "money management"],            ["financial-literacy"]),
+    (["entrepreneurship", "entrepreneur", "startup"],       ["entrepreneurship"]),
+    (["cit", "counsellor in training",
+      "counselor in training"],                             ["cit-lit-program"]),
+    # ── Outdoor / adventure ──────────────────────────────────────────────────
+    (["wilderness trip", "canoe trip", "out-tripping",
+      "outtripping"],                                       ["wilderness-out-tripping"]),
+    (["wilderness", "bushcraft", "backcountry"],            ["wilderness-skills"]),
+    (["ropes course", "high ropes", "low ropes"],           ["ropes-course"]),
+    (["survival skills", "survival camp"],                  ["survival-skills"]),
+    (["urban exploration"],                                 ["urban-exploration"]),
+    (["hiking", "backpacking", "trekking"],                 ["hiking"]),
+    (["travel camp", "teen travel", "world travel"],        ["travel"]),
+    (["adventure camp", "adventure program"],               ["adventure"]),
+    (["safari"],                                            ["safari"]),
+    (["zip line", "zipline"],                               ["zip-line"]),
+    # ── Equestrian ───────────────────────────────────────────────────────────
+    (["horseback", "horse riding", "horse camp",
+      "equestrian", "equine", "pony", "stable"],            ["horseback-riding-equestrian"]),
+    # ── Health / wellness ────────────────────────────────────────────────────
+    (["yoga"],                                              ["yoga"]),
+    (["meditation"],                                        ["meditation"]),
+    (["mindfulness"],                                       ["mindfulness-training"]),
+    (["pilates"],                                           ["pilates"]),
+    (["nutrition", "healthy eating"],                       ["nutrition"]),
+    (["fitness", "conditioning", "bootcamp", "boot camp"],  ["health-fitness"]),
+    (["lifeguard", "lifesaving", "first aid", "cpr",
+      "emergency response", "bronze cross",
+      "water safety", "standard first aid",
+      "nls", "national lifeguard"],                         ["first-aid-lifesaving"]),
+    (["cooking", "culinary", "chef", "kitchen",
+      "junior chef", "food prep", "canning"],               ["cooking"]),
+    (["baking", "cake decorating", "pastry", "cupcake"],    ["baking-decorating"]),
+    # ── Misc arts ────────────────────────────────────────────────────────────
+    (["circus", "acrobat", "aerial"],                       ["circus"]),
+]
+
+
+def infer_tags(session_names: list, tag_slug_to_id: dict) -> set:
+    """
+    Given a list of session names for a camp, return the set of matched
+    activity tag slugs using keyword matching against _KEYWORD_TO_TAGS.
+
+    Matching is case-insensitive. Longer phrases are checked before shorter
+    ones to prevent e.g. 'scratch' matching inside 'basketball'.
+    Returns only slugs that exist in tag_slug_to_id (i.e. active in our DB).
+    """
+    combined = " | ".join(session_names).lower()
+    found = set()
+    for keywords, slugs in _KEYWORD_TO_TAGS:
+        for kw in keywords:
+            if kw in combined:
+                for slug in slugs:
+                    if slug in tag_slug_to_id:
+                        found.add(slug)
+                break  # first matching keyword in the group is enough
+    return found
+
+
 # ── Main sync logic ───────────────────────────────────────────────────────────
 
-def run(dump_path, dry_run, only, update_meta, deactivate=False, skip_ids=None):
+def run(dump_path, dry_run, only, update_meta, deactivate=False, skip_ids=None,
+        seed_programs=False):
     print(f"Reading dump: {dump_path}")
     with open(dump_path, 'r', encoding='utf-8', errors='replace') as f:
         content = f.read()
@@ -303,6 +620,7 @@ def run(dump_path, dry_run, only, update_meta, deactivate=False, skip_ids=None):
         'new_camps': 0,
         'deactivated': 0,
         'reactivated': 0,
+        'programs_seeded': 0,
         'meta_updated': 0,
         'locations_added': 0,
         'dates_inserted': 0,
@@ -316,7 +634,7 @@ def run(dump_path, dry_run, only, update_meta, deactivate=False, skip_ids=None):
             if cid not in new_db_all:
                 continue
             new = new_db_all[cid]
-            old_active = old['status'] == 1
+            old_active = old['is_member'] == 1  # paying client → should be active
             new_active = new['status'] == 1
 
             if old_active and not new_active:
@@ -351,8 +669,8 @@ def run(dump_path, dry_run, only, update_meta, deactivate=False, skip_ids=None):
         for cid, old in sorted(dump_camps.items()):
             if cid in new_db_all:
                 continue
-            if old['status'] != 1:
-                continue  # don't import inactive camps
+            if old['is_member'] != 1:
+                continue  # don't import non-member camps
 
             addr = dump_addrs.get(cid, {})
             info = dump_info.get(cid, {})
@@ -391,7 +709,83 @@ def run(dump_path, dry_run, only, update_meta, deactivate=False, skip_ids=None):
             print("  No new camps.")
         print()
 
-    # ── 3. Metadata updates ───────────────────────────────────────────────────
+    # ── 3. Seed programs for newly-active camps ───────────────────────────────
+    if seed_programs and only in (None, 'seed', 'all'):
+        print("=== Seed programs for active camps with none ===")
+
+        # Find all currently-active camps in our DB with no programs
+        cursor.execute("""
+            SELECT c.id, c.camp_name
+            FROM camps c
+            LEFT JOIN programs p ON p.camp_id = c.id AND p.status = 1
+            WHERE c.status = 1
+            GROUP BY c.id
+            HAVING COUNT(p.id) = 0
+        """)
+        needs_program = {r['id']: r['camp_name'] for r in cursor.fetchall()}
+
+        if not needs_program:
+            print("  No active camps without programs.")
+            print()
+        else:
+            print(f"  {len(needs_program)} active camps need programs — "
+                  f"parsing sessions from dump...")
+
+            # Parse sessions only for camps that need them
+            sessions_by_camp = parse_sessions_by_camp(content, set(needs_program.keys()))
+
+            # Load active tag slug → id map
+            cursor.execute("SELECT id, slug FROM activity_tags WHERE is_active = 1")
+            tag_slug_to_id = {r['slug']: r['id'] for r in cursor.fetchall()}
+
+            seeded = 0
+            for camp_id, camp_name in sorted(needs_program.items()):
+                sessions = sessions_by_camp.get(camp_id, [])
+                inferred = sorted(infer_tags(sessions, tag_slug_to_id))
+
+                tag_preview = inferred[:6]
+                if len(inferred) > 6:
+                    tag_preview_str = ", ".join(tag_preview) + f" (+{len(inferred)-6} more)"
+                else:
+                    tag_preview_str = ", ".join(tag_preview) or "(none inferred)"
+
+                print(f"  SEED id={camp_id}: {camp_name!r}  "
+                      f"sessions={len(sessions)}  tags=[{tag_preview_str}]")
+
+                if dry_run:
+                    seeded += 1
+                    continue
+
+                # Create default program
+                cursor.execute(
+                    """
+                    INSERT INTO programs (camp_id, name, type, age_from, age_to, status)
+                    VALUES (%s, %s, 'Day', 4, 18, 1)
+                    """,
+                    (camp_id, camp_name)
+                )
+                prog_id = cursor.lastrowid
+
+                # Assign inferred tags
+                for slug in inferred:
+                    tag_id = tag_slug_to_id.get(slug)
+                    if tag_id:
+                        cursor.execute(
+                            "INSERT IGNORE INTO program_tags (program_id, tag_id) "
+                            "VALUES (%s, %s)",
+                            (prog_id, tag_id)
+                        )
+
+                seeded += 1
+                if seeded % 50 == 0:
+                    conn.commit()
+
+            stats['programs_seeded'] = seeded
+            if not dry_run and seeded % 50 != 0:
+                conn.commit()
+            print()
+
+    # ── 4. Metadata updates ───────────────────────────────────────────────────
     if update_meta and only in (None, 'meta', 'all'):
         print("=== Metadata updates (tier/website) ===")
         updated = 0
@@ -427,7 +821,7 @@ def run(dump_path, dry_run, only, update_meta, deactivate=False, skip_ids=None):
             print("  No metadata changes.")
         print()
 
-    # ── 4. Extra locations ────────────────────────────────────────────────────
+    # ── 5. Extra locations ────────────────────────────────────────────────────
     if only in (None, 'locations', 'all'):
         print("=== Missing extra_locations ===")
 
@@ -499,6 +893,7 @@ def run(dump_path, dry_run, only, update_meta, deactivate=False, skip_ids=None):
                         (camp_name, slug, tier, status, lat, lon,
                          city, province, country, website, description)
                     VALUES (%s, %s, %s, 1, %s, %s, %s, %s, 1, %s, %s)
+                    ON DUPLICATE KEY UPDATE id=id
                     """,
                     (camp_name, slug, master.get('tier', 'bronze'),
                      loc['lat'], loc['lon'],
@@ -554,7 +949,7 @@ def run(dump_path, dry_run, only, update_meta, deactivate=False, skip_ids=None):
             print("  No missing locations.")
         print()
 
-    # ── 6. Program dates ──────────────────────────────────────────────────────
+    # ── 6. Program dates (was 6, now 6) ───────────────────────────────────────
     if only in (None, 'dates', 'all'):
         from datetime import date as _date
         today = str(_date.today())
@@ -618,14 +1013,16 @@ def run(dump_path, dry_run, only, update_meta, deactivate=False, skip_ids=None):
     prefix = "DRY RUN — " if dry_run else ""
     print("=" * 60)
     print(f"{prefix}Sync complete")
-    print(f"  New camps {'would be ' if dry_run else ''}inserted:       {stats['new_camps']}")
-    print(f"  Camps {'would be ' if dry_run else ''}re-activated:       {stats['reactivated']}")
+    print(f"  New camps {'would be ' if dry_run else ''}inserted:         {stats['new_camps']}")
+    print(f"  Camps {'would be ' if dry_run else ''}re-activated:         {stats['reactivated']}")
     if deactivate:
-        print(f"  Camps {'would be ' if dry_run else ''}deactivated:        {stats['deactivated']}")
+        print(f"  Camps {'would be ' if dry_run else ''}deactivated:          {stats['deactivated']}")
+    if seed_programs:
+        print(f"  Programs {'would be ' if dry_run else ''}seeded:           {stats['programs_seeded']}")
     if update_meta:
-        print(f"  Metadata {'would be ' if dry_run else ''}updated:        {stats['meta_updated']}")
-    print(f"  Locations {'would be ' if dry_run else ''}added:          {stats['locations_added']}")
-    print(f"  Program dates {'would be ' if dry_run else ''}inserted:   {stats['dates_inserted']}")
+        print(f"  Metadata {'would be ' if dry_run else ''}updated:          {stats['meta_updated']}")
+    print(f"  Locations {'would be ' if dry_run else ''}added:            {stats['locations_added']}")
+    print(f"  Program dates {'would be ' if dry_run else ''}inserted:     {stats['dates_inserted']}")
     print("=" * 60)
 
 
@@ -636,15 +1033,18 @@ if __name__ == "__main__":
     parser.add_argument("--dry-run", action="store_true",
                         help="Preview changes without writing to DB")
     parser.add_argument("--only",
-                        choices=["status", "new", "meta", "locations", "dates", "all"],
+                        choices=["status", "new", "seed", "meta", "locations", "dates", "all"],
                         default=None,
                         help="Run only a specific sync section")
     parser.add_argument("--update-meta", action="store_true",
                         help="Also update tier/website for existing camps")
     parser.add_argument("--deactivate", action="store_true",
-                        help="Deactivate camps whose status is now 0 in the dump "
+                        help="Deactivate camps whose is_member=0 in the dump "
                              "(i.e. they left the client list). Always dry-run first "
                              "to review the list before applying.")
+    parser.add_argument("--seed-programs", action="store_true",
+                        help="For active camps with no programs: create a default program "
+                             "and infer activity tags from dump session names.")
     parser.add_argument("--skip-ids",
                         help="Comma-separated camp IDs to skip during deactivation "
                              "(e.g. manually-promoted sub-locations: 422,529,579)")
@@ -652,4 +1052,5 @@ if __name__ == "__main__":
                         help="Path to SQL dump file")
     args = parser.parse_args()
     skip_ids = set(int(x) for x in args.skip_ids.split(",")) if args.skip_ids else None
-    run(args.dump, args.dry_run, args.only, args.update_meta, args.deactivate, skip_ids)
+    run(args.dump, args.dry_run, args.only, args.update_meta, args.deactivate, skip_ids,
+        seed_programs=args.seed_programs)

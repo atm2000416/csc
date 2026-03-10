@@ -41,10 +41,10 @@ def _cost_str(cost_from, cost_to) -> str:
 
 _BTN = (
     "display:inline-block; margin-right:8px; "
-    "padding:5px 14px; border-radius:20px; font-size:0.78rem; font-weight:700; "
-    "font-family:Montserrat,sans-serif; text-decoration:none; "
-    "background:linear-gradient(135deg,#2e7d32,#388e3c); color:white; "
-    "box-shadow:0 2px 6px rgba(46,125,50,0.25);"
+    "padding:5px 14px; border-radius:24px; font-size:0.78rem; font-weight:700; "
+    "font-family:Nunito,sans-serif; text-decoration:none; "
+    "background:#8A9A5B; color:white; "
+    "box-shadow:3px 3px 8px rgba(117,131,77,0.35);"
 )
 
 
@@ -75,33 +75,33 @@ def render_card(result: dict):
 
     # Line 1 — Program Name
     lines.append(
-        f'<p style="margin:0 0 2px 0; font-family:Montserrat,sans-serif; font-weight:800; '
-        f'font-size:1.05rem; color:#1b5e20;">{program_name}</p>'
+        f'<p style="margin:0 0 2px 0; font-family:Nunito,sans-serif; font-weight:800; '
+        f'font-size:1.05rem; color:#2F4F4F;">{program_name}</p>'
     )
 
     # Line 2 — Camp Name
     lines.append(
-        f'<p style="margin:0 0 6px 0; font-size:0.92rem; color:{tier_col}; font-weight:600;">'
+        f'<p style="margin:0 0 6px 0; font-size:0.92rem; color:{tier_col}; font-weight:600; font-family:Nunito,sans-serif;">'
         f'{camp_name}</p>'
     )
 
     # Line 3 — Blurb
     if blurb:
         lines.append(
-            f'<p style="margin:0 0 7px 0; font-size:0.86rem; color:#555; font-style:italic;">'
+            f'<p style="margin:0 0 7px 0; font-size:0.86rem; color:#4a6060; font-style:italic; font-family:Lato,sans-serif;">'
             f'{blurb}</p>'
         )
 
     # Line 4 — Cost
     if cost:
         lines.append(
-            f'<p style="margin:0 0 4px 0; font-size:0.86rem; color:#333;">💰 {cost}</p>'
+            f'<p style="margin:0 0 4px 0; font-size:0.86rem; color:#3a5252; font-family:Lato,sans-serif;">💰 {cost}</p>'
         )
 
     # Line 5 — Location
     if location:
         lines.append(
-            f'<p style="margin:0 0 10px 0; font-size:0.84rem; color:#666;">📍 {location}</p>'
+            f'<p style="margin:0 0 10px 0; font-size:0.84rem; color:#5a7070; font-family:Lato,sans-serif;">📍 {location}</p>'
         )
 
     # Buttons
@@ -110,9 +110,9 @@ def render_card(result: dict):
 
     card_html = (
         f'<div style="padding:0 1.4rem; margin-bottom:10px;">'
-        f'<div style="border-left:4px solid {tier_col}; border-radius:8px; '
+        f'<div style="border-left:4px solid {tier_col}; border-radius:12px; '
         f'background:#ffffff; padding:14px 16px 12px 16px; '
-        f'box-shadow:0 1px 4px rgba(0,0,0,0.06);">'
+        f'box-shadow:0 2px 8px rgba(47,79,79,0.08);">'
         + "".join(lines)
         + "</div></div>"
     )

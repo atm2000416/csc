@@ -19,77 +19,80 @@ st.set_page_config(
 
 st.markdown("""
 <style>
-@import url('https://fonts.googleapis.com/css2?family=Montserrat:wght@400;600;700;800;900&family=Source+Sans+3:wght@400;500;600&display=swap');
+@import url('https://fonts.googleapis.com/css2?family=Nunito:wght@400;600;700;800;900&family=Lato:wght@400;700&display=swap');
 
 /* ── Base ── */
 html, body, [class*="css"] {
-    font-family: 'Source Sans 3', sans-serif;
-    color: #2c3e50;
-    background-color: #f5f6f8;
+    font-family: 'Lato', sans-serif;
+    color: #2F4F4F;
+    background-color: #F4F7F0;
 }
 #MainMenu, footer, header { visibility: hidden; }
 [data-testid="stSidebarCollapsedControl"] { display: none !important; }
 .block-container { padding: 0 !important; max-width: 100% !important; }
 
-/* ── Custom topbar ── */
+/* ── Custom topbar (frosted glass) ── */
 .camps-topbar {
-    background: #1b5e20;
+    background: rgba(138,154,91,0.88);
+    backdrop-filter: blur(12px);
+    -webkit-backdrop-filter: blur(12px);
     padding: 0 1.5rem;
-    height: 56px;
+    height: 72px;
     display: flex;
     align-items: center;
     position: sticky;
     top: 0;
     z-index: 1000;
-    box-shadow: 0 2px 6px rgba(0,0,0,0.25);
+    box-shadow: 0 2px 12px rgba(47,79,79,0.15);
     margin-bottom: 0;
 }
 .camps-topbar .logo {
-    font-family: 'Montserrat', sans-serif;
+    font-family: 'Nunito', sans-serif;
     font-weight: 900;
-    font-size: 1.4rem;
+    font-size: 1.5rem;
     color: white;
     letter-spacing: -0.3px;
 }
 .camps-topbar .logo em {
-    color: #f9a825;
+    color: #ffd166;
     font-style: normal;
 }
 .camps-topbar .badge {
     margin-left: 10px;
-    background: #f9a825;
-    color: #1b5e20;
-    font-family: 'Montserrat', sans-serif;
+    background: rgba(255,255,255,0.25);
+    color: white;
+    font-family: 'Nunito', sans-serif;
     font-weight: 800;
     font-size: 0.65rem;
-    padding: 2px 7px;
-    border-radius: 10px;
+    padding: 2px 9px;
+    border-radius: 12px;
     letter-spacing: 0.3px;
     text-transform: uppercase;
+    border: 1px solid rgba(255,255,255,0.4);
 }
 
 /* ── Sidebar ── */
 [data-testid="stSidebar"] {
     background: white !important;
-    border-right: 1px solid #e0e4ea;
+    border-right: 1px solid #d8e4d0;
 }
 [data-testid="stSidebar"] h1,
 [data-testid="stSidebar"] h2,
 [data-testid="stSidebar"] h3 {
-    font-family: 'Montserrat', sans-serif;
+    font-family: 'Nunito', sans-serif;
     font-weight: 800;
     font-size: 0.95rem;
     color: white;
-    background: #1b5e20;
+    background: #8A9A5B;
     margin: -1rem -1rem 1rem -1rem;
     padding: 0.9rem 1rem;
-    border-radius: 0 0 10px 10px;
+    border-radius: 0 0 12px 12px;
 }
 [data-testid="stSidebar"] label {
     font-size: 0.82rem !important;
-    font-weight: 600 !important;
-    color: #37474f !important;
-    font-family: 'Montserrat', sans-serif !important;
+    font-weight: 700 !important;
+    color: #2F4F4F !important;
+    font-family: 'Nunito', sans-serif !important;
     text-transform: uppercase;
     letter-spacing: 0.5px;
 }
@@ -106,7 +109,7 @@ html, body, [class*="css"] {
     padding: 0 1.2rem;
 }
 
-/* ── Chat messages (user input echo, if any) ── */
+/* ── Chat messages ── */
 [data-testid="stChatMessage"] {
     background: transparent;
     border: none;
@@ -117,62 +120,64 @@ html, body, [class*="css"] {
 
 /* ── Chat input ── */
 [data-testid="stChatInput"] textarea {
-    border: 2px solid #c8e6c9 !important;
-    border-radius: 25px !important;
-    font-family: 'Source Sans 3', sans-serif !important;
+    border: 2px solid #c5d4a0 !important;
+    border-radius: 28px !important;
+    font-family: 'Lato', sans-serif !important;
     font-size: 0.92rem !important;
     padding: 0.55rem 1.1rem !important;
     background: white !important;
+    color: #2F4F4F !important;
 }
 [data-testid="stChatInput"] textarea:focus {
-    border-color: #2e7d32 !important;
-    box-shadow: 0 0 0 3px rgba(46,125,50,0.12) !important;
+    border-color: #8A9A5B !important;
+    box-shadow: 0 0 0 3px rgba(138,154,91,0.18) !important;
 }
 
-/* ── Buttons ── */
+/* ── Buttons (claymorphism) ── */
 .stButton > button {
-    font-family: 'Montserrat', sans-serif !important;
+    font-family: 'Nunito', sans-serif !important;
     font-weight: 700 !important;
-    border-radius: 20px !important;
-    font-size: 0.82rem !important;
-    padding: 0.35rem 0.9rem !important;
-    border: 1.5px solid #2e7d32 !important;
-    color: #2e7d32 !important;
-    background: white !important;
+    border-radius: 24px !important;
+    font-size: 0.85rem !important;
+    padding: 0.4rem 1rem !important;
+    border: none !important;
+    color: white !important;
+    background: #8A9A5B !important;
+    box-shadow: 4px 4px 10px #75834d, -3px -3px 8px #9fb169, inset 2px 2px 6px rgba(255,255,255,0.4) !important;
     transition: all 0.15s ease;
 }
 .stButton > button:hover {
-    background: #e8f5e9 !important;
-    border-color: #1b5e20 !important;
-    color: #1b5e20 !important;
+    background: #7a8a4b !important;
+    box-shadow: 3px 3px 8px #75834d, -2px -2px 6px #9fb169, inset 2px 2px 6px rgba(255,255,255,0.4) !important;
+    transform: translateY(-1px);
 }
 
 /* ── Link buttons (camps.ca / Camp Website) ── */
 .stLinkButton a {
-    font-family: 'Montserrat', sans-serif !important;
+    font-family: 'Nunito', sans-serif !important;
     font-weight: 700 !important;
     font-size: 0.78rem !important;
-    border-radius: 20px !important;
-    background: linear-gradient(135deg, #2e7d32, #388e3c) !important;
+    border-radius: 24px !important;
+    background: #8A9A5B !important;
     color: white !important;
     border: none !important;
-    padding: 0.3rem 0.85rem !important;
-    box-shadow: 0 2px 6px rgba(46,125,50,0.25) !important;
+    padding: 0.3rem 0.9rem !important;
+    box-shadow: 3px 3px 8px rgba(117,131,77,0.35) !important;
     transition: all 0.15s ease;
 }
 .stLinkButton a:hover {
-    background: linear-gradient(135deg, #1b5e20, #2e7d32) !important;
-    box-shadow: 0 4px 12px rgba(46,125,50,0.35) !important;
+    background: #7a8a4b !important;
+    box-shadow: 4px 4px 12px rgba(117,131,77,0.45) !important;
     transform: translateY(-1px);
 }
 
 /* ── Result count ── */
 .result-count {
     padding: 0 1.4rem;
-    font-family: 'Montserrat', sans-serif;
+    font-family: 'Nunito', sans-serif;
     font-size: 0.78rem;
-    font-weight: 700;
-    color: #558b2f;
+    font-weight: 800;
+    color: #8A9A5B;
     text-transform: uppercase;
     letter-spacing: 0.5px;
     margin-bottom: 0.8rem;
@@ -180,30 +185,30 @@ html, body, [class*="css"] {
 
 /* ── Spinner ── */
 .stSpinner > div {
-    border-top-color: #2e7d32 !important;
+    border-top-color: #8A9A5B !important;
 }
 
 /* ── Selectbox / inputs ── */
 [data-testid="stSelectbox"] > div > div,
 [data-testid="stNumberInput"] input,
 [data-testid="stTextInput"] input {
-    border: 1.5px solid #c8e6c9 !important;
-    border-radius: 7px !important;
+    border: 1.5px solid #c5d4a0 !important;
+    border-radius: 10px !important;
     font-size: 0.88rem !important;
 }
 
 /* ── Sticky filter bar ── */
 [data-testid="stExpander"] {
     position: sticky;
-    top: 56px;
+    top: 72px;
     z-index: 900;
     background: white;
-    border-bottom: 1px solid #e0e4ea;
-    box-shadow: 0 2px 6px rgba(0,0,0,0.06);
+    border-bottom: 1px solid #d8e4d0;
+    box-shadow: 0 2px 8px rgba(47,79,79,0.06);
 }
 
 /* ── Dividers ── */
-hr { border-color: #e8edf2 !important; margin: 0.8rem 0 !important; }
+hr { border-color: #d8e4d0 !important; margin: 0.8rem 0 !important; }
 </style>
 """, unsafe_allow_html=True)
 
@@ -279,7 +284,7 @@ def display_results(results: list[dict]):
 
 _BUBBLE_BASE = (
     "padding:12px 16px; max-width:75%; "
-    "font-family:'Source Sans 3',sans-serif; font-size:0.95rem; line-height:1.55;"
+    "font-family:'Lato',sans-serif; font-size:0.95rem; line-height:1.55;"
 )
 
 _BUBBLE_ROW = "padding:0 1.4rem;"
@@ -292,15 +297,15 @@ def _render_bubble(message: str, role: str):
     if role == "assistant":
         st.markdown(
             f'<div style="display:flex; justify-content:flex-start; margin:0 0 0.8rem 0; {_BUBBLE_ROW}">'
-            f'<div style="background:#007AFF; color:white; '
-            f'border-radius:18px 18px 18px 4px; {_BUBBLE_BASE}">'
+            f'<div style="background:#FFFFFF; color:#2F4F4F; '
+            f'border-radius:18px 18px 18px 4px; box-shadow:0 1px 6px rgba(47,79,79,0.10); {_BUBBLE_BASE}">'
             f'{message}</div></div>',
             unsafe_allow_html=True,
         )
     else:
         st.markdown(
             f'<div style="display:flex; justify-content:flex-end; margin:0 0 0.8rem 0; {_BUBBLE_ROW}">'
-            f'<div style="background:#E5E5EA; color:#1c1c1e; '
+            f'<div style="background:#8A9A5B; color:white; '
             f'border-radius:18px 18px 4px 18px; {_BUBBLE_BASE}">'
             f'{message}</div></div>',
             unsafe_allow_html=True,
@@ -405,7 +410,22 @@ def main():
                     st.session_state.session_context, sidebar_filters)
         return
 
-    # Handle surprise query injection
+    # Handle direct surprise results (bypasses LLM pipeline entirely)
+    if st.session_state.get("_surprise_direct_results") is not None and not user_input:
+        surprise_results = st.session_state.pop("_surprise_direct_results")
+        query_label      = st.session_state.pop("_surprise_query_label", "Surprise camps")
+        st.session_state.pop("_disambiguated_tags", None)
+        st.session_state.session_context["pending_suggestion"] = None
+        _render_history()
+        _show_user_bubble(query_label)
+        if surprise_results:
+            st.session_state["_last_results"] = surprise_results
+            display_results(surprise_results)
+        else:
+            _speak("I couldn't find camps for that combination — try searching manually!")
+        return
+
+    # Handle surprise query injection (legacy path — kept for safety)
     if st.session_state.get("_pending_query") and not user_input:
         user_input = st.session_state.pop("_pending_query")
         st.session_state["_surprise_results_heading"] = True

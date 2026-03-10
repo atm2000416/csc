@@ -14,6 +14,7 @@ st.set_page_config(
     page_title="Camp Finder | camps.ca",
     page_icon="🏕️",
     layout="wide",
+    initial_sidebar_state="collapsed",
 )
 
 st.markdown("""
@@ -27,6 +28,7 @@ html, body, [class*="css"] {
     background-color: #f5f6f8;
 }
 #MainMenu, footer, header { visibility: hidden; }
+[data-testid="stSidebarCollapsedControl"] { display: none !important; }
 .block-container { padding: 0 !important; max-width: 100% !important; }
 
 /* ── Custom topbar ── */
@@ -338,13 +340,7 @@ def main():
         render_surprise_me(on_surprise_search)
     with col3:
         if st.button("Start Over", key="reset_btn", help="Clear all searches and start fresh"):
-            for key in [
-                "session_context", "_trace", "_session_trace", "_last_results",
-                "_pending_query", "_input_path", "_input_path_pending",
-                "_surprise_query", "_surprise_tag", "_surprise_province",
-                "_surprise_results_heading", "_disambiguation_choice", "_disambiguated_tags",
-            ]:
-                st.session_state.pop(key, None)
+            st.session_state.clear()
             st.rerun()
 
     # Chat input
@@ -382,6 +378,13 @@ def main():
         prior = st.session_state.get("_last_results")
         if prior:
             display_results(prior)
+        else:
+            st.markdown(
+                '<p style="color:#78909c; font-size:0.92rem; margin-top:2rem; text-align:center;">'
+                '🏕️ Tell me what you\'re looking for and I\'ll find the best camps for your child.'
+                '</p>',
+                unsafe_allow_html=True,
+            )
         return
 
     session = st.session_state.session_context

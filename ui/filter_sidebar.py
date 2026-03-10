@@ -1,6 +1,7 @@
 """
 ui/filter_sidebar.py
-Sidebar filters for camp search. Returns a dict of non-default active filters.
+Inline collapsible filter bar for camp search.
+Returns a dict of non-default active filters.
 """
 import streamlit as st
 
@@ -12,22 +13,26 @@ _PROVINCES = [
 
 _TYPES = ["Any", "Day Camp", "Overnight", "Virtual"]
 
-# Maps sidebar display labels to CSSL type map keys
 _TYPE_TO_CSSL = {"Day Camp": "Day", "Overnight": "Overnight", "Virtual": "Virtual"}
 
 
 def render_filters() -> dict:
     """
-    Render sidebar filter controls and return active filter params dict.
+    Render inline collapsible filter controls and return active filter params dict.
     Only non-default values are included in the returned dict.
     """
-    with st.sidebar:
-        st.header("Filter Results")
-
-        age_range = st.slider("Age", min_value=4, max_value=18, value=(4, 18))
-        camp_type = st.selectbox("Type", _TYPES)
-        cost_max = st.number_input("Max cost ($)", min_value=0, value=0, step=100)
-        province = st.selectbox("Province", _PROVINCES)
+    with st.expander("🔍 Filters", expanded=False):
+        col1, col2, col3, col4 = st.columns(4)
+        with col1:
+            age_range = st.slider("Age", min_value=4, max_value=18, value=(4, 18),
+                                  key="filter_age")
+        with col2:
+            camp_type = st.selectbox("Type", _TYPES, key="filter_type")
+        with col3:
+            cost_max = st.number_input("Max cost ($)", min_value=0, value=0, step=100,
+                                       key="filter_cost")
+        with col4:
+            province = st.selectbox("Province", _PROVINCES, key="filter_province")
 
     params = {}
 

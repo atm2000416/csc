@@ -104,21 +104,28 @@ html, body, [class*="css"] {
     padding: 0 1.2rem;
 }
 
-/* ── Chat messages ── */
+/* ── Chat messages — iMessage blue bubble for assistant ── */
 [data-testid="stChatMessage"] {
-    background: white;
-    border: 1px solid #e5eaef;
-    border-radius: 12px;
-    padding: 1rem 1.2rem;
-    margin-bottom: 0.8rem;
-    box-shadow: 0 1px 4px rgba(0,0,0,0.05);
+    background: transparent;
+    border: none;
+    box-shadow: none;
+    padding: 0;
+    margin-bottom: 0.6rem;
 }
-[data-testid="stChatMessage"][data-testid*="assistant"] {
-    border-left: 4px solid #2e7d32;
+/* Blue iMessage bubble: targets the inner content div of assistant messages */
+[data-testid="stChatMessage"]:has([data-testid="chatAvatarIcon-assistant"]) .stChatMessageContent,
+[data-testid="stChatMessage"]:has([data-testid="chatAvatarIcon-assistant"]) [data-testid="stMarkdownContainer"] {
+    background: #007AFF;
+    border-radius: 18px 18px 18px 4px;
+    padding: 10px 16px;
+    display: inline-block;
+    max-width: 75%;
 }
-[data-testid="stChatMessage"] p {
+[data-testid="stChatMessage"]:has([data-testid="chatAvatarIcon-assistant"]) p,
+[data-testid="stChatMessage"]:has([data-testid="chatAvatarIcon-assistant"]) li {
+    color: white !important;
     font-size: 0.95rem;
-    line-height: 1.6;
+    line-height: 1.55;
     margin: 0;
 }
 

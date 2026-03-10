@@ -10,8 +10,27 @@ Visual hierarchy (per spec):
   Line 5 — Location          (camps.city, camps.province)
   Line 6 — Schedule slots    (program_dates, if available)
 """
+import re
 import streamlit as st
 from datetime import date
+
+
+def _ourkids_url(camp_name: str) -> str:
+    """Generate the ourkids.net listing URL for a camp from its name."""
+    slug = camp_name.lower()
+    slug = re.sub(r"[^\w\s-]", "", slug)
+    slug = re.sub(r"[-\s]+", "-", slug)
+    slug = slug.strip("-")
+    return f"https://www.ourkids.net/camp/{slug}"
+
+
+def _normalise_website(url: str) -> str:
+    """Ensure external website URL has an https:// scheme."""
+    if not url:
+        return ""
+    if url.startswith("http://") or url.startswith("https://"):
+        return url
+    return "https://" + url
 
 
 _TIER_COLOUR = {
@@ -193,7 +212,11 @@ def render_card(result: dict):
             tags_str = "  ".join(f"`{t}`" for t in tags[:8])
             st.markdown(tags_str)
 
+        btn_cols = st.columns([1, 1, 4])
+        with btn_cols[0]:
+            st.link_button("View on OurKids →", _ourkids_url(camp_name))
         if website:
-            st.link_button("View Camp →", website)
+            with btn_cols[1]:
+                st.link_button("Camp Website →", _normalise_website(website))
 
         st.markdown("</div>", unsafe_allow_html=True)

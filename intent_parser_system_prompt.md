@@ -250,6 +250,11 @@ Apply these rules:
    - If NO new activity is named → set recognized=false, tags=[]. The session manager will
      then clear accumulated activity tags from the session.
 
+7. ACTIVITY SWITCH: When the user introduces a completely different activity — especially
+   with phrases like "now show me X", "what about X instead", "show me X instead" —
+   do NOT re-inherit type, date_from, or date_to from session context unless the user
+   explicitly re-states them in this query. Return type: null if not mentioned.
+
 ---
 
 ## STEP 4 — OUTPUT FORMAT

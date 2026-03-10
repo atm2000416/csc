@@ -92,14 +92,16 @@ def merge_intent(intent: IntentResult) -> dict:
         if val is not None:
             acc[key] = val
 
-    # RC-4 post-merge: if activity switched, drop any dates Gemini re-inherited
+    # RC-4 post-merge: if activity switched, drop type/dates the model re-inherited
     # from session context. The scalar merge above may have re-added them.
-    # Guard: only strip if the user did NOT explicitly state a date in this query.
+    # Guard: only strip if the user did NOT explicitly state them in this query.
     if activity_switched:
         if new.get("date_from") is None:
             acc.pop("date_from", None)
         if new.get("date_to") is None:
             acc.pop("date_to", None)
+        if new.get("type") is None:
+            acc.pop("type", None)
 
     # Lists: override only if non-empty (empty list = "no new info")
     for key in ["tags", "exclude_tags", "cities", "traits"]:

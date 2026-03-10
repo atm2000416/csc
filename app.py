@@ -223,7 +223,7 @@ from core.tracer import init_trace, record, render_trace
 from core.category_disambiguator import get_broad_parent, get_viable_children
 from core.concierge_response import generate as generate_concierge_response
 from ui.results_card import render_card
-from ui.filter_sidebar import render_filters
+from ui.filter_sidebar import render_filters, get_filter_values
 from ui.clarification_widget import render_clarification
 from ui.surprise_me import render_surprise_me
 
@@ -272,6 +272,7 @@ def display_results(results: list[dict]):
         return
     st.markdown(f'<p class="result-count">{len(results)} result{"s" if len(results) != 1 else ""} found</p>',
                 unsafe_allow_html=True)
+    render_filters()
     for result in results:
         render_card(result)
 
@@ -374,8 +375,8 @@ def main():
             "then `python db/seed_tags.py` to seed activity tags."
         )
 
-    # Sidebar filters
-    sidebar_filters = render_filters()
+    # Read current filter values (widgets rendered later, inside display_results)
+    sidebar_filters = get_filter_values()
 
     # Surprise Me button
     def on_surprise_search(query: str):

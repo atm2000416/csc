@@ -38,6 +38,14 @@ def merge_intent(intent: IntentResult) -> dict:
         for k in ("tags", "exclude_tags", "type"):
             acc.pop(k, None)
 
+    # When Gemini recognized the query (has location/cost/etc) but found NO activity
+    # in the taxonomy (tags=[]) and had medium-low confidence, the user searched for
+    # something we can't map. Clear stale activity tags so they don't poison the search.
+    # Guard: 0.3 < ics < 0.7 — excludes API failures (0.3) and refinements (>=0.7).
+    if not intent.tags and 0.3 < intent.ics < 0.7:
+        for k in ("tags", "exclude_tags"):
+            acc.pop(k, None)
+
     # clear_activity: explicit fresh broad search ("now show me X", "all girls overnight
     # camps") — clear stale activity AND type/dates so old constraints don't pollute.
     if intent.clear_activity:
@@ -54,6 +62,14 @@ def merge_intent(intent: IntentResult) -> dict:
     activity_switched = bool(new_tags and acc_tags and not (set(new_tags) & set(acc_tags)))
     if activity_switched:
         acc.pop("exclude_tags", None)
+
+    # Coordinate invalidation: when the user names a new city/cities but provides no
+    # coordinates, the accumulated proximity coords belong to a different location.
+    # Clear them so CSSL falls back to city-string matching for the new location.
+    if (new.get("city") or new.get("cities")) and new.get("lat") is None:
+        acc.pop("lat", None)
+        acc.pop("lon", None)
+        acc.pop("radius_km", None)
 
     # Geography reset: when the user broadens to province level (province is set but
     # no specific city/cities/coords), clear stale location data so province-wide

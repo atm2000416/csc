@@ -281,8 +281,9 @@ def main():
             _render_category_picker(broad_parent, options, merged_params, user_input)
             return
 
-    # Geolocation needed but no location in params — ask the user
-    if intent.needs_geolocation and not merged_params.get("city") and not merged_params.get("province"):
+    # Geolocation needed — always ask regardless of stale session location.
+    # "near me" means the user's physical location, not a prior session city.
+    if intent.needs_geolocation:
         record("output", {"route": "NEEDS_GEOLOCATION"})
         render_trace()
         with st.chat_message("assistant"):

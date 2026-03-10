@@ -192,6 +192,16 @@ html, body, [class*="css"] {
     font-size: 0.88rem !important;
 }
 
+/* ── Sticky filter bar ── */
+[data-testid="stExpander"] {
+    position: sticky;
+    top: 56px;
+    z-index: 900;
+    background: white;
+    border-bottom: 1px solid #e0e4ea;
+    box-shadow: 0 2px 6px rgba(0,0,0,0.06);
+}
+
 /* ── Dividers ── */
 hr { border-color: #e8edf2 !important; margin: 0.8rem 0 !important; }
 </style>

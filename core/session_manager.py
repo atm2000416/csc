@@ -31,8 +31,10 @@ def merge_intent(intent: IntentResult) -> dict:
     acc = session["accumulated_params"].copy()
     new = asdict(intent)
 
-    # When the parser completely failed, don't let stale activity params bleed in
-    if not intent.recognized:
+    # When the parser genuinely failed to understand the query (not an API error),
+    # clear stale activity params so they don't bleed into an unrelated search.
+    # ics=0.3 is the hardcoded API-failure fallback — don't clear on that.
+    if not intent.recognized and intent.ics > 0.3:
         for k in ("tags", "exclude_tags", "type"):
             acc.pop(k, None)
 

@@ -5,7 +5,6 @@ Fires when result pool is large or intent confidence is low.
 """
 import json
 import logging
-import re
 import google.genai as genai
 from google.genai import types
 from config import get_secret

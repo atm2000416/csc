@@ -15,8 +15,11 @@ import streamlit as st
 from datetime import date
 
 
-def _ourkids_url(camp_name: str) -> str:
-    """Generate the ourkids.net listing URL for a camp from its name."""
+def _ourkids_url(camp_name: str, camp_id: int = None, prettyurl: str = None) -> str:
+    """Generate the ourkids.net listing URL for a camp."""
+    if prettyurl and camp_id:
+        return f"https://www.ourkids.net/{prettyurl}/{camp_id}"
+    # Fallback: generate slug from name (used for manually created sub-locations)
     slug = camp_name.lower()
     slug = re.sub(r"[^\w\s-]", "", slug)
     slug = re.sub(r"[-\s]+", "-", slug)
@@ -150,6 +153,8 @@ def render_card(result: dict):
     tags = result.get("tags", [])
     program_dates = result.get("program_dates", [])
     website = result.get("website", "")
+    prettyurl = result.get("prettyurl", "")
+    camp_id = result.get("camp_id")
 
     # ── Card container ────────────────────────────────────────────────────────
     card_style = (
@@ -214,7 +219,7 @@ def render_card(result: dict):
 
         btn_cols = st.columns([1, 1, 4])
         with btn_cols[0]:
-            st.link_button("View on OurKids →", _ourkids_url(camp_name))
+            st.link_button("View on OurKids →", _ourkids_url(camp_name, camp_id, prettyurl))
         if website:
             with btn_cols[1]:
                 st.link_button("Camp Website →", _normalise_website(website))

@@ -103,7 +103,7 @@ def parse_camps(content):
     Old schema: (cid, camp_name, prefix, listingClass, eListingType, status,
                   mod_date, location, Lat, Lon, weight, filename, usePretty,
                   prettyURL, onlineonly, wentLive, showAnalytics, agate)
-    Returns dict: {cid: {camp_name, tier, status, lat, lon}}
+    Returns dict: {cid: {camp_name, tier, status, lat, lon, prettyurl}}
     """
     block = _extract_block(content, 'camps')
     if not block:
@@ -111,12 +111,13 @@ def parse_camps(content):
 
     rows = re.findall(
         r"\((\d+),'((?:[^'\\]|\\.)*)',('(?:[^'\\]|\\.)*'|NULL),'([^']*)',"
-        r"'([^']*)',(\d+),'[^']*','[^']*','([^']*?)','([^']*?)',",
+        r"'([^']*)',(\d+),'[^']*','[^']*','([^']*?)','([^']*?)',"
+        r"\d+,'[^']*',\d+,'([^']*?)'",
         block
     )
     result = {}
     for row in rows:
-        cid, camp_name, _, listing_class, e_listing, status, lat, lon = row
+        cid, camp_name, _, listing_class, e_listing, status, lat, lon, prettyurl = row
         cid = int(cid)
         camp_name = camp_name.replace("\\'", "'")
         tier = TIER_MAP.get(e_listing, 'bronze')
@@ -132,6 +133,7 @@ def parse_camps(content):
             'status': int(status),
             'lat': lat_f,
             'lon': lon_f,
+            'prettyurl': prettyurl or None,
         }
     return result
 
@@ -372,14 +374,15 @@ def run(dump_path, dry_run, only, update_meta, deactivate=False, skip_ids=None):
                 """
                 INSERT INTO camps
                     (id, camp_name, slug, tier, status, lat, lon,
-                     city, province, country, website, description)
-                VALUES (%s, %s, %s, %s, 1, %s, %s, %s, %s, 1, %s, %s)
+                     city, province, country, website, description, prettyurl)
+                VALUES (%s, %s, %s, %s, 1, %s, %s, %s, %s, 1, %s, %s, %s)
                 ON DUPLICATE KEY UPDATE id=id
                 """,
                 (cid, camp_name, slug, old.get('tier', 'bronze'),
                  old.get('lat'), old.get('lon'),
                  city, province,
-                 info.get('website', ''), info.get('description', ''))
+                 info.get('website', ''), info.get('description', ''),
+                 old.get('prettyurl'))
             )
             added += 1
 
@@ -404,6 +407,9 @@ def run(dump_path, dry_run, only, update_meta, deactivate=False, skip_ids=None):
             website = info.get('website', '')
             if website and website != (new.get('website') or ''):
                 changes['website'] = website
+            prettyurl = old.get('prettyurl')
+            if prettyurl and prettyurl != (new.get('prettyurl') or ''):
+                changes['prettyurl'] = prettyurl
 
             if changes:
                 desc = ', '.join(f"{k}: {new.get(k)!r}→{v!r}" for k, v in changes.items())

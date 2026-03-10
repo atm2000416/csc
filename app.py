@@ -273,10 +273,12 @@ _BUBBLE_BASE = (
 
 _BUBBLE_ROW = "padding:0 1.4rem;"
 
-def _speak(message: str):
-    """Render CSC response as a left-aligned iMessage blue bubble."""
-    if message:
-        st.session_state["_last_csc_message"] = message
+
+def _render_bubble(message: str, role: str):
+    """Low-level bubble renderer — does not touch session state."""
+    if not message:
+        return
+    if role == "assistant":
         st.markdown(
             f'<div style="display:flex; justify-content:flex-start; margin:0 0 0.8rem 0; {_BUBBLE_ROW}">'
             f'<div style="background:#007AFF; color:white; '
@@ -284,11 +286,7 @@ def _speak(message: str):
             f'{message}</div></div>',
             unsafe_allow_html=True,
         )
-
-
-def _show_user_bubble(message: str):
-    """Render user input as a right-aligned iMessage grey bubble."""
-    if message:
+    else:
         st.markdown(
             f'<div style="display:flex; justify-content:flex-end; margin:0 0 0.8rem 0; {_BUBBLE_ROW}">'
             f'<div style="background:#E5E5EA; color:#1c1c1e; '
@@ -296,6 +294,30 @@ def _show_user_bubble(message: str):
             f'{message}</div></div>',
             unsafe_allow_html=True,
         )
+
+
+def _render_history():
+    """Re-render all stored conversation messages."""
+    for msg in st.session_state.get("_messages", []):
+        _render_bubble(msg["content"], msg["role"])
+
+
+def _speak(message: str):
+    """Append CSC response to history and render it."""
+    if message:
+        st.session_state.setdefault("_messages", []).append(
+            {"role": "assistant", "content": message}
+        )
+        _render_bubble(message, "assistant")
+
+
+def _show_user_bubble(message: str):
+    """Append user message to history and render it."""
+    if message:
+        st.session_state.setdefault("_messages", []).append(
+            {"role": "user", "content": message}
+        )
+        _render_bubble(message, "user")
 
 
 # ── Affirmative suggestion check ──────────────────────────────────────────────
@@ -388,14 +410,10 @@ def main():
         st.session_state.pop("_surprise_results_heading", None)
 
     if not user_input:
-        last_user = st.session_state.get("_last_user_message")
-        last_csc  = st.session_state.get("_last_csc_message")
-        prior     = st.session_state.get("_last_results")
-        if last_user or prior:
-            if last_user:
-                _show_user_bubble(last_user)
-            if last_csc:
-                _speak(last_csc)
+        messages = st.session_state.get("_messages", [])
+        prior    = st.session_state.get("_last_results")
+        if messages or prior:
+            _render_history()
             if prior:
                 display_results(prior)
         else:
@@ -409,9 +427,8 @@ def main():
 
     session = st.session_state.session_context
 
-    # Show user bubble immediately and store for re-renders
-    st.session_state["_last_user_message"] = user_input
-    st.session_state.pop("_last_csc_message", None)  # clear stale CSC message
+    # Render prior conversation history, then show + store current user message
+    _render_history()
     _show_user_bubble(user_input)
 
     # Affirmative suggestion check

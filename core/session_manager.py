@@ -48,6 +48,14 @@ def merge_intent(intent: IntentResult) -> dict:
     if new_tags and acc_tags and not (set(new_tags) & set(acc_tags)):
         acc.pop("exclude_tags", None)
 
+    # Geography reset: when the user broadens to province level (province is set but
+    # no specific city or cities list), clear stale cities so the province-wide
+    # search takes effect. Without this, cities takes precedence over province in CSSL
+    # and the user's "search all of Ontario" has no effect.
+    if new.get("province") and not new.get("city") and not (new.get("cities") or []):
+        acc.pop("cities", None)
+        acc.pop("city", None)
+
     # Scalars: override on any non-None value (allows setting False, 0, etc.)
     for key in [
         "age_from", "age_to", "cost_max", "is_special_needs", "is_virtual",

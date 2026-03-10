@@ -122,7 +122,7 @@ def render_trace():
                     "Path":    inp.get("path", "typed"),
                     "Query":   inp.get("raw_query", "")[:50],
                     "Tags":    ", ".join(ip.get("tags", [])),
-                    "ICS":     ip.get("ics", ""),
+                    "ICS":     ip.get("ics") or None,
                     "Results": out.get("final_count", cssl.get("results_returned", "")),
                     "RCS":     cssl.get("rcs", ""),
                     "Route":   out.get("route", ""),

@@ -86,7 +86,7 @@ def rerank(
         response = client.models.generate_content(
             model="gemini-2.5-flash",
             contents=prompt,
-            config=types.GenerateContentConfig(temperature=0.1, max_output_tokens=1500),
+            config=types.GenerateContentConfig(temperature=0.1, max_output_tokens=3000),
         )
         raw = response.text.strip()
         # Extract first JSON object — handles markdown fences and thinking preamble

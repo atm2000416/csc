@@ -136,9 +136,19 @@ def main():
     def on_surprise_search(query: str):
         st.session_state["_pending_query"] = query
 
-    col1, col2 = st.columns([4, 1])
+    col1, col2, col3 = st.columns([4, 1, 1])
     with col2:
         render_surprise_me(on_surprise_search)
+    with col3:
+        if st.button("Start Over", key="reset_btn", help="Clear all searches and start fresh"):
+            for key in [
+                "session_context", "_trace", "_session_trace", "_last_results",
+                "_pending_query", "_input_path", "_input_path_pending",
+                "_surprise_query", "_surprise_tag", "_surprise_province",
+                "_surprise_results_heading", "_disambiguation_choice", "_disambiguated_tags",
+            ]:
+                st.session_state.pop(key, None)
+            st.rerun()
 
     # Chat input
     user_input = st.chat_input("Describe what you're looking for (e.g. hockey camp Toronto for my 10 year old)")
@@ -463,6 +473,9 @@ def _diagnose_zero_results(merged_params: dict) -> dict:
         tag_ids=tag_ids,
         searched_city=merged_params.get("city"),
         searched_province=merged_params.get("province"),
+        program_type=merged_params.get("type"),
+        date_from=merged_params.get("date_from"),
+        date_to=merged_params.get("date_to"),
     )
 
     ps = diagnosis.get("pending_suggestion") or {}

@@ -147,6 +147,8 @@ def main():
     if st.session_state.get("_disambiguation_choice") and not user_input:
         choice = st.session_state.pop("_disambiguation_choice")
         init_trace()
+        # Persist chosen params into session so next typed turn inherits them
+        st.session_state.session_context["accumulated_params"] = dict(choice["params"])
         record("input", {"raw_query": choice["raw_query"], "path": "disambiguation",
                          "source": "category_disambiguation"})
         _run_search(choice["params"], choice["raw_query"],
@@ -345,7 +347,8 @@ def _run_search(merged_params: dict, raw_query: str, session: dict, sidebar_filt
 
     elif decision.route == Route.BROADEN_SEARCH:
         expanded = casl_expand(merged_params, limit=pool_size)
-        all_results = results + [r for r in expanded if r not in results]
+        result_ids = {r["id"] for r in results}
+        all_results = results + [r for r in expanded if r["id"] not in result_ids]
         record("casl_expand", {
             "input_tags": merged_params.get("tags", []),
             "expanded_count": len(expanded),

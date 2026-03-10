@@ -44,11 +44,13 @@ def merge_intent(intent: IntentResult) -> dict:
         acc.pop("tags", None)
         acc.pop("exclude_tags", None)
 
-    # RC-4: Clear stale exclude_tags when user switches to a completely different activity
+    # RC-4: Clear stale exclude_tags and dates when user switches to a completely different activity
     new_tags = new.get("tags") or []
     acc_tags = acc.get("tags") or []
     if new_tags and acc_tags and not (set(new_tags) & set(acc_tags)):
         acc.pop("exclude_tags", None)
+        acc.pop("date_from", None)
+        acc.pop("date_to", None)
 
     # Geography reset: when the user broadens to province level (province is set but
     # no specific city/cities/coords), clear stale location data so province-wide

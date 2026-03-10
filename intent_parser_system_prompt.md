@@ -236,10 +236,10 @@ Apply these rules:
 3. FOLLOW-UP: Short queries with no location should inherit session location.
    "What about overnight?" → inherit session city and province.
 
-4. AFFIRMATIVE: If query is an affirmative response ("yes", "sure", "go ahead",
-   "sounds good", "ok do it", "yeah", "yep") AND session has a pending_suggestion:
-   Return ics: 0.10 and set accepted_suggestion: true.
-   The orchestrator will execute the pending_suggestion directly.
+4. AFFIRMATIVE: If the query is a plain affirmative ("yes", "sure", "ok", "yeah",
+   "sounds good") with nothing else — set recognized: false, ics: 0.10.
+   The orchestrator intercepts affirmatives before this parser runs, so this rule
+   fires only when the affirmative wasn't caught (e.g. no pending suggestion).
 
 5. REFINEMENT: "cheaper ones", "closer ones", "more options" →
    Inherit all session params, add/modify the refined dimension only.

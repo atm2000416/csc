@@ -10,7 +10,10 @@ _PROVINCES = [
     "Quebec", "Saskatchewan",
 ]
 
-_TYPES = ["Any", "Day Camp", "Overnight", "Virtual Program"]
+_TYPES = ["Any", "Day Camp", "Overnight", "Virtual"]
+
+# Maps sidebar display labels to CSSL type map keys
+_TYPE_TO_CSSL = {"Day Camp": "Day", "Overnight": "Overnight", "Virtual": "Virtual"}
 
 
 def render_filters() -> dict:
@@ -33,7 +36,7 @@ def render_filters() -> dict:
         params["age_to"] = age_range[1]
 
     if camp_type != "Any":
-        params["type"] = camp_type
+        params["type"] = _TYPE_TO_CSSL.get(camp_type, camp_type)
 
     if cost_max > 0:
         params["cost_max"] = int(cost_max)

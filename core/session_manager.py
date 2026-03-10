@@ -38,19 +38,22 @@ def merge_intent(intent: IntentResult) -> dict:
         for k in ("tags", "exclude_tags", "type"):
             acc.pop(k, None)
 
-    # clear_activity: broad new search with no specific activity (e.g. "all girls overnight
-    # camps") — clear stale activity tags so they don't pollute the new search
+    # clear_activity: explicit fresh broad search ("now show me X", "all girls overnight
+    # camps") — clear stale activity AND type/dates so old constraints don't pollute.
     if intent.clear_activity:
         acc.pop("tags", None)
         acc.pop("exclude_tags", None)
-
-    # RC-4: Clear stale exclude_tags and dates when user switches to a completely different activity
-    new_tags = new.get("tags") or []
-    acc_tags = acc.get("tags") or []
-    if new_tags and acc_tags and not (set(new_tags) & set(acc_tags)):
-        acc.pop("exclude_tags", None)
+        acc.pop("type", None)
         acc.pop("date_from", None)
         acc.pop("date_to", None)
+
+    # RC-4: Track full activity switch (completely different tags, no overlap).
+    # Used to suppress date/exclude bleed after the scalar merge runs.
+    new_tags = new.get("tags") or []
+    acc_tags = acc.get("tags") or []
+    activity_switched = bool(new_tags and acc_tags and not (set(new_tags) & set(acc_tags)))
+    if activity_switched:
+        acc.pop("exclude_tags", None)
 
     # Geography reset: when the user broadens to province level (province is set but
     # no specific city/cities/coords), clear stale location data so province-wide
@@ -72,6 +75,12 @@ def merge_intent(intent: IntentResult) -> dict:
         val = new.get(key)
         if val is not None:
             acc[key] = val
+
+    # RC-4 post-merge: if activity switched, drop any dates Gemini re-inherited
+    # from session context. The scalar merge above may have re-added them.
+    if activity_switched:
+        acc.pop("date_from", None)
+        acc.pop("date_to", None)
 
     # Lists: override only if non-empty (empty list = "no new info")
     for key in ["tags", "exclude_tags", "cities", "traits"]:

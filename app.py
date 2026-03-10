@@ -250,6 +250,8 @@ def main():
         "is_special_needs": intent.is_special_needs,
         "is_virtual": intent.is_virtual,
         "language_immersion": intent.language_immersion,
+        "date_from": intent.date_from,
+        "date_to": intent.date_to,
         "lat": intent.lat,
         "lon": intent.lon,
         "radius_km": intent.radius_km,

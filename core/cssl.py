@@ -102,13 +102,13 @@ def query(params: dict, limit: int = 100) -> tuple[list[dict], float]:
         conditions.append("p.type = %(type)s")
         args["type"] = params["type"]
 
-    # Gender (NULL/0=Coed, 1=Boys, 2=Girls)
-    # Gender data is sparse in the DB (most programs have NULL = all genders).
-    # Apply as a soft filter: match explicit gender OR NULL (coed/unspecified).
+    # Gender (NULL=unknown, 0=Coed, 1=Boys, 2=Girls)
+    # Strict match: when a user asks for girls-only or boys-only, only return
+    # programs with an explicit gender tag. NULL means data is missing, not coed.
     gender_map = {"Boys": 1, "Girls": 2}
     if params.get("gender") and params["gender"] in gender_map:
         gval = gender_map[params["gender"]]
-        conditions.append("(p.gender = %(gender)s OR p.gender IS NULL OR p.gender = 0)")
+        conditions.append("p.gender = %(gender)s")
         args["gender"] = gval
 
     # Cost

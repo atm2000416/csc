@@ -36,6 +36,12 @@ def merge_intent(intent: IntentResult) -> dict:
         for k in ("tags", "exclude_tags", "type"):
             acc.pop(k, None)
 
+    # clear_activity: broad new search with no specific activity (e.g. "all girls overnight
+    # camps") — clear stale activity tags so they don't pollute the new search
+    if intent.clear_activity:
+        acc.pop("tags", None)
+        acc.pop("exclude_tags", None)
+
     # RC-4: Clear stale exclude_tags when user switches to a completely different activity
     new_tags = new.get("tags") or []
     acc_tags = acc.get("tags") or []

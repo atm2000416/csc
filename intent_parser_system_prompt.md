@@ -159,6 +159,25 @@ true if user specifically wants an online or virtual program.
 ### language_immersion (string)
 "French" for French immersion. "English" for ESL. Capture if explicitly mentioned.
 
+### clear_activity (boolean)
+Set to true when the user's query is a FRESH, BROAD search that should NOT inherit
+previously accumulated activity tags from the session — even though the user didn't
+explicitly say to forget them.
+
+Set true when:
+- Query contains type/gender/cost/location but NO specific activity, AND reads as a
+  self-contained new search: "all girls overnight camps", "day camps for boys in Toronto",
+  "overnight camps under $3000", "outdoor programs for teenagers"
+- User changes direction entirely: "show me something completely different"
+
+Set false (default) for:
+- Follow-up refinements that add to an existing search:
+  "what about overnight?" / "cheaper ones?" / "same but in Vancouver"
+- Corrections: "no I meant hockey not ringette"
+- Any query that mentions a specific activity (tags will be set anyway)
+
+If unsure, leave false.
+
 ### voice (string)
 "parent" — query uses third person about child, mentions developmental goals, asks about logistics
 "child" — query is first person, uses casual language, mentions what they personally like
@@ -251,6 +270,7 @@ Return ONLY this JSON object. No text before or after.
   "cost_sensitive": false,
   "date_from": null,
   "date_to": null,
+  "clear_activity": false,
   "traits": [],
   "is_special_needs": false,
   "is_virtual": false,

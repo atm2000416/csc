@@ -39,6 +39,7 @@ class IntentResult:
     language_immersion: str | None = None
     date_from: str | None = None
     date_to: str | None = None
+    clear_activity: bool = False
     voice: str = "unknown"
     detected_language: str = "en"
     needs_clarification: list[str] = field(default_factory=list)
@@ -117,7 +118,7 @@ def _coerce_parsed(parsed: dict) -> dict:
 
     # Boolean fields
     for key in ("recognized", "cost_sensitive", "is_special_needs", "is_virtual",
-                "needs_geolocation", "accepted_suggestion"):
+                "needs_geolocation", "accepted_suggestion", "clear_activity"):
         val = parsed.get(key)
         if val is not None and not isinstance(val, bool):
             parsed[key] = bool(val)

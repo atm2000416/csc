@@ -89,11 +89,12 @@ def rerank(
             config=types.GenerateContentConfig(temperature=0.1, max_output_tokens=3000),
         )
         raw = response.text.strip()
-        # Extract first JSON object — handles markdown fences and thinking preamble
-        json_match = re.search(r'\{.*\}', raw, re.DOTALL)
-        if not json_match:
+        # Find {"ranked" anchor then use raw_decode to parse exactly that object,
+        # ignoring any preamble or trailing content Gemini may have added.
+        start = raw.find('{"ranked"')
+        if start == -1:
             raise ValueError("No JSON object found in reranker response")
-        ranked_data = json.loads(json_match.group(0)).get("ranked", [])
+        ranked_data = json.JSONDecoder().raw_decode(raw, start)[0].get("ranked", [])
     except Exception as exc:
         _log.warning("Reranker Gemini call failed: %s", exc)
         for r in results[:top_n]:

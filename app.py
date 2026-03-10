@@ -701,20 +701,20 @@ def _render_category_picker(parent_slug: str, options: list[dict],
     parent_name = parent_slug.replace("-multi", "").replace("-", " ").title()
 
     _speak(f"**{parent_name}** covers a lot of ground! Which area interests you most?")
-        # Build button row: up to 4 child options + an "All" fallback
-        display_options = options[:4]
-        btn_labels = [opt["name"] for opt in display_options] + [f"All {parent_name}"]
-        btn_slugs  = [opt["slug"] for opt in display_options] + [None]  # None = keep parent
+    # Build button row: up to 4 child options + an "All" fallback
+    display_options = options[:4]
+    btn_labels = [opt["name"] for opt in display_options] + [f"All {parent_name}"]
+    btn_slugs  = [opt["slug"] for opt in display_options] + [None]  # None = keep parent
 
-        cols = st.columns(len(btn_labels))
-        for col, label, slug in zip(cols, btn_labels, btn_slugs):
-            if col.button(label, key=f"disambig_{slug or 'all'}"):
-                chosen_tags = [slug] if slug else merged_params.get("tags", [parent_slug])
-                st.session_state["_disambiguation_choice"] = {
-                    "params": {**merged_params, "tags": chosen_tags},
-                    "raw_query": raw_query,
-                }
-                st.rerun()
+    cols = st.columns(len(btn_labels))
+    for col, label, slug in zip(cols, btn_labels, btn_slugs):
+        if col.button(label, key=f"disambig_{slug or 'all'}"):
+            chosen_tags = [slug] if slug else merged_params.get("tags", [parent_slug])
+            st.session_state["_disambiguation_choice"] = {
+                "params": {**merged_params, "tags": chosen_tags},
+                "raw_query": raw_query,
+            }
+            st.rerun()
 
 
 if __name__ == "__main__":

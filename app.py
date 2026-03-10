@@ -455,8 +455,6 @@ def _diagnose_zero_results(merged_params: dict) -> dict:
         tag_ids=tag_ids,
         searched_city=merged_params.get("city"),
         searched_province=merged_params.get("province"),
-        user_lat=merged_params.get("lat"),
-        user_lon=merged_params.get("lon"),
     )
 
     ps = diagnosis.get("pending_suggestion") or {}

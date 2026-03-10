@@ -11,8 +11,6 @@ def diagnose(
     tag_ids: list[int],
     searched_city: str | None,
     searched_province: str | None,
-    user_lat: float | None = None,
-    user_lon: float | None = None,
 ) -> dict:
     """
     Find where the requested activity exists, closest first.
@@ -29,13 +27,6 @@ def diagnose(
     conn = get_connection()
     cursor = conn.cursor(dictionary=True)
 
-    if user_lat is not None and user_lon is not None:
-        order_by = "ST_Distance_Sphere(POINT(c.lon, c.lat), POINT(%s, %s)) ASC"
-        order_args = [user_lon, user_lat]
-    else:
-        order_by = "program_count DESC"
-        order_args = []
-
     ph = ", ".join(["%s"] * len(tag_ids))
     cursor.execute(
         f"""
@@ -48,10 +39,10 @@ def diagnose(
           AND c.status = 1
           AND (p.end_date IS NULL OR p.end_date >= CURDATE())
         GROUP BY c.city, c.province
-        ORDER BY {order_by}
+        ORDER BY program_count DESC
         LIMIT 10
         """,
-        list(tag_ids) + order_args,
+        list(tag_ids),
     )
 
     locations = cursor.fetchall()

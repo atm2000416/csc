@@ -12,6 +12,13 @@ Visual hierarchy (per spec):
 import streamlit as st
 
 
+_TIER_COLOUR = {
+    "gold":   "#B8860B",
+    "silver": "#808080",
+    "bronze": "#8B4513",
+}
+
+
 def _camps_url(slug: str, camp_id: int) -> str:
     return f"https://www.camps.ca/{slug}/{camp_id}"
 
@@ -24,19 +31,21 @@ def _normalise_website(url: str) -> str:
     return "https://" + url
 
 
-_TIER_COLOUR = {
-    "gold":   "#B8860B",
-    "silver": "#808080",
-    "bronze": "#8B4513",
-}
-
-
 def _cost_str(cost_from, cost_to) -> str:
     if cost_from and cost_to:
         return f"${int(cost_from):,} – ${int(cost_to):,}"
     if cost_from:
         return f"From ${int(cost_from):,}"
     return ""
+
+
+_BTN = (
+    "display:inline-block; margin-right:8px; "
+    "padding:5px 14px; border-radius:20px; font-size:0.78rem; font-weight:700; "
+    "font-family:Montserrat,sans-serif; text-decoration:none; "
+    "background:linear-gradient(135deg,#2e7d32,#388e3c); color:white; "
+    "box-shadow:0 2px 6px rgba(46,125,50,0.25);"
+)
 
 
 def render_card(result: dict):
@@ -54,61 +63,57 @@ def render_card(result: dict):
     camp_slug    = result.get("slug", "")
     camp_id      = result.get("camp_id")
 
-    card_style = (
-        f"border-left: 4px solid {tier_col}; "
-        "border-radius: 8px; "
-        "background: #ffffff; "
-        "padding: 14px 16px 12px 16px; "
-        "margin-bottom: 10px; "
-        "box-shadow: 0 1px 4px rgba(0,0,0,0.06);"
+    # ── Build buttons HTML ─────────────────────────────────────────────────────
+    buttons_html = ""
+    if camp_slug and camp_id:
+        buttons_html += f'<a href="{_camps_url(camp_slug, camp_id)}" target="_blank" style="{_BTN}">View on camps.ca →</a>'
+    if website:
+        buttons_html += f'<a href="{_normalise_website(website)}" target="_blank" style="{_BTN}">Camp Website →</a>'
+
+    # ── Build card lines ───────────────────────────────────────────────────────
+    lines = []
+
+    # Line 1 — Program Name
+    lines.append(
+        f'<p style="margin:0 0 2px 0; font-family:Montserrat,sans-serif; font-weight:800; '
+        f'font-size:1.05rem; color:#1b5e20;">{program_name}</p>'
     )
 
-    with st.container():
-        st.markdown(f'<div style="{card_style}">', unsafe_allow_html=True)
+    # Line 2 — Camp Name
+    lines.append(
+        f'<p style="margin:0 0 6px 0; font-size:0.92rem; color:{tier_col}; font-weight:600;">'
+        f'{camp_name}</p>'
+    )
 
-        # Line 1 — Program Name
-        st.markdown(
-            f'<p style="margin:0 0 2px 0; font-family:Montserrat,sans-serif; font-weight:800; '
-            f'font-size:1.1rem; color:#1b5e20;">{program_name}</p>',
-            unsafe_allow_html=True,
+    # Line 3 — Blurb
+    if blurb:
+        lines.append(
+            f'<p style="margin:0 0 7px 0; font-size:0.86rem; color:#555; font-style:italic;">'
+            f'{blurb}</p>'
         )
 
-        # Line 2 — Camp Name
-        st.markdown(
-            f'<p style="margin:0 0 6px 0; font-size:0.95rem; color:{tier_col}; font-weight:600;">'
-            f"{camp_name}</p>",
-            unsafe_allow_html=True,
+    # Line 4 — Cost
+    if cost:
+        lines.append(
+            f'<p style="margin:0 0 4px 0; font-size:0.86rem; color:#333;">💰 {cost}</p>'
         )
 
-        # Line 3 — Context blurb
-        if blurb:
-            st.markdown(
-                f'<p style="margin:0 0 8px 0; font-size:0.88rem; color:#555; font-style:italic;">'
-                f"{blurb}</p>",
-                unsafe_allow_html=True,
-            )
+    # Line 5 — Location
+    if location:
+        lines.append(
+            f'<p style="margin:0 0 10px 0; font-size:0.84rem; color:#666;">📍 {location}</p>'
+        )
 
-        # Line 4 — Cost
-        if cost:
-            st.markdown(
-                f'<p style="margin:0 0 4px 0; font-size:0.88rem; color:#333;">💰 {cost}</p>',
-                unsafe_allow_html=True,
-            )
+    # Buttons
+    if buttons_html:
+        lines.append(f'<div style="margin-top:4px;">{buttons_html}</div>')
 
-        # Line 5 — Location
-        if location:
-            st.markdown(
-                f'<p style="margin:0 0 10px 0; font-size:0.85rem; color:#666;">📍 {location}</p>',
-                unsafe_allow_html=True,
-            )
+    card_html = (
+        f'<div style="border-left:4px solid {tier_col}; border-radius:8px; '
+        f'background:#ffffff; padding:14px 16px 12px 16px; margin-bottom:10px; '
+        f'box-shadow:0 1px 4px rgba(0,0,0,0.06);">'
+        + "".join(lines)
+        + "</div>"
+    )
 
-        # Buttons
-        btn_cols = st.columns([1, 1, 4])
-        with btn_cols[0]:
-            if camp_slug and camp_id:
-                st.link_button("View on camps.ca →", _camps_url(camp_slug, camp_id))
-        if website:
-            with btn_cols[1]:
-                st.link_button("Camp Website →", _normalise_website(website))
-
-        st.markdown("</div>", unsafe_allow_html=True)
+    st.markdown(card_html, unsafe_allow_html=True)

@@ -160,6 +160,7 @@ def main():
         user_input = st.session_state.pop("_pending_query")
         st.session_state["_surprise_results_heading"] = True
         st.session_state["_input_path"] = st.session_state.pop("_input_path_pending", "surprise_me")
+        st.session_state.pop("_disambiguated_tags", None)  # fresh disambiguator on surprise
         # Keep location from prior session but clear activity/filter params
         prior = st.session_state.session_context.get("accumulated_params", {})
         st.session_state.session_context["accumulated_params"] = {
@@ -268,11 +269,15 @@ def main():
     record("merged_params", {"params": merged_params})
 
     # Category disambiguation — fires when a single broad parent tag was found
-    # and there are meaningful child options to offer the user
+    # and there are meaningful child options to offer the user.
+    # Guard: only offer once per broad parent per session — prevents infinite loop
+    # when the user types refinements without clicking a disambiguation button.
+    _disambiguated = st.session_state.get("_disambiguated_tags", set())
     broad_parent = get_broad_parent(merged_params.get("tags", []))
-    if broad_parent:
+    if broad_parent and broad_parent not in _disambiguated:
         options = get_viable_children(broad_parent)
         if len(options) >= 2:
+            st.session_state["_disambiguated_tags"] = _disambiguated | {broad_parent}
             record("category_disambiguator", {
                 "parent": broad_parent,
                 "options": [o["slug"] for o in options],

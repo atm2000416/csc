@@ -46,6 +46,7 @@ def merge_intent(intent: IntentResult) -> dict:
     for key in [
         "age_from", "age_to", "cost_max", "is_special_needs", "is_virtual",
         "language_immersion", "city", "province", "type", "gender",
+        "date_from", "date_to",
     ]:
         val = new.get(key)
         if val is not None:

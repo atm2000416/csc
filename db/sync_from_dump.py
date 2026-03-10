@@ -10,6 +10,7 @@ What this syncs:
                        the old DB, not manually-created location branches)
   4. METADATA       — tier/website changes for active camps (--update-meta flag)
   5. LOCATIONS      — new extra_locations not yet in new DB → INSERT
+  6. PROGRAM DATES  — program_dates table refreshed from session_date in dump
 
 What this does NOT touch:
   - activity_tags / program_tags / categories (curated in new DB)
@@ -20,17 +21,17 @@ Usage:
   # Dry run — see what would change (always do this first)
   python3 db/sync_from_dump.py --dump /path/to/new_dump.sql --dry-run
 
-  # Apply standard sync (new camps + re-activations + new locations)
+  # Apply standard sync (new camps + re-activations + new locations + program dates)
   python3 db/sync_from_dump.py --dump /path/to/new_dump.sql
 
   # Also deactivate camps that left the client list
   python3 db/sync_from_dump.py --dump /path/to/new_dump.sql --deactivate
 
-  # Full sync: new + deactivations + metadata + locations
+  # Full sync: new + deactivations + metadata + locations + program dates
   python3 db/sync_from_dump.py --dump /path/to/new_dump.sql --deactivate --update-meta
 
   # Run only a specific section
-  python3 db/sync_from_dump.py --dump /path/to/new_dump.sql --only status
+  python3 db/sync_from_dump.py --dump /path/to/new_dump.sql --only dates
 """
 import re
 import sys
@@ -186,6 +187,42 @@ def parse_general_info(content):
     return result
 
 
+def parse_session_dates(content) -> list[dict]:
+    """
+    Parse session_date rows for program schedule data.
+    Returns list of {seid, start_date, end_date, cost_from, cost_to, before_care, after_care}.
+    """
+    blocks = re.findall(
+        r"INSERT INTO `session_date` VALUES (.*?);\n",
+        content, re.DOTALL
+    )
+    rows = []
+    for block in blocks:
+        matches = re.findall(
+            r"\((\d+),(\d+),(\d+),"           # id, cid, seid
+            r"'(\d{4}-\d{2}-\d{2})',"         # start
+            r"'(\d{4}-\d{2}-\d{2})',"         # end
+            r"(\d+),(\d+),"                    # cost_from, cost_to
+            r"\d+,'[^']*',\d+,\d+,"           # location, timestamp, loc, period
+            r"'[^']*','[^']*',"               # start_time, end_time
+            r"(\d+),"                          # before_care
+            r"'[^']*',\d+,"                   # before_start, before_fee
+            r"(\d+),",                         # after_care
+            block
+        )
+        for m in matches:
+            rows.append({
+                "seid":        int(m[2]),
+                "start_date":  m[3],
+                "end_date":    m[4],
+                "cost_from":   int(m[5]) or None,
+                "cost_to":     int(m[6]) or None,
+                "before_care": int(m[7]),
+                "after_care":  int(m[8]),
+            })
+    return rows
+
+
 def parse_extra_locations(content):
     """Returns dict: {cid: [location_dict, ...]}"""
     block = _extract_block(content, 'extra_locations')
@@ -240,14 +277,16 @@ def run(dump_path, dry_run, only, update_meta, deactivate=False, skip_ids=None):
     with open(dump_path, 'r', encoding='utf-8', errors='replace') as f:
         content = f.read()
 
-    dump_camps = parse_camps(content)
-    dump_addrs = parse_addresses(content)
-    dump_info  = parse_general_info(content)
-    dump_locs  = parse_extra_locations(content)
+    dump_camps  = parse_camps(content)
+    dump_addrs  = parse_addresses(content)
+    dump_info   = parse_general_info(content)
+    dump_locs   = parse_extra_locations(content)
+    dump_sdates = parse_session_dates(content)
 
     print(f"  Parsed {len(dump_camps)} camps, {len(dump_addrs)} addresses, "
           f"{len(dump_info)} generalInfo rows, "
-          f"{sum(len(v) for v in dump_locs.values())} extra_location rows\n")
+          f"{sum(len(v) for v in dump_locs.values())} extra_location rows, "
+          f"{len(dump_sdates)} session_date rows\n")
 
     conn = get_connection()
     cursor = conn.cursor(dictionary=True)
@@ -264,6 +303,7 @@ def run(dump_path, dry_run, only, update_meta, deactivate=False, skip_ids=None):
         'reactivated': 0,
         'meta_updated': 0,
         'locations_added': 0,
+        'dates_inserted': 0,
     }
 
     # ── 1. Status changes ─────────────────────────────────────────────────────
@@ -508,6 +548,60 @@ def run(dump_path, dry_run, only, update_meta, deactivate=False, skip_ids=None):
             print("  No missing locations.")
         print()
 
+    # ── 6. Program dates ──────────────────────────────────────────────────────
+    if only in (None, 'dates', 'all'):
+        from datetime import date as _date
+        today = str(_date.today())
+        print("=== Program dates (session_date sync) ===")
+
+        # Get active program IDs
+        cursor.execute("SELECT id FROM programs WHERE status=1")
+        active_prog_ids = {r['id'] for r in cursor.fetchall()}
+
+        # Filter to future rows matching active programs
+        matched = [r for r in dump_sdates
+                   if r['seid'] in active_prog_ids and r['end_date'] >= today]
+
+        from collections import defaultdict as _dd
+        by_prog = _dd(list)
+        for r in matched:
+            by_prog[r['seid']].append(r)
+
+        print(f"  {len(matched)} future session_date rows across "
+              f"{len(by_prog)} programs")
+
+        if not dry_run and by_prog:
+            # Clear existing future rows for those programs, then re-insert
+            prog_id_list = ",".join(str(pid) for pid in by_prog)
+            cursor.execute(
+                f"DELETE FROM program_dates WHERE end_date >= %s "
+                f"AND program_id IN ({prog_id_list})",
+                (today,)
+            )
+            inserted = 0
+            for r in matched:
+                cursor.execute(
+                    """
+                    INSERT IGNORE INTO program_dates
+                        (program_id, start_date, end_date, cost_from, cost_to,
+                         before_care, after_care)
+                    VALUES (%s, %s, %s, %s, %s, %s, %s)
+                    """,
+                    (r['seid'], r['start_date'], r['end_date'],
+                     r['cost_from'], r['cost_to'],
+                     r['before_care'], r['after_care'])
+                )
+                inserted += 1
+                if inserted % 100 == 0:
+                    conn.commit()
+            stats['dates_inserted'] = inserted
+        elif dry_run:
+            stats['dates_inserted'] = len(matched)
+
+        if not by_prog:
+            print("  No matching program dates found.")
+        print()
+
     # ── Commit & summary ──────────────────────────────────────────────────────
     if not dry_run:
         conn.commit()
@@ -525,6 +619,7 @@ def run(dump_path, dry_run, only, update_meta, deactivate=False, skip_ids=None):
     if update_meta:
         print(f"  Metadata {'would be ' if dry_run else ''}updated:        {stats['meta_updated']}")
     print(f"  Locations {'would be ' if dry_run else ''}added:          {stats['locations_added']}")
+    print(f"  Program dates {'would be ' if dry_run else ''}inserted:   {stats['dates_inserted']}")
     print("=" * 60)
 
 
@@ -535,7 +630,7 @@ if __name__ == "__main__":
     parser.add_argument("--dry-run", action="store_true",
                         help="Preview changes without writing to DB")
     parser.add_argument("--only",
-                        choices=["status", "new", "meta", "locations", "all"],
+                        choices=["status", "new", "meta", "locations", "dates", "all"],
                         default=None,
                         help="Run only a specific sync section")
     parser.add_argument("--update-meta", action="store_true",

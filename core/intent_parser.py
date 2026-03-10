@@ -37,6 +37,8 @@ class IntentResult:
     is_special_needs: bool = False
     is_virtual: bool = False
     language_immersion: str | None = None
+    date_from: str | None = None
+    date_to: str | None = None
     voice: str = "unknown"
     detected_language: str = "en"
     needs_clarification: list[str] = field(default_factory=list)
@@ -121,7 +123,8 @@ def _coerce_parsed(parsed: dict) -> dict:
             parsed[key] = bool(val)
 
     # String fields
-    for key in ("city", "province", "type", "gender", "language_immersion", "voice", "detected_language"):
+    for key in ("city", "province", "type", "gender", "language_immersion",
+                "date_from", "date_to", "voice", "detected_language"):
         val = parsed.get(key)
         if val is not None and not isinstance(val, str):
             parsed[key] = str(val)

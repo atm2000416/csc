@@ -116,6 +116,22 @@ Maximum cost in CAD the user is willing to pay. Only if explicitly mentioned.
 - "cheap", "affordable", "budget" → flag cost_sensitive: true (no numeric value)
 - If not mentioned, omit.
 
+### date_from, date_to (strings, ISO 8601 format "YYYY-MM-DD")
+Extract when the user specifies WHEN they want the camp to run.
+Use the CURRENT_DATE from context to determine the correct year.
+Rules:
+- "first week of August" → date_from: "2026-08-03", date_to: "2026-08-07"
+- "second week of July" → date_from: "2026-07-06", date_to: "2026-07-10"
+- "July" or "in July" → date_from: "2026-07-01", date_to: "2026-07-31"
+- "late June" → date_from: "2026-06-22", date_to: "2026-06-30"
+- "early August" → date_from: "2026-08-01", date_to: "2026-08-14"
+- "week of July 14" or "July 14th week" → date_from: "2026-07-14", date_to: "2026-07-18"
+- "August long weekend" → date_from: "2026-08-01", date_to: "2026-08-03"
+- "this summer" → do NOT extract dates (too vague, covers the whole season)
+- "now", "this week" → date_from: CURRENT_DATE, date_to: 7 days from CURRENT_DATE
+- If not mentioned or too vague, omit both fields entirely.
+- Never guess or assume a date range that isn't clearly stated.
+
 ### traits (array of strings)
 Map developmental or outcome language to character trait slugs.
 Use these ONLY when user describes what they want their child to develop or experience,
@@ -233,6 +249,8 @@ Return ONLY this JSON object. No text before or after.
   "gender": null,
   "cost_max": null,
   "cost_sensitive": false,
+  "date_from": null,
+  "date_to": null,
   "traits": [],
   "is_special_needs": false,
   "is_virtual": false,
@@ -619,7 +637,24 @@ Output:
   "raw_query": "summer camps in the GTA for 12 year olds"
 }
 
-### Example 9 — Completely vague
+### Example 9 — Date range extraction
+Input: "soccer camps in Toronto first two weeks of August"
+CURRENT_DATE: 2026-03-09
+Output:
+{
+  "tags": ["soccer"],
+  "city": "Toronto",
+  "province": "Ontario",
+  "date_from": "2026-08-03",
+  "date_to": "2026-08-14",
+  "voice": "unknown",
+  "detected_language": "en",
+  "ics": 0.92,
+  "recognized": true,
+  "raw_query": "soccer camps in Toronto first two weeks of August"
+}
+
+### Example 10 — Completely vague
 Input: "camp"
 Output:
 {
@@ -630,7 +665,7 @@ Output:
   "raw_query": "camp"
 }
 
-### Example 10 — Sea kayaking specificity
+### Example 11 — Sea kayaking specificity
 Input: "sea kayaking camps for kids"
 Output:
 {

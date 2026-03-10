@@ -8,8 +8,10 @@ Visual hierarchy (per spec):
   Line 3 — Context blurb     (programs.mini_description)
   Line 4 — Cost              (programs.cost_from / cost_to)
   Line 5 — Location          (camps.city, camps.province)
+  Line 6 — Schedule slots    (program_dates, if available)
 """
 import streamlit as st
+from datetime import date
 
 
 _TIER_COLOUR = {
@@ -25,6 +27,70 @@ def _cost_str(cost_from, cost_to) -> str:
     if cost_from:
         return f"From ${int(cost_from):,}"
     return ""
+
+
+_MONTH_ABBR = ["", "Jan", "Feb", "Mar", "Apr", "May", "Jun",
+               "Jul", "Aug", "Sep", "Oct", "Nov", "Dec"]
+
+
+def _format_slot(start_str: str, end_str: str) -> str:
+    """Format a date range compactly: 'Jul 7–11' or 'Jun 30–Jul 4'."""
+    try:
+        s = date.fromisoformat(start_str)
+        e = date.fromisoformat(end_str)
+    except (ValueError, TypeError):
+        return ""
+    sm, em = _MONTH_ABBR[s.month], _MONTH_ABBR[e.month]
+    if s.month == e.month:
+        return f"{sm} {s.day}–{e.day}"
+    return f"{sm} {s.day}–{em} {e.day}"
+
+
+def _render_schedule(program_dates: list) -> None:
+    """Render weekly slot pills + before/after care badges."""
+    if not program_dates:
+        return
+
+    today = date.today()
+    future = [pd for pd in program_dates
+              if date.fromisoformat(str(pd["end_date"])) >= today]
+    if not future:
+        return
+
+    # Sort by start_date
+    future.sort(key=lambda x: x["start_date"])
+
+    slot_labels = [_format_slot(str(pd["start_date"]), str(pd["end_date"]))
+                   for pd in future]
+    # Show up to 6 slots, collapse the rest
+    MAX_SHOW = 6
+    shown = slot_labels[:MAX_SHOW]
+    hidden = len(slot_labels) - MAX_SHOW
+
+    slots_str = "  ·  ".join(shown)
+    if hidden > 0:
+        slots_str += f"  +{hidden} more"
+
+    # Before/after care — show badge if ANY slot offers it
+    care_parts = []
+    if any(pd.get("before_care") for pd in future):
+        care_parts.append("🌅 Before care")
+    if any(pd.get("after_care") for pd in future):
+        care_parts.append("🌇 After care")
+
+    schedule_html = (
+        '<p style="margin:0 0 4px 0; font-size:0.83rem; color:#1a6e2e;">'
+        f"📅 {slots_str}</p>"
+    )
+    st.markdown(schedule_html, unsafe_allow_html=True)
+
+    if care_parts:
+        care_html = (
+            '<p style="margin:0 0 4px 0; font-size:0.80rem; color:#555;">'
+            + "  ·  ".join(care_parts)
+            + "</p>"
+        )
+        st.markdown(care_html, unsafe_allow_html=True)
 
 
 def render_card(result: dict):
@@ -63,6 +129,7 @@ def render_card(result: dict):
         icons.append("♿ Accessible")
 
     tags = result.get("tags", [])
+    program_dates = result.get("program_dates", [])
     website = result.get("website", "")
 
     # ── Card container ────────────────────────────────────────────────────────
@@ -111,6 +178,9 @@ def render_card(result: dict):
                 f'<p style="margin:0 0 8px 0; font-size:0.85rem; color:#666;">📍 {location}</p>',
                 unsafe_allow_html=True,
             )
+
+        # Line 6 — Schedule slots
+        _render_schedule(program_dates)
 
         # Icons + tags (supplementary)
         if icons:

@@ -113,6 +113,16 @@ def query(params: dict, limit: int = 100) -> tuple[list[dict], float]:
         conditions.append("p.language_immersion = %(language_immersion)s")
         args["language_immersion"] = params["language_immersion"]
 
+    # Date range — only match programs with a scheduled slot overlapping the window
+    # (Programs with no program_dates are excluded when this filter is active;
+    #  they're year-round/ongoing programs without fixed schedule data.)
+    if params.get("date_from") and params.get("date_to"):
+        joins.append("JOIN program_dates pd ON p.id = pd.program_id "
+                     "AND pd.start_date <= %(date_to)s "
+                     "AND pd.end_date >= %(date_from)s")
+        args["date_from"] = params["date_from"]
+        args["date_to"]   = params["date_to"]
+
     # Traits
     trait_ids = resolve_trait_ids(params.get("traits", []), cursor)
     if trait_ids:
@@ -148,8 +158,6 @@ def query(params: dict, limit: int = 100) -> tuple[list[dict], float]:
 
     cursor.execute(sql, args)
     results = cursor.fetchall()
-    cursor.close()
-    conn.close()
 
     # Belt-and-suspenders dedup in case DISTINCT doesn't cover all join paths
     seen = set()
@@ -160,8 +168,41 @@ def query(params: dict, limit: int = 100) -> tuple[list[dict], float]:
             deduped.append(r)
     results = deduped
 
+    enrich_with_dates(results, cursor)
+
+    cursor.close()
+    conn.close()
+
     rcs = calculate_rcs(results, params, tag_ids)
     return list(results), rcs
+
+
+def enrich_with_dates(results: list, cursor) -> None:
+    """
+    Attach program_dates rows to each result dict (in-place).
+    Fetches all future slots for the returned programs in one query.
+    Each result gets a 'program_dates' key: list of dicts sorted by start_date.
+    """
+    if not results:
+        return
+    ids = [r["id"] for r in results]
+    ph = ", ".join(["%s"] * len(ids))
+    cursor.execute(
+        f"SELECT program_id, start_date, end_date, "
+        f"MIN(cost_from) as cost_from, MAX(cost_to) as cost_to, "
+        f"MAX(before_care) as before_care, MAX(after_care) as after_care "
+        f"FROM program_dates "
+        f"WHERE program_id IN ({ph}) AND end_date >= CURDATE() "
+        f"GROUP BY program_id, start_date, end_date "
+        f"ORDER BY program_id, start_date",
+        tuple(ids),
+    )
+    from collections import defaultdict
+    by_prog = defaultdict(list)
+    for row in cursor.fetchall():
+        by_prog[row["program_id"]].append(row)
+    for r in results:
+        r["program_dates"] = by_prog.get(r["id"], [])
 
 
 def calculate_rcs(results: list, params: dict, tag_ids: list) -> float:

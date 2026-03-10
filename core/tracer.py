@@ -119,10 +119,11 @@ def render_trace():
                 out  = next((s for s in t["steps"] if s["step"] == "output"),  {})
                 rows.append({
                     "Turn":    t.get("turn", "?"),
+                    "Path":    inp.get("path", "typed"),
                     "Query":   inp.get("raw_query", "")[:50],
                     "Tags":    ", ".join(ip.get("tags", [])),
                     "ICS":     ip.get("ics", ""),
-                    "Results": cssl.get("results_returned", ""),
+                    "Results": out.get("final_count", cssl.get("results_returned", "")),
                     "RCS":     cssl.get("rcs", ""),
                     "Route":   out.get("route", ""),
                 })

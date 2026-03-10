@@ -147,7 +147,8 @@ def main():
     if st.session_state.get("_disambiguation_choice") and not user_input:
         choice = st.session_state.pop("_disambiguation_choice")
         init_trace()
-        record("input", {"raw_query": choice["raw_query"], "source": "category_disambiguation"})
+        record("input", {"raw_query": choice["raw_query"], "path": "disambiguation",
+                         "source": "category_disambiguation"})
         _run_search(choice["params"], choice["raw_query"],
                     st.session_state.session_context, sidebar_filters)
         return
@@ -156,6 +157,7 @@ def main():
     if st.session_state.get("_pending_query") and not user_input:
         user_input = st.session_state.pop("_pending_query")
         st.session_state["_surprise_results_heading"] = True
+        st.session_state["_input_path"] = st.session_state.pop("_input_path_pending", "surprise_me")
         # Keep location from prior session but clear activity/filter params
         prior = st.session_state.session_context.get("accumulated_params", {})
         st.session_state.session_context["accumulated_params"] = {
@@ -177,6 +179,7 @@ def main():
     # Affirmative suggestion check
     pending = session.get("pending_suggestion")
     if pending and is_affirmative(user_input):
+        init_trace()
         merged_params = dict(session["accumulated_params"])
         if pending.get("type") == "geo_broaden":
             merged_params["city"] = pending["to_city"]
@@ -184,6 +187,14 @@ def main():
         elif pending.get("type") == "geo_broaden_province":
             merged_params.pop("city", None)
             merged_params["province"] = pending["to_province"]
+        record("input", {
+            "raw_query": user_input,
+            "path": "affirmative",
+            "suggestion_type": pending.get("type"),
+            "suggestion_detail": pending.get("to_city") or pending.get("to_province"),
+            "params_after": merged_params,
+            "sidebar_filters": sidebar_filters,
+        })
         clear_suggestion()
         _run_search(merged_params, user_input, session, sidebar_filters)
         return
@@ -191,7 +202,13 @@ def main():
     clear_suggestion()
 
     init_trace()
-    record("input", {"raw_query": user_input, "sidebar_filters": sidebar_filters})
+    input_path = st.session_state.pop("_input_path", "typed")
+    input_record: dict = {"raw_query": user_input, "path": input_path,
+                          "sidebar_filters": sidebar_filters}
+    if input_path == "surprise_me":
+        input_record["surprise_tag"] = st.session_state.pop("_surprise_tag", None)
+        input_record["surprise_province"] = st.session_state.pop("_surprise_province", None)
+    record("input", input_record)
 
     # Fuzzy preprocessing
     fuzzy_hints = preprocess(user_input)
@@ -311,10 +328,11 @@ def _run_search(merged_params: dict, raw_query: str, session: dict, sidebar_filt
     # Route handlers
     if decision.route == Route.SHOW_RESULTS:
         final = process_results(results, raw_query, merged_params)
-        record("output", {"route": "SHOW_RESULTS", "final_count": len(final),
-                          "top_camps": [r.get("camp_name") for r in final]})
-        render_trace()
         msg = generate_concierge_response(final, raw_query, merged_params, "SHOW_RESULTS")
+        record("output", {"route": "SHOW_RESULTS", "final_count": len(final),
+                          "top_camps": [r.get("camp_name") for r in final],
+                          "concierge_msg": msg[:200]})
+        render_trace()
         _speak(msg)
         display_results(final)
         st.session_state["_last_results"] = final
@@ -326,7 +344,12 @@ def _run_search(merged_params: dict, raw_query: str, session: dict, sidebar_filt
     elif decision.route == Route.BROADEN_SEARCH:
         expanded = casl_expand(merged_params, limit=pool_size)
         all_results = results + [r for r in expanded if r not in results]
-        record("casl_expand", {"expanded_count": len(expanded), "combined_count": len(all_results)})
+        record("casl_expand", {
+            "input_tags": merged_params.get("tags", []),
+            "expanded_count": len(expanded),
+            "casl_sample": [r.get("camp_name") for r in expanded[:5]],
+            "combined_count": len(all_results),
+        })
         if all_results:
             final = process_results(all_results, raw_query, merged_params)
             max_score = max((r.get("rerank_score", 0.0) for r in final), default=0.0)
@@ -335,10 +358,11 @@ def _run_search(merged_params: dict, raw_query: str, session: dict, sidebar_filt
                 render_trace()
                 _handle_zero_results(merged_params, intent, session)
                 return
-            record("output", {"route": "BROADEN_SEARCH", "final_count": len(final),
-                               "top_camps": [r.get("camp_name") for r in final]})
-            render_trace()
             msg = generate_concierge_response(final, raw_query, merged_params, "BROADEN_SEARCH")
+            record("output", {"route": "BROADEN_SEARCH", "final_count": len(final),
+                               "top_camps": [r.get("camp_name") for r in final],
+                               "concierge_msg": msg[:200]})
+            render_trace()
             _speak(msg)
             display_results(final)
             st.session_state["_last_results"] = final
@@ -353,23 +377,31 @@ def _run_search(merged_params: dict, raw_query: str, session: dict, sidebar_filt
 
     elif decision.route == Route.SHOW_CLARIFY:
         final = process_results(results, raw_query, merged_params)
-        record("output", {"route": "SHOW_CLARIFY", "final_count": len(final),
-                          "clarification_dims": decision.clarification_dimensions})
-        render_trace()
         msg = generate_concierge_response(final, raw_query, merged_params, "SHOW_CLARIFY")
+        record("output", {"route": "SHOW_CLARIFY", "final_count": len(final),
+                          "clarification_dims": decision.clarification_dimensions,
+                          "concierge_msg": msg[:200]})
+        render_trace()
         _speak(msg)
         display_results(final)
         st.session_state["_last_results"] = final
         render_clarification(decision.clarification_dimensions)
+        if intent:
+            log_search(session, intent, rcs, len(final))
 
     elif decision.route == Route.CLARIFY_LOOP:
-        record("output", {"route": "CLARIFY_LOOP",
+        clarify_final_count = 0
+        if results:
+            final = process_results(results, raw_query, merged_params)
+            clarify_final_count = len(final)
+        record("output", {"route": "CLARIFY_LOOP", "final_count": clarify_final_count,
                           "clarification_dims": decision.clarification_dimensions})
         render_trace()
         if results:
-            final = process_results(results, raw_query, merged_params)
             display_results(final)
             st.session_state["_last_results"] = final
+            if intent:
+                log_search(session, intent, rcs, clarify_final_count)
         if decision.clarification_dimensions:
             render_clarification(decision.clarification_dimensions)
         else:
@@ -380,6 +412,7 @@ def _run_search(merged_params: dict, raw_query: str, session: dict, sidebar_filt
     answer = st.session_state.pop("_clarification_answer", None)
     if answer:
         st.session_state["_pending_query"] = answer
+        st.session_state["_input_path_pending"] = "clarification"
         st.rerun()
 
 
@@ -402,6 +435,14 @@ def _handle_zero_results(merged_params: dict, intent, session: dict):
         searched_city=merged_params.get("city"),
         searched_province=merged_params.get("province"),
     )
+
+    ps = diagnosis.get("pending_suggestion") or {}
+    record("advisor", {
+        "diagnosis_type": diagnosis.get("type", "unknown"),
+        "message": diagnosis.get("message", "")[:200],
+        "suggestion_type": ps.get("type"),
+        "suggestion_city": ps.get("to_city") or ps.get("to_province"),
+    })
 
     msg = diagnosis.get("message", "No camps found matching your search.")
     with st.chat_message("assistant"):

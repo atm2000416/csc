@@ -47,6 +47,9 @@ def render_surprise_me(on_search_callback):
             query = f"summer camps in {province}"
 
         st.session_state["_surprise_query"] = query
+        st.session_state["_surprise_tag"] = tag
+        st.session_state["_surprise_province"] = province
+        st.session_state["_input_path_pending"] = "surprise_me"
         on_search_callback(query)
 
     if st.session_state.get("_surprise_results_heading"):

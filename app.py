@@ -118,7 +118,15 @@ html, body, [class*="css"] {
     margin-bottom: 0.4rem;
 }
 
-/* ── Chat input ── */
+/* ── Chat input — remove rectangular frame, keep pill ── */
+section[data-testid="stBottom"],
+section[data-testid="stBottom"] > div,
+[data-testid="stChatInput"],
+[data-testid="stChatInput"] > div {
+    background: transparent !important;
+    border: none !important;
+    box-shadow: none !important;
+}
 [data-testid="stChatInput"] textarea {
     border: 2px solid #c5d4a0 !important;
     border-radius: 28px !important;
@@ -127,6 +135,7 @@ html, body, [class*="css"] {
     padding: 0.55rem 1.1rem !important;
     background: white !important;
     color: #2F4F4F !important;
+    box-shadow: 0 2px 8px rgba(47,79,79,0.08) !important;
 }
 [data-testid="stChatInput"] textarea:focus {
     border-color: #8A9A5B !important;
@@ -387,7 +396,7 @@ def main():
     def on_surprise_search(query: str):
         st.session_state["_pending_query"] = query
 
-    col1, col2, col3 = st.columns([4, 1, 1])
+    col1, col2, col3 = st.columns([3, 1.3, 1.3])
     with col2:
         render_surprise_me(on_surprise_search)
     with col3:

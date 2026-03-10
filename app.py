@@ -38,13 +38,19 @@ html, body, [class*="css"] {
     -webkit-backdrop-filter: blur(12px);
     padding: 0 1.5rem;
     height: 72px;
+    width: 100%;
     display: flex;
     align-items: center;
-    position: sticky;
+    position: fixed;
     top: 0;
+    left: 0;
     z-index: 1000;
     box-shadow: 0 2px 12px rgba(47,79,79,0.15);
-    margin-bottom: 0;
+}
+
+/* Push content below the fixed header */
+.main-content {
+    margin-top: 72px;
 }
 .camps-topbar .logo {
     font-family: 'Nunito', sans-serif;
@@ -107,6 +113,7 @@ html, body, [class*="css"] {
     max-width: 860px;
     margin: 1.5rem auto 6rem;
     padding: 0 1.2rem;
+    margin-top: 88px;
 }
 
 /* ── Chat messages ── */
@@ -211,6 +218,7 @@ section[data-testid="stBottom"] > div,
     position: sticky;
     top: 72px;
     z-index: 900;
+    margin-top: 0;
     background: white;
     border-bottom: 1px solid #d8e4d0;
     box-shadow: 0 2px 8px rgba(47,79,79,0.06);

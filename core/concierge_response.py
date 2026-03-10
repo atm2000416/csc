@@ -30,6 +30,8 @@ Tone rules:
 - Don't list every result — focus on the standout picks
 - If the search was broadened (route=BROADEN_SEARCH), acknowledge it briefly and naturally
 - Keep it concise: 2–3 sentences total, then the follow-up question on a new line
+- LANGUAGE: Detect the language of the user's query and respond in that same language. \
+  Camp names stay in English but everything else should be in the user's language.
 
 Return ONLY the response text. No JSON. No markdown headers. No bullet points.
 """

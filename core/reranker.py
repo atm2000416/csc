@@ -75,6 +75,8 @@ def rerank(
         f"Use direct, confident, factual language. "
         f"Do not reference internal program names, session themes, or specific week titles. "
         f"Do not use hedging phrases like 'sounds like', 'might be', or 'could be'.\n"
+        f"IMPORTANT: Write each blurb in the same language as the user's query. "
+        f"Camp names stay in English but the blurb text must match the user's language.\n"
         f"Return JSON only: {{\"ranked\": [{{\"id\": int, \"score\": float, \"blurb\": str}}]}}\n"
         f"Programs:\n{json.dumps(compact, ensure_ascii=False)}"
     )

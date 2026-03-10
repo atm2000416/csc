@@ -109,11 +109,12 @@ def render_card(result: dict):
         lines.append(f'<div style="margin-top:4px;">{buttons_html}</div>')
 
     card_html = (
+        f'<div style="padding:0 1.4rem; margin-bottom:10px;">'
         f'<div style="border-left:4px solid {tier_col}; border-radius:8px; '
-        f'background:#ffffff; padding:14px 16px 12px 16px; margin-bottom:10px; '
+        f'background:#ffffff; padding:14px 16px 12px 16px; '
         f'box-shadow:0 1px 4px rgba(0,0,0,0.06);">'
         + "".join(lines)
-        + "</div>"
+        + "</div></div>"
     )
 
     st.markdown(card_html, unsafe_allow_html=True)

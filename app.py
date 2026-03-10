@@ -168,6 +168,7 @@ html, body, [class*="css"] {
 
 /* ── Result count ── */
 .result-count {
+    padding: 0 1.4rem;
     font-family: 'Montserrat', sans-serif;
     font-size: 0.78rem;
     font-weight: 700;
@@ -270,12 +271,14 @@ _BUBBLE_BASE = (
     "font-family:'Source Sans 3',sans-serif; font-size:0.95rem; line-height:1.55;"
 )
 
+_BUBBLE_ROW = "padding:0 1.4rem;"
+
 def _speak(message: str):
     """Render CSC response as a left-aligned iMessage blue bubble."""
     if message:
         st.session_state["_last_csc_message"] = message
         st.markdown(
-            f'<div style="display:flex; justify-content:flex-start; margin:0 0 0.8rem 0;">'
+            f'<div style="display:flex; justify-content:flex-start; margin:0 0 0.8rem 0; {_BUBBLE_ROW}">'
             f'<div style="background:#007AFF; color:white; '
             f'border-radius:18px 18px 18px 4px; {_BUBBLE_BASE}">'
             f'{message}</div></div>',
@@ -287,7 +290,7 @@ def _show_user_bubble(message: str):
     """Render user input as a right-aligned iMessage grey bubble."""
     if message:
         st.markdown(
-            f'<div style="display:flex; justify-content:flex-end; margin:0 0 0.8rem 0;">'
+            f'<div style="display:flex; justify-content:flex-end; margin:0 0 0.8rem 0; {_BUBBLE_ROW}">'
             f'<div style="background:#E5E5EA; color:#1c1c1e; '
             f'border-radius:18px 18px 4px 18px; {_BUBBLE_BASE}">'
             f'{message}</div></div>',

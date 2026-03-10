@@ -10,21 +10,13 @@ Visual hierarchy (per spec):
   Line 5 — Location          (camps.city, camps.province)
   Line 6 — Schedule slots    (program_dates, if available)
 """
-import re
 import streamlit as st
 from datetime import date
 
 
-def _ourkids_url(camp_name: str, camp_id: int = None, prettyurl: str = None) -> str:
-    """Generate the ourkids.net listing URL for a camp."""
-    if prettyurl and camp_id:
-        return f"https://www.ourkids.net/{prettyurl}/{camp_id}"
-    # Fallback: generate slug from name (used for manually created sub-locations)
-    slug = camp_name.lower()
-    slug = re.sub(r"[^\w\s-]", "", slug)
-    slug = re.sub(r"[-\s]+", "-", slug)
-    slug = slug.strip("-")
-    return f"https://www.ourkids.net/camp/{slug}"
+def _camps_url(slug: str, camp_id: int) -> str:
+    """Generate the camps.ca listing URL for a camp."""
+    return f"https://www.camps.ca/{slug}/{camp_id}"
 
 
 def _normalise_website(url: str) -> str:
@@ -153,7 +145,7 @@ def render_card(result: dict):
     tags = result.get("tags", [])
     program_dates = result.get("program_dates", [])
     website = result.get("website", "")
-    prettyurl = result.get("prettyurl", "")
+    camp_slug = result.get("slug", "")
     camp_id = result.get("camp_id")
 
     # ── Card container ────────────────────────────────────────────────────────
@@ -219,7 +211,8 @@ def render_card(result: dict):
 
         btn_cols = st.columns([1, 1, 4])
         with btn_cols[0]:
-            st.link_button("View on OurKids →", _ourkids_url(camp_name, camp_id, prettyurl))
+            if camp_slug and camp_id:
+                st.link_button("View on camps.ca →", _camps_url(camp_slug, camp_id))
         if website:
             with btn_cols[1]:
                 st.link_button("Camp Website →", _normalise_website(website))

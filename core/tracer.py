@@ -82,7 +82,7 @@ def render_trace():
         + (f"  |  Session: {len(all_turns)} turn(s)" if len(all_turns) > 1 else "")
     )
 
-    with st.expander(label, expanded=False):
+    with st.expander(label, expanded=True):
 
         # ── Current turn step-by-step ─────────────────────────────────────────
         st.markdown("### Current turn")

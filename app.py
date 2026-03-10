@@ -265,21 +265,32 @@ def display_results(results: list[dict]):
         render_card(result)
 
 
+_BUBBLE_BASE = (
+    "padding:12px 16px; max-width:75%; "
+    "font-family:'Source Sans 3',sans-serif; font-size:0.95rem; line-height:1.55;"
+)
+
 def _speak(message: str):
-    """Render a concierge narrative as an iMessage-style blue bubble."""
+    """Render CSC response as a left-aligned iMessage blue bubble."""
+    if message:
+        st.session_state["_last_csc_message"] = message
+        st.markdown(
+            f'<div style="display:flex; justify-content:flex-start; margin:0 0 0.8rem 0;">'
+            f'<div style="background:#007AFF; color:white; '
+            f'border-radius:18px 18px 18px 4px; {_BUBBLE_BASE}">'
+            f'{message}</div></div>',
+            unsafe_allow_html=True,
+        )
+
+
+def _show_user_bubble(message: str):
+    """Render user input as a right-aligned iMessage grey bubble."""
     if message:
         st.markdown(
-            f'<div style="'
-            f'background:#007AFF; color:white; '
-            f'border-radius:18px 18px 18px 4px; '
-            f'padding:12px 16px; '
-            f'display:inline-block; '
-            f'max-width:75%; '
-            f'margin:0 0 0.8rem 0; '
-            f'font-family:Source Sans 3,sans-serif; '
-            f'font-size:0.95rem; '
-            f'line-height:1.55;'
-            f'">{message}</div>',
+            f'<div style="display:flex; justify-content:flex-end; margin:0 0 0.8rem 0;">'
+            f'<div style="background:#E5E5EA; color:#1c1c1e; '
+            f'border-radius:18px 18px 4px 18px; {_BUBBLE_BASE}">'
+            f'{message}</div></div>',
             unsafe_allow_html=True,
         )
 
@@ -374,10 +385,16 @@ def main():
         st.session_state.pop("_surprise_results_heading", None)
 
     if not user_input:
-        # Show prior results if available
-        prior = st.session_state.get("_last_results")
-        if prior:
-            display_results(prior)
+        last_user = st.session_state.get("_last_user_message")
+        last_csc  = st.session_state.get("_last_csc_message")
+        prior     = st.session_state.get("_last_results")
+        if last_user or prior:
+            if last_user:
+                _show_user_bubble(last_user)
+            if last_csc:
+                _speak(last_csc)
+            if prior:
+                display_results(prior)
         else:
             st.markdown(
                 '<p style="color:#78909c; font-size:0.92rem; margin-top:2rem; text-align:center;">'
@@ -388,6 +405,11 @@ def main():
         return
 
     session = st.session_state.session_context
+
+    # Show user bubble immediately and store for re-renders
+    st.session_state["_last_user_message"] = user_input
+    st.session_state.pop("_last_csc_message", None)  # clear stale CSC message
+    _show_user_bubble(user_input)
 
     # Affirmative suggestion check
     pending = session.get("pending_suggestion")

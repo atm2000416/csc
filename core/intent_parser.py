@@ -1,6 +1,6 @@
 """
 core/intent_parser.py
-Intent Parser — wraps Gemini API call.
+Intent Parser — wraps Claude API call.
 Loads system prompt from intent_parser_system_prompt.md at startup.
 Returns structured IntentResult dataclass.
 """
@@ -9,8 +9,7 @@ import re
 from dataclasses import dataclass, field
 from pathlib import Path
 
-import google.genai as genai
-from google.genai import types
+from core.llm_client import get_client
 from config import get_secret
 
 # Module-level cache for system prompt
@@ -141,17 +140,17 @@ def parse_intent(
     session_context: dict | None = None,
     fuzzy_hints: dict | None = None,
     current_date: str | None = None,
-    model_name: str = "gemini-2.5-flash",
+    model_name: str = "claude-haiku-4-5-20251001",
 ) -> IntentResult:
     """
-    Call Gemini to parse user query into structured search parameters.
+    Call Claude to parse user query into structured search parameters.
 
     Args:
         user_query: Raw user input (any language)
         session_context: Accumulated parameters from prior session turns
         fuzzy_hints: Tag hints from Fuzzy Pre-processor
         current_date: ISO date string for temporal reasoning
-        model_name: Gemini model to use
+        model_name: Claude model to use
 
     Returns:
         IntentResult dataclass with all extracted parameters
@@ -174,31 +173,28 @@ def parse_intent(
     user_message = f"{user_query}{context_block}" if context_block else user_query
 
     try:
-        client = genai.Client(api_key=get_secret("GEMINI_API_KEY", ""))
-        response = client.models.generate_content(
+        client = get_client()
+        response = client.messages.create(
             model=model_name,
-            contents=user_message,
-            config=types.GenerateContentConfig(
-                system_instruction=system_prompt,
-                temperature=0.2,
-                max_output_tokens=1000,
-            ),
+            system=system_prompt,
+            messages=[{"role": "user", "content": user_message}],
+            temperature=0.2,
+            max_tokens=1000,
         )
-        raw = response.text.strip()
+        raw = response.content[0].text.strip()
     except Exception as exc:
         import logging
-        logging.getLogger(__name__).warning("Gemini API call failed: %s", exc)
+        logging.getLogger(__name__).warning("Claude API call failed: %s", exc)
         return IntentResult(raw_query=user_query, ics=0.3, recognized=False)
 
     # Extract first JSON object regardless of surrounding markdown or thinking text
-    json_match = re.search(r'\{.*\}', raw, re.DOTALL)
-    if json_match:
-        raw = json_match.group(0)
-
+    start = raw.find('{')
+    if start == -1:
+        return IntentResult(raw_query=user_query, ics=0.3, recognized=False)
     try:
-        parsed = json.loads(raw)
+        parsed, _ = json.JSONDecoder().raw_decode(raw, start)
     except json.JSONDecodeError:
-        # Gemini returned unparseable output — return low-confidence fallback
+        # Claude returned unparseable output — return low-confidence fallback
         return IntentResult(raw_query=user_query, ics=0.3, recognized=False)
 
     # Validate tags against live DB slugs; strip any hallucinated slugs

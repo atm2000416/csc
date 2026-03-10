@@ -9,10 +9,8 @@ from unittest.mock import patch, MagicMock
 
 sys.path.insert(0, os.path.join(os.path.dirname(__file__), ".."))
 
-# Mock google.genai before any core imports (required since package not installed locally)
-sys.modules.setdefault("google", MagicMock())
-sys.modules.setdefault("google.genai", MagicMock())
-sys.modules.setdefault("google.genai.types", MagicMock())
+# Mock anthropic before any core imports (required since package may not be installed locally)
+sys.modules.setdefault("anthropic", MagicMock())
 
 
 def test_coerce_parsed_age_string():
@@ -69,17 +67,16 @@ def test_coerce_parsed_invalid_int_becomes_none():
 
 
 def test_parse_intent_api_failure():
-    """parse_intent should return recognized=False and ics=0.3 when Gemini raises."""
+    """parse_intent should return recognized=False and ics=0.3 when Claude raises."""
     from core.intent_parser import parse_intent
 
-    with patch("core.intent_parser.genai") as mock_genai, \
+    with patch("core.intent_parser.get_client") as mock_get_client, \
          patch("core.intent_parser._get_active_slugs", return_value=set()):
         mock_client = MagicMock()
-        mock_genai.Client.return_value = mock_client
-        mock_client.models.generate_content.side_effect = Exception("Network error")
+        mock_get_client.return_value = mock_client
+        mock_client.messages.create.side_effect = Exception("Network error")
 
-        with patch("core.intent_parser.get_secret", return_value="fake-key"), \
-             patch("core.intent_parser.load_system_prompt", return_value="system prompt"):
+        with patch("core.intent_parser.load_system_prompt", return_value="system prompt"):
             result = parse_intent("hockey camp Toronto")
 
     assert result.recognized is False

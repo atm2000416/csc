@@ -10,11 +10,8 @@ from unittest.mock import patch, MagicMock
 
 sys.path.insert(0, os.path.join(os.path.dirname(__file__), ".."))
 
-# Mock google.genai before any core imports
-_google_mock = MagicMock()
-sys.modules.setdefault("google", _google_mock)
-sys.modules.setdefault("google.genai", MagicMock())
-sys.modules.setdefault("google.genai.types", MagicMock())
+# Mock anthropic before any core imports
+sys.modules.setdefault("anthropic", MagicMock())
 
 
 def _make_result(program_id: int, tier: str = "bronze") -> dict:
@@ -50,13 +47,12 @@ def test_gold_bonus_applied_once():
     ]
 
     mock_response = MagicMock()
-    mock_response.text = json.dumps({"ranked": mock_ranked})
+    mock_response.content = [MagicMock(text=json.dumps({"ranked": mock_ranked}))]
     mock_client = MagicMock()
-    mock_client.models.generate_content.return_value = mock_response
+    mock_client.messages.create.return_value = mock_response
 
     with patch("core.reranker.get_secret", side_effect=_secret_side_effect), \
-         patch("core.reranker.genai") as mock_genai:
-        mock_genai.Client.return_value = mock_client
+         patch("core.reranker.get_client", return_value=mock_client):
         final = rerank(results, "hockey camp", {}, top_n=10)
 
     gold_result = next((r for r in final if r["id"] == 1), None)
@@ -90,11 +86,10 @@ def test_reranker_fallback_score_is_half():
     results = [_make_result(i) for i in range(1, 20)]
 
     mock_client = MagicMock()
-    mock_client.models.generate_content.side_effect = Exception("API down")
+    mock_client.messages.create.side_effect = Exception("API down")
 
     with patch("core.reranker.get_secret", side_effect=_secret_side_effect), \
-         patch("core.reranker.genai") as mock_genai:
-        mock_genai.Client.return_value = mock_client
+         patch("core.reranker.get_client", return_value=mock_client):
         final = rerank(results, "hockey camp", {"ics": 0.50}, top_n=10)
 
     for r in final:

@@ -9,10 +9,8 @@ from unittest.mock import MagicMock
 
 sys.path.insert(0, os.path.join(os.path.dirname(__file__), ".."))
 
-# Mock google.genai and streamlit before any core imports
-sys.modules.setdefault("google", MagicMock())
-sys.modules.setdefault("google.genai", MagicMock())
-sys.modules.setdefault("google.genai.types", MagicMock())
+# Mock anthropic and streamlit before any core imports
+sys.modules.setdefault("anthropic", MagicMock())
 
 # We'll inject a fresh st mock per test via importlib
 import importlib

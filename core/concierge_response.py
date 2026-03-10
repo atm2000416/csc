@@ -4,14 +4,12 @@ Concierge Response Generator — produces a short spoken narrative for each
 search result set. The concierge acknowledges the request, highlights what
 makes the top picks relevant, and offers one natural follow-up.
 
-Gemini is tried first; on any failure a template-based response is returned
+Claude is tried first; on any failure a template-based response is returned
 so the concierge always speaks.
 """
 import json
 import logging
-import google.genai as genai
-from google.genai import types
-from config import get_secret
+from core.llm_client import get_client
 
 _log = logging.getLogger(__name__)
 
@@ -158,21 +156,19 @@ def generate(
     )
 
     try:
-        client = genai.Client(api_key=get_secret("GEMINI_API_KEY", ""))
-        response = client.models.generate_content(
-            model="gemini-2.5-flash",
-            contents=user_message,
-            config=types.GenerateContentConfig(
-                system_instruction=_SYSTEM_PROMPT,
-                temperature=0.4,
-                max_output_tokens=200,
-            ),
+        client = get_client()
+        response = client.messages.create(
+            model="claude-sonnet-4-6",
+            system=_SYSTEM_PROMPT,
+            messages=[{"role": "user", "content": user_message}],
+            temperature=0.4,
+            max_tokens=200,
         )
-        text = response.text.strip() if response.text else ""
+        text = response.content[0].text.strip()
         if text:
             return text
-        _log.warning("Concierge response: Gemini returned empty text, using template")
+        _log.warning("Concierge response: Claude returned empty text, using template")
     except Exception as exc:
-        _log.warning("Concierge response: Gemini call failed (%s), using template", exc)
+        _log.warning("Concierge response: Claude call failed (%s), using template", exc)
 
     return _template_fallback(results, params, route)

@@ -1,12 +1,11 @@
 """
 core/reranker.py
-Reranker — uses Gemini to reorder and annotate results for relevance.
+Reranker — uses Claude to reorder and annotate results for relevance.
 Fires when result pool is large or intent confidence is low.
 """
 import json
 import logging
-import google.genai as genai
-from google.genai import types
+from core.llm_client import get_client
 from config import get_secret
 
 _log = logging.getLogger(__name__)
@@ -81,21 +80,22 @@ def rerank(
     )
 
     try:
-        client = genai.Client(api_key=get_secret("GEMINI_API_KEY", ""))
-        response = client.models.generate_content(
-            model="gemini-2.5-flash",
-            contents=prompt,
-            config=types.GenerateContentConfig(temperature=0.1, max_output_tokens=3000),
+        client = get_client()
+        response = client.messages.create(
+            model="claude-haiku-4-5-20251001",
+            messages=[{"role": "user", "content": prompt}],
+            temperature=0.1,
+            max_tokens=3000,
         )
-        raw = response.text.strip()
+        raw = response.content[0].text.strip()
         # Find {"ranked" anchor then use raw_decode to parse exactly that object,
-        # ignoring any preamble or trailing content Gemini may have added.
+        # ignoring any preamble or trailing content the model may have added.
         start = raw.find('{"ranked"')
         if start == -1:
             raise ValueError("No JSON object found in reranker response")
         ranked_data = json.JSONDecoder().raw_decode(raw, start)[0].get("ranked", [])
     except Exception as exc:
-        _log.warning("Reranker Gemini call failed: %s", exc)
+        _log.warning("Reranker Claude call failed: %s", exc)
         for r in results[:top_n]:
             r.setdefault("blurb", r.get("mini_description", ""))
             r.setdefault("rerank_score", 0.5)

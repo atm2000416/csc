@@ -88,12 +88,13 @@ def rerank(
             max_tokens=3000,
         )
         raw = response.content[0].text.strip()
-        # Find {"ranked" anchor then use raw_decode to parse exactly that object,
-        # ignoring any preamble or trailing content the model may have added.
-        start = raw.find('{"ranked"')
+        # Find the first { and parse from there — handles both compact {"ranked":...}
+        # and pretty-printed {\n  "ranked":...} output from Claude.
+        start = raw.find('{')
         if start == -1:
             raise ValueError("No JSON object found in reranker response")
-        ranked_data = json.JSONDecoder().raw_decode(raw, start)[0].get("ranked", [])
+        parsed = json.JSONDecoder().raw_decode(raw, start)[0]
+        ranked_data = parsed.get("ranked", [])
     except Exception as exc:
         _log.warning("Reranker Claude call failed: %s", exc)
         for r in results[:top_n]:

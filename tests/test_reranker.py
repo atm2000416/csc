@@ -47,7 +47,7 @@ def test_gold_bonus_applied_once():
     ]
 
     mock_response = MagicMock()
-    mock_response.content = [MagicMock(text=json.dumps({"ranked": mock_ranked}))]
+    mock_response.content = [MagicMock(text=json.dumps({"ranked": mock_ranked}, indent=2))]
     mock_client = MagicMock()
     mock_client.messages.create.return_value = mock_response
 

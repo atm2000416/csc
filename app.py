@@ -388,7 +388,12 @@ def is_affirmative(text: str) -> bool:
         return True
     # Match if the first word is an affirmative (e.g. "yes please", "yes, show them")
     first_word = normalized.split()[0].rstrip(",.!") if normalized else ""
-    return first_word in {"yes", "sure", "okay", "yeah", "yep"}
+    if first_word in {"yes", "sure", "okay", "yeah", "yep"}:
+        return True
+    # Match show-intent phrases (e.g. "show me the 7 camps", "show them", "show me")
+    if normalized.startswith("show"):
+        return True
+    return False
 
 
 # ── Main app ──────────────────────────────────────────────────────────────────
@@ -520,7 +525,9 @@ def main():
             merged_params["city"] = pending["to_city"]
             merged_params["province"] = pending["to_province"]
         elif pending.get("type") == "geo_broaden_province":
-            merged_params.pop("city", None)
+            # Clear ALL location specifics so CSSL does a true province-wide search
+            for _k in ("city", "cities", "lat", "lon", "radius_km", "needs_geolocation"):
+                merged_params.pop(_k, None)
             merged_params["province"] = pending["to_province"]
         # Write accepted params back to session so next typed turn inherits them
         session["accumulated_params"] = merged_params

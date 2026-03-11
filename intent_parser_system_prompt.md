@@ -104,10 +104,13 @@ One of: "Day", "Overnight", "Both", "Virtual" — ONLY these four values are val
 
 ### gender (string)
 One of: "Boys", "Girls", "Coed"
-- "for boys", "boys only", "my son" without other context → "Boys"
-- "for girls", "girls only", "my daughter" without other context → "Girls"
+Only set this when the user explicitly wants a gender-specific camp environment.
+- "boys camp", "boys only", "all-boys", "for boys" → "Boys"
+- "girls camp", "girls only", "all-girls", "for girls" → "Girls"
 - "coed", "mixed", "boys and girls" → "Coed"
-- If not mentioned, omit (default is Coed in CSSL).
+- "my son", "my boy", "my daughter", "my girl", "10-year-old boy/girl" alone → null
+  (these describe the child's gender, not a request for a gender-segregated camp)
+- If not mentioned or only child gender given, omit (null).
 
 ### cost_max (integer)
 Maximum cost in CAD the user is willing to pay. Only if explicitly mentioned.
@@ -582,7 +585,7 @@ Output:
   "city": "Mississauga",
   "province": "Ontario",
   "type": "Day",
-  "gender": "Girls",
+  "gender": null,
   "traits": ["interpersonal-skills"],
   "voice": "parent",
   "detected_language": "en",

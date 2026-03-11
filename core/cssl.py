@@ -103,12 +103,14 @@ def query(params: dict, limit: int = 100) -> tuple[list[dict], float]:
         args["type"] = params["type"]
 
     # Gender (NULL=unknown, 0=Coed, 1=Boys, 2=Girls)
-    # Strict match: when a user asks for girls-only or boys-only, only return
-    # programs with an explicit gender tag. NULL means data is missing, not coed.
+    # Soft match: include exact gender match and untagged (NULL) programs.
+    # Gender filter is only set when the user explicitly asks for a gender-specific
+    # camp (e.g. "all-girls camp") — not when they merely mention the child's gender.
+    # Exact gender matches are ranked first via gender_boost in ORDER BY.
     gender_map = {"Boys": 1, "Girls": 2}
     if params.get("gender") and params["gender"] in gender_map:
         gval = gender_map[params["gender"]]
-        conditions.append("p.gender = %(gender)s")
+        conditions.append("(p.gender = %(gender)s OR p.gender IS NULL OR p.gender = 0)")
         args["gender"] = gval
 
     # Cost

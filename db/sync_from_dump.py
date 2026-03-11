@@ -3,13 +3,14 @@ db/sync_from_dump.py
 Sync the new CSC database from a fresh SQL dump of the legacy camp directory.
 
 What this syncs:
-  1. NEW camps      — cids in dump (is_member=1, with city) not present in new DB → INSERT
-  2. RE-ACTIVATED   — cids status=0 in new DB, now is_member=1 in dump → UPDATE status=1
-  3. DEACTIVATED    — cids status=1 in new DB, now is_member=0 in dump → UPDATE status=0
+  1. NEW camps      — cids in dump (status=1, with city) not present in new DB → INSERT
+  2. RE-ACTIVATED   — cids status=0 in new DB, now status=1 in dump → UPDATE status=1
+  3. DEACTIVATED    — cids status=1 in new DB, now status=0 in dump → UPDATE status=0
                       (requires --deactivate flag; only touches camps whose ID came from
                        the old DB, not manually-created location branches)
-  NOTE: Uses is_member (paying client) not status (published listing) as the activation
-        criterion — this matches what camps.ca actually surfaces in search results.
+  NOTE: Uses status (field 6) as the activation criterion — the only active/inactive
+        signal in the legacy schema. Field 17 (showAnalytics) was previously mislabelled
+        as is_member; it defaults to 1 for almost all camps and is not a membership flag.
   4. SEED PROGRAMS  — for newly-active camps with no programs: create default program
                       and infer activity tags from dump session names (--seed-programs flag)
   5. METADATA       — tier/website changes for active camps (--update-meta flag)
@@ -25,7 +26,7 @@ Usage:
   # Dry run — see what would change (always do this first)
   python3 db/sync_from_dump.py --dump /path/to/new_dump.sql --dry-run
 
-  # Standard sync: activate is_member camps + new locations + program dates
+  # Standard sync: activate status=1 camps + new locations + program dates
   python3 db/sync_from_dump.py --dump /path/to/new_dump.sql
 
   # Seed programs/tags for newly-active camps that have none
@@ -104,14 +105,16 @@ def _extract_block(content, table):
 
 def parse_camps(content):
     """
-    Old schema: (cid, camp_name, prefix, listingClass, eListingType, status,
-                  mod_date, location, Lat, Lon, weight, filename, usePretty,
-                  prettyURL, onlineonly, wentLive, is_member, agate)
-    Returns dict: {cid: {camp_name, tier, status, is_member, lat, lon, prettyurl}}
+    Legacy schema (confirmed from CREATE TABLE in dump):
+      (cid, camp_name, prefix, listingClass, eListingType, status,
+       mod_date, location, Lat, Lon, weight, filename, usePretty,
+       prettyURL, onlineonly, wentLive, showAnalytics, agate)
 
-    Activation logic uses is_member (field 17), not status (field 6).
-    status=1 means "listing published" (subset of members);
-    is_member=1 means "paying client" — what camps.ca actually surfaces.
+    Field 6  = status        — 1 if camp listing is active/live (THE activation signal)
+    Field 17 = showAnalytics — defaults to 1 for almost all camps; NOT a membership flag
+
+    NOTE: There is no is_member field in the legacy schema. Field 17 was previously
+    mislabelled as is_member — it is showAnalytics and should not be used for activation.
     """
     block = _extract_block(content, 'camps')
     if not block:
@@ -120,12 +123,12 @@ def parse_camps(content):
     rows = re.findall(
         r"\((\d+),'((?:[^'\\]|\\.)*)',('(?:[^'\\]|\\.)*'|NULL),'([^']*)',"
         r"'([^']*)',(\d+),'[^']*','[^']*','([^']*?)','([^']*?)',"
-        r"\d+,'[^']*',\d+,'([^']*?)',\d+,'[^']*',(\d+),\d+\)",
+        r"\d+,'[^']*',\d+,'([^']*?)',\d+,'[^']*',\d+,\d+\)",
         block
     )
     result = {}
     for row in rows:
-        cid, camp_name, _, listing_class, e_listing, status, lat, lon, prettyurl, is_member = row
+        cid, camp_name, _, listing_class, e_listing, status, lat, lon, prettyurl = row
         cid = int(cid)
         camp_name = camp_name.replace("\\'", "'")
         tier = TIER_MAP.get(e_listing, 'bronze')
@@ -139,7 +142,6 @@ def parse_camps(content):
             'camp_name': camp_name,
             'tier': tier,
             'status': int(status),
-            'is_member': int(is_member),
             'lat': lat_f,
             'lon': lon_f,
             'prettyurl': prettyurl or None,
@@ -634,7 +636,7 @@ def run(dump_path, dry_run, only, update_meta, deactivate=False, skip_ids=None,
             if cid not in new_db_all:
                 continue
             new = new_db_all[cid]
-            old_active = old['is_member'] == 1  # paying client → should be active
+            old_active = old['status'] == 1  # status=1 means active in legacy DB
             new_active = new['status'] == 1
 
             if old_active and not new_active:
@@ -669,8 +671,8 @@ def run(dump_path, dry_run, only, update_meta, deactivate=False, skip_ids=None,
         for cid, old in sorted(dump_camps.items()):
             if cid in new_db_all:
                 continue
-            if old['is_member'] != 1:
-                continue  # don't import non-member camps
+            if old['status'] != 1:
+                continue  # only import active camps (status=1 in legacy DB)
 
             addr = dump_addrs.get(cid, {})
             info = dump_info.get(cid, {})
@@ -1039,8 +1041,8 @@ if __name__ == "__main__":
     parser.add_argument("--update-meta", action="store_true",
                         help="Also update tier/website for existing camps")
     parser.add_argument("--deactivate", action="store_true",
-                        help="Deactivate camps whose is_member=0 in the dump "
-                             "(i.e. they left the client list). Always dry-run first "
+                        help="Deactivate camps whose status=0 in the dump "
+                             "(i.e. no longer active). Always dry-run first "
                              "to review the list before applying.")
     parser.add_argument("--seed-programs", action="store_true",
                         help="For active camps with no programs: create a default program "

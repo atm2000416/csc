@@ -355,13 +355,24 @@ _BUBBLE_BASE = (
 _BUBBLE_ROW = "padding:0 1.4rem;"
 
 
+_AVATAR_BASE = (
+    "width:34px; height:34px; border-radius:50%; flex-shrink:0; "
+    "display:flex; align-items:center; justify-content:center; "
+    "font-size:17px; align-self:flex-end;"
+)
+_AVATAR_AI   = f"{_AVATAR_BASE} background:#8A9A5B;"
+_AVATAR_USER = f"{_AVATAR_BASE} background:#5a7a6a;"
+
+
 def _render_bubble(message: str, role: str):
     """Low-level bubble renderer — does not touch session state."""
     if not message:
         return
     if role == "assistant":
         st.markdown(
-            f'<div style="display:flex; justify-content:flex-start; margin:0 0 0.8rem 0; {_BUBBLE_ROW}">'
+            f'<div style="display:flex; align-items:flex-end; gap:8px; '
+            f'justify-content:flex-start; margin:0 0 0.8rem 0; {_BUBBLE_ROW}">'
+            f'<div style="{_AVATAR_AI}">🏕</div>'
             f'<div style="background:#FFFFFF; color:#2F4F4F; '
             f'border-radius:18px 18px 18px 4px; box-shadow:0 1px 6px rgba(47,79,79,0.10); {_BUBBLE_BASE}">'
             f'{message}</div></div>',
@@ -369,10 +380,14 @@ def _render_bubble(message: str, role: str):
         )
     else:
         st.markdown(
-            f'<div style="display:flex; justify-content:flex-end; margin:0 0 0.8rem 0; {_BUBBLE_ROW}">'
+            f'<div style="display:flex; align-items:flex-end; gap:8px; '
+            f'justify-content:flex-end; margin:0 0 0.8rem 0; {_BUBBLE_ROW}">'
             f'<div style="background:#8A9A5B; color:white; '
             f'border-radius:18px 18px 4px 18px; {_BUBBLE_BASE}">'
-            f'{message}</div></div>',
+            f'{message}</div>'
+            f'<div style="{_AVATAR_USER}; color:white; font-size:13px; '
+            f'font-family:Nunito,sans-serif; font-weight:800;">You</div>'
+            f'</div>',
             unsafe_allow_html=True,
         )
 

@@ -440,7 +440,7 @@ def main():
     st.markdown("""
     <div class="camps-topbar">
         <span class="logo">camps<em>.ca</em></span>
-        <span class="badge">Camp Finder</span>
+        <span class="badge">AI Powered Camp Finder</span>
         <div style="margin-left:auto; display:flex; align-items:center; gap:8px;">
             <a href="?action=surprise" target="_self" class="topbar-btn">✨ Surprise Me</a>
             <a href="?action=reset" target="_self" class="topbar-btn">↺ Start Over</a>

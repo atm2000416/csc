@@ -13,6 +13,8 @@ What this syncs:
         as is_member; it defaults to 1 for almost all camps and is not a membership flag.
   4. SEED PROGRAMS  — for newly-active camps with no programs: create default program
                       and infer activity tags from dump session names (--seed-programs flag)
+  4b. REFRESH PROGRAMS — replace single generic placeholder programs (name=camp name)
+                      with individual session records from the dump (--refresh-programs flag)
   5. METADATA       — tier/website changes for active camps (--update-meta flag)
   6. LOCATIONS      — new extra_locations not yet in new DB → INSERT
   7. PROGRAM DATES  — program_dates table refreshed from session_date in dump
@@ -34,6 +36,10 @@ Usage:
 
   # Full sync with deactivations + metadata + seeded programs
   python3 db/sync_from_dump.py --dump /path/to/new_dump.sql --deactivate --update-meta --seed-programs
+
+  # Replace placeholder programs with real sessions (always dry-run first)
+  python3 db/sync_from_dump.py --dump /path/to/new_dump.sql --refresh-programs --dry-run
+  python3 db/sync_from_dump.py --dump /path/to/new_dump.sql --refresh-programs
 
   # Run only a specific section
   python3 db/sync_from_dump.py --dump /path/to/new_dump.sql --only dates
@@ -301,6 +307,64 @@ def parse_sessions_by_camp(content, camp_ids: set) -> dict:
             if cid in camp_ids:
                 result[cid].append(sm.group(2).strip())
     return result
+
+
+def parse_sessions_full(content, camp_ids: set) -> dict:
+    """
+    Parse full session details from the dump for specific camp_ids.
+    Deduplicates by cleaned name — returns one record per unique program name.
+    Skips: status=0, blank/draft names ("New program", "Copy of ...").
+    Returns: {camp_id: [{"name", "type", "age_from", "age_to",
+                          "cost_from", "cost_to", "date_from", "date_to"}, ...]}
+    """
+    # Schema: (id, camp_id, 'name', 'type', ?, category_id, status,
+    #           'date_from', 'date_to', age_from, age_to, cost_from, cost_to, ...)
+    _SESSION_RE = re.compile(
+        r"\((\d+),(\d+),'((?:[^'\\]|\\.)*?)','([^']*)',\d+,\d+,(\d+),"
+        r"'(\d{4}-\d{2}-\d{2})','(\d{4}-\d{2}-\d{2})',"
+        r"(\d+),(\d+),(\d+),(\d+),"
+    )
+    _SKIP_PREFIXES = ("new program", "copy of")
+
+    result = defaultdict(dict)  # camp_id → {clean_name: session_dict}
+
+    for m in re.finditer(
+        r"INSERT INTO `sessions` VALUES (.*?);\n",
+        content, re.DOTALL
+    ):
+        for sm in _SESSION_RE.finditer(m.group(1)):
+            cid    = int(sm.group(2))
+            if cid not in camp_ids:
+                continue
+            status = int(sm.group(5))
+            if status != 1:
+                continue
+            name = sm.group(3).strip().replace("\\'", "'")
+            if not name:
+                continue
+            name_lower = name.lower()
+            if any(name_lower.startswith(p) for p in _SKIP_PREFIXES):
+                continue
+
+            clean_key = re.sub(r'\s+', ' ', name_lower).strip()
+            if clean_key in result[cid]:
+                continue  # keep first occurrence per unique name
+
+            date_from = sm.group(6)
+            date_to   = sm.group(7)
+            result[cid][clean_key] = {
+                "name":      name,
+                "type":      sm.group(4) or None,
+                "age_from":  int(sm.group(8)) or None,
+                "age_to":    int(sm.group(9)) or None,
+                "cost_from": int(sm.group(10)) or None,
+                "cost_to":   int(sm.group(11)) or None,
+                "date_from": date_from if date_from != "0000-00-00" else None,
+                "date_to":   date_to   if date_to   != "0000-00-00" else None,
+            }
+
+    # Convert inner dicts to lists
+    return {cid: list(sessions.values()) for cid, sessions in result.items()}
 
 
 # ── Activity tag inference ─────────────────────────────────────────────────────
@@ -593,7 +657,7 @@ def infer_tags(session_names: list, tag_slug_to_id: dict) -> set:
 # ── Main sync logic ───────────────────────────────────────────────────────────
 
 def run(dump_path, dry_run, only, update_meta, deactivate=False, skip_ids=None,
-        seed_programs=False):
+        seed_programs=False, refresh_programs=False):
     print(f"Reading dump: {dump_path}")
     with open(dump_path, 'r', encoding='utf-8', errors='replace') as f:
         content = f.read()
@@ -623,6 +687,8 @@ def run(dump_path, dry_run, only, update_meta, deactivate=False, skip_ids=None,
         'deactivated': 0,
         'reactivated': 0,
         'programs_seeded': 0,
+        'programs_refreshed': 0,
+        'programs_refresh_skipped': 0,
         'meta_updated': 0,
         'locations_added': 0,
         'dates_inserted': 0,
@@ -787,7 +853,105 @@ def run(dump_path, dry_run, only, update_meta, deactivate=False, skip_ids=None,
                 conn.commit()
             print()
 
-    # ── 4. Metadata updates ───────────────────────────────────────────────────
+    # ── 4. Refresh programs — replace single generic placeholders ────────────
+    if refresh_programs and only in (None, 'refresh', 'all'):
+        print("=== Refresh programs (replace generic placeholders with real sessions) ===")
+
+        # Find camps with exactly 1 program where program name = camp name
+        cursor.execute("""
+            SELECT c.id, c.camp_name, MIN(p.id) as prog_id
+            FROM camps c
+            JOIN programs p ON p.camp_id = c.id AND p.status = 1
+            WHERE c.status = 1
+            GROUP BY c.id, c.camp_name
+            HAVING COUNT(p.id) = 1 AND MIN(p.name) = MAX(c.camp_name)
+        """)
+        placeholder_camps = {r['id']: r for r in cursor.fetchall()}
+
+        if not placeholder_camps:
+            print("  No camps with generic placeholder programs found.")
+            print()
+        else:
+            print(f"  {len(placeholder_camps)} camps with generic placeholders — "
+                  f"parsing sessions from dump...")
+
+            sessions_by_camp = parse_sessions_full(content, set(placeholder_camps.keys()))
+
+            # Load active tag slug → id map
+            cursor.execute("SELECT id, slug FROM activity_tags WHERE is_active = 1")
+            tag_slug_to_id = {r['slug']: r['id'] for r in cursor.fetchall()}
+
+            refreshed = skipped = 0
+            for camp_id, row in sorted(placeholder_camps.items()):
+                sessions = sessions_by_camp.get(camp_id, [])
+                if not sessions:
+                    skipped += 1
+                    if dry_run:
+                        print(f"  SKIP  id={camp_id}: {row['camp_name']!r}  (no sessions in dump)")
+                    continue
+
+                tag_names = [s["name"] for s in sessions]
+                print(f"  {'DRY ' if dry_run else ''}REFRESH id={camp_id}: "
+                      f"{row['camp_name']!r}  → {len(sessions)} sessions")
+
+                if dry_run:
+                    for s in sessions[:5]:
+                        inferred = sorted(infer_tags([s["name"]], tag_slug_to_id))
+                        print(f"    · {s['name']!r:50s}  tags={inferred}")
+                    if len(sessions) > 5:
+                        print(f"    … (+{len(sessions)-5} more)")
+                    refreshed += 1
+                    continue
+
+                old_prog_id = row['prog_id']
+
+                # Remove old placeholder tags, dates, and program
+                cursor.execute("DELETE FROM program_tags WHERE program_id = %s", (old_prog_id,))
+                cursor.execute("DELETE FROM program_dates WHERE program_id = %s", (old_prog_id,))
+                cursor.execute("DELETE FROM programs WHERE id = %s", (old_prog_id,))
+
+                # Insert one program per unique session name
+                for s in sessions:
+                    cursor.execute(
+                        """
+                        INSERT INTO programs
+                            (camp_id, name, type, age_from, age_to,
+                             cost_from, cost_to, start_date, end_date, status)
+                        VALUES (%s, %s, %s, %s, %s, %s, %s, %s, %s, 1)
+                        """,
+                        (
+                            camp_id,
+                            s["name"],
+                            s["type"],
+                            s["age_from"],
+                            s["age_to"],
+                            s["cost_from"],
+                            s["cost_to"],
+                            s["date_from"],
+                            s["date_to"],
+                        )
+                    )
+                    prog_id = cursor.lastrowid
+                    for slug in sorted(infer_tags([s["name"]], tag_slug_to_id)):
+                        tag_id = tag_slug_to_id.get(slug)
+                        if tag_id:
+                            cursor.execute(
+                                "INSERT IGNORE INTO program_tags (program_id, tag_id) "
+                                "VALUES (%s, %s)",
+                                (prog_id, tag_id)
+                            )
+
+                refreshed += 1
+                if refreshed % 20 == 0:
+                    conn.commit()
+
+            stats['programs_refreshed'] = refreshed
+            stats['programs_refresh_skipped'] = skipped
+            if not dry_run and refreshed % 20 != 0:
+                conn.commit()
+            print()
+
+    # ── 5. Metadata updates ───────────────────────────────────────────────────
     if update_meta and only in (None, 'meta', 'all'):
         print("=== Metadata updates (tier/website) ===")
         updated = 0
@@ -1021,6 +1185,9 @@ def run(dump_path, dry_run, only, update_meta, deactivate=False, skip_ids=None,
         print(f"  Camps {'would be ' if dry_run else ''}deactivated:          {stats['deactivated']}")
     if seed_programs:
         print(f"  Programs {'would be ' if dry_run else ''}seeded:           {stats['programs_seeded']}")
+    if refresh_programs:
+        print(f"  Programs {'would be ' if dry_run else ''}refreshed:        {stats['programs_refreshed']}")
+        print(f"  Programs skipped (no sessions in dump):  {stats['programs_refresh_skipped']}")
     if update_meta:
         print(f"  Metadata {'would be ' if dry_run else ''}updated:          {stats['meta_updated']}")
     print(f"  Locations {'would be ' if dry_run else ''}added:            {stats['locations_added']}")
@@ -1035,7 +1202,7 @@ if __name__ == "__main__":
     parser.add_argument("--dry-run", action="store_true",
                         help="Preview changes without writing to DB")
     parser.add_argument("--only",
-                        choices=["status", "new", "seed", "meta", "locations", "dates", "all"],
+                        choices=["status", "new", "seed", "refresh", "meta", "locations", "dates", "all"],
                         default=None,
                         help="Run only a specific sync section")
     parser.add_argument("--update-meta", action="store_true",
@@ -1047,6 +1214,10 @@ if __name__ == "__main__":
     parser.add_argument("--seed-programs", action="store_true",
                         help="For active camps with no programs: create a default program "
                              "and infer activity tags from dump session names.")
+    parser.add_argument("--refresh-programs", action="store_true",
+                        help="Replace single generic placeholder programs with individual "
+                             "session records imported from the dump. Infers activity tags "
+                             "per session name. Always dry-run first.")
     parser.add_argument("--skip-ids",
                         help="Comma-separated camp IDs to skip during deactivation "
                              "(e.g. manually-promoted sub-locations: 422,529,579)")
@@ -1055,4 +1226,4 @@ if __name__ == "__main__":
     args = parser.parse_args()
     skip_ids = set(int(x) for x in args.skip_ids.split(",")) if args.skip_ids else None
     run(args.dump, args.dry_run, args.only, args.update_meta, args.deactivate, skip_ids,
-        seed_programs=args.seed_programs)
+        seed_programs=args.seed_programs, refresh_programs=args.refresh_programs)

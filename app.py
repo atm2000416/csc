@@ -254,7 +254,10 @@ hr { border-color: #d8e4d0 !important; margin: 0.8rem 0 !important; }
 """, unsafe_allow_html=True)
 
 # ── Imports (after page config) ───────────────────────────────────────────────
-from core.session_manager import init_session, merge_intent, store_suggestion, clear_suggestion, store_results
+from core.session_manager import (
+    init_session, merge_intent, store_suggestion, clear_suggestion, store_results,
+    get_query_state, sync_mirror,
+)
 from core.fuzzy_preprocessor import preprocess
 from core.intent_parser import parse_intent
 from core.cssl import query as cssl_query
@@ -456,8 +459,10 @@ def main():
     if st.session_state.get("_disambiguation_choice") and not user_input:
         choice = st.session_state.pop("_disambiguation_choice")
         init_trace()
-        # Persist chosen params into session so next typed turn inherits them
-        st.session_state.session_context["accumulated_params"] = dict(choice["params"])
+        # Persist chosen tags into QueryState so next typed turn inherits them.
+        qs = get_query_state()
+        qs.apply_inferred_update("tags", choice["params"]["tags"], source="category_disambiguation")
+        sync_mirror()
         record("input", {"raw_query": choice["raw_query"], "path": "disambiguation",
                          "source": "category_disambiguation"})
         _run_search(choice["params"], choice["raw_query"],
@@ -469,7 +474,7 @@ def main():
         surprise_results = st.session_state.pop("_surprise_direct_results")
         query_label      = st.session_state.pop("_surprise_query_label", "Surprise camps")
         st.session_state.pop("_disambiguated_tags", None)
-        st.session_state.session_context["pending_suggestion"] = None
+        clear_suggestion()
         _render_history()
         _show_user_bubble(query_label)
         if surprise_results:
@@ -485,12 +490,14 @@ def main():
         st.session_state["_surprise_results_heading"] = True
         st.session_state["_input_path"] = st.session_state.pop("_input_path_pending", "surprise_me")
         st.session_state.pop("_disambiguated_tags", None)  # fresh disambiguator on surprise
-        # Keep location from prior session but clear activity/filter params
-        prior = st.session_state.session_context.get("accumulated_params", {})
-        st.session_state.session_context["accumulated_params"] = {
-            k: v for k, v in prior.items() if k in ("city", "cities", "province")
-        }
-        st.session_state.session_context["pending_suggestion"] = None
+        # Keep location from prior session but clear all activity/filter params.
+        qs = get_query_state()
+        _prior_scope = {k: v for k, v in qs.geo.current_scope.items()
+                        if k in ("city", "cities", "province")}
+        qs.start_new_search()
+        if _prior_scope:
+            qs.replace_geo(_prior_scope)  # type: ignore[arg-type]
+        sync_mirror()
     else:
         st.session_state.pop("_surprise_results_heading", None)
 
@@ -519,27 +526,27 @@ def main():
     # Affirmative suggestion check
     pending = session.get("pending_suggestion")
     if pending and is_affirmative(user_input):
+        qs = get_query_state()
         init_trace()
-        merged_params = dict(session["accumulated_params"])
-        if pending.get("type") == "geo_broaden":
-            merged_params["city"] = pending["to_city"]
-            merged_params["province"] = pending["to_province"]
-        elif pending.get("type") == "geo_broaden_province":
-            # Clear ALL location specifics so CSSL does a true province-wide search
-            for _k in ("city", "cities", "lat", "lon", "radius_km", "needs_geolocation"):
-                merged_params.pop(_k, None)
-            merged_params["province"] = pending["to_province"]
-        # Write accepted params back to session so next typed turn inherits them
-        session["accumulated_params"] = merged_params
+        # Apply geo mutation before clearing the action so broaden_geo() can read it.
+        _pa = qs.pending_action
+        if _pa is not None and _pa.type.value in (
+            "geo_broaden", "geo_broaden_province", "geo_broaden_radius"
+        ):
+            qs.broaden_geo(_pa)
+        _p = _pa.parameters if _pa else {}
         record("input", {
             "raw_query": user_input,
             "path": "affirmative",
             "suggestion_type": pending.get("type"),
-            "suggestion_detail": pending.get("to_city") or pending.get("to_province"),
-            "params_after": merged_params,
+            "suggestion_detail": _p.get("to_city") or _p.get("to_province"),
             "sidebar_filters": sidebar_filters,
         })
+        # clear_suggestion() resolves the pending_action and syncs mirrors.
         clear_suggestion()
+        merged_params = dict(session["accumulated_params"])
+        merged_params.update(sidebar_filters)
+        record("merged_params", {"params": merged_params})
         _run_search(merged_params, user_input, session, sidebar_filters)
         return
 

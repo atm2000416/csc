@@ -35,8 +35,13 @@ class _FakeSessionState:
 def _run_with_st(accumulated_params, intent_kwargs):
     """Helper: run merge_intent with a mocked st.session_state."""
     from core.intent_parser import IntentResult
+    from core.query_state import QueryState
+
+    # Build QueryState from accumulated_params so the new code has _query_state.
+    qs = QueryState.from_flat_dict(dict(accumulated_params), turn=0)
 
     session_context = {
+        "_query_state":    qs,
         "accumulated_params": dict(accumulated_params),
         "query_history": [],
         "results_shown": [],
@@ -69,13 +74,13 @@ def _run_with_st(accumulated_params, intent_kwargs):
 
 
 def test_merge_intent_reset_special_needs():
-    """is_special_needs=False in new intent should clear existing True in session."""
+    """is_special_needs=False in new intent should clear the filter (not appear in output)."""
     result = _run_with_st(
         accumulated_params={"is_special_needs": True, "tags": ["hockey"]},
         intent_kwargs={"is_special_needs": False, "tags": ["hockey"]},
     )
-    assert result.get("is_special_needs") is False, (
-        f"Expected is_special_needs=False, got {result.get('is_special_needs')!r}"
+    assert not result.get("is_special_needs"), (
+        f"Expected is_special_needs filter cleared, got {result.get('is_special_needs')!r}"
     )
 
 
@@ -102,11 +107,11 @@ def test_merge_intent_empty_list_does_not_override():
 
 
 def test_merge_intent_is_virtual_false():
-    """is_virtual=False should override existing True."""
+    """is_virtual=False should clear the filter (not appear in output)."""
     result = _run_with_st(
         accumulated_params={"is_virtual": True},
         intent_kwargs={"is_virtual": False},
     )
-    assert result.get("is_virtual") is False, (
-        f"Expected is_virtual=False, got {result.get('is_virtual')!r}"
+    assert not result.get("is_virtual"), (
+        f"Expected is_virtual filter cleared, got {result.get('is_virtual')!r}"
     )

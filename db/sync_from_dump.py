@@ -47,7 +47,7 @@ from collections import defaultdict
 sys.path.insert(0, os.path.abspath(os.path.join(os.path.dirname(__file__), "..")))
 from db.connection import get_connection
 
-DEFAULT_DUMP = "/Users/181lp/Documents/CLAUDE_code/csc_migration/camp_directory_dump20260205.sql"
+DEFAULT_DUMP = "/Users/181lp/Documents/CLAUDE_code/csc_migration/camp_directory_dump20260311.sql"
 
 PROVINCE_MAP = {
     'ON': 'Ontario', 'On': 'Ontario', 'ont': 'Ontario', 'Ont': 'Ontario',

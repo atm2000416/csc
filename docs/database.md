@@ -62,20 +62,68 @@ self-regulation, religious-faith
 ---
 
 ## Gender Field Notes
-- `gender=NULL` — data missing (most programs); NOT the same as coed
-- `gender=0` — explicitly coed
+- `gender=NULL` — data missing; NOT the same as coed
+- `gender=0` — coed (also the legacy default — most imported programs have 0, not NULL)
 - `gender=1` — boys only
 - `gender=2` — girls only
 - CSSL filter: only applied when user explicitly requests gender-specific camp
 - "my son / my daughter" alone → `gender=null` in intent (child's sex ≠ camp gender filter)
+
+Note: The legacy DB had a separate `gender` table (camp-level gender with age brackets) that
+was not migrated. Gender data is therefore sparse and unreliable for filtering.
+
+---
+
+## Legacy Schema Reference (confirmed from MWB + official docs)
+
+### `camps` table — column order (0-indexed INSERT tuple)
+| Index | Field | Type | Notes |
+|---|---|---|---|
+| 0 | `cid` | smallint UNSIGNED | PK → our `id` |
+| 1 | `camp_name` | varchar(75) | |
+| 4 | `eListingType` | varchar(6) DEFAULT 'bronze' | Tier string: gold/silver/bronze/double/single |
+| 5 | `status` | tinyint(1) DEFAULT 0 | **1=live, 0=inactive or agate** |
+| 7 | `location` | varchar(50) | City name |
+| 8-9 | `Lat`/`Lon` | varchar(100) | Stored as string in legacy |
+| 10 | `weight` | int DEFAULT 1 | Member buy-in: 0=unset, 1=bronze, 2=silver, 3=gold |
+| 13 | `prettyURL` | varchar(245) | |
+| 16 | `showAnalytics` | int DEFAULT 1 | Sales analytics toggle — NOT activation signal |
+| 17 | `agate` | tinyint | 0=regular paid listing, non-zero=free/agate listing |
+
+**Tier field**: `eListingType` is authoritative (more current than `weight`).
+**Agate camps**: status=0 — free listings on ourkids.net, not camps.ca. Correctly excluded by our filter.
+
+### `sessions` table (→ our `programs`)
+- `gender` tinyint NOT NULL DEFAULT=0 — legacy default is 0 (coed), not NULL
+- `running` tinyint DEFAULT=0 — program active/running flag (not currently filtered by sync)
+- `mini_description` varchar(500) — migrated as-is
+- `type` varchar(45) — "1"=Day, "2"=Overnight (same as our programs.type)
+
+### `extra_locations` table
+- `Lat`/`Lon` stored as `double` (unlike camps table which uses varchar)
+- `main_loc` tinyint DEFAULT=0 — 1 = primary location for multi-location brands
+- `office` tinyint DEFAULT=0 — 1 = administrative office only, not a camp site
+- `admin` tinyint — internal admin flag
+
+### `sitems` table (→ our `activity_tags`)
+Legacy activity/tag system. Confirmed mapping:
+| Legacy (`sitems`) | Our DB (`activity_tags`) |
+|---|---|
+| `h1=0` (top-level parent) | `level=1` (Domain) |
+| `h2` (category subset) | `level=2` (Category) |
+| `h3` (leaf subset) | `level=3` (Sub-activity) |
+| `relatives` (comma-sep IDs) | `related_ids` (feeds CASL) |
+| `isact=1` | `is_active=1` |
+
+Example hierarchy: "Hip Hop" → h3(Dance multi) → h2(Arts multi) → h1(Arts)
 
 ---
 
 ## Legacy Dump Sync (`db/sync_from_dump.py`)
 
 ### Activation signal
-**`status` (field 6)** in the legacy camps tuple = active/inactive.
-Field 17 is `showAnalytics` (defaults 1) — **not** a membership flag. There is no `is_member` column.
+**`status` (index 5)** in the legacy camps tuple = active/inactive.
+`showAnalytics` (index 16, defaults 1) — sales analytics toggle, not an activation signal.
 
 ### Workflow
 ```bash
@@ -109,4 +157,4 @@ python3 db/sync_from_dump.py --dump /path/to/dump.sql --seed-programs
 - Camps with IDs above ~2110 (manually created location branches)
 
 ### Default dump path
-`/Users/181lp/Documents/CLAUDE_code/csc_migration/camp_directory_dump20260205.sql`
+`/Users/181lp/Documents/CLAUDE_code/csc_migration/camp_directory_dump20260311.sql`

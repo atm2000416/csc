@@ -1,0 +1,96 @@
+groups:
+  - app: csc
+    description: Camp Search Concierge
+    config: /Users/181lp/Documents/CLAUDE_code/projects/csc/qa/config.yaml
+    blocks:
+      - block: 1
+        description: "Activity switch — no tag bleed"
+        tags: [smoke, regression]
+        turns:
+          - query: "hockey camps in Toronto for my 10 year old"
+            expect:
+              route: SHOW_RESULTS
+              min_results: 1
+              concierge_mentions: [hockey, Toronto]
+          - query: "now show me soccer instead"
+            expect:
+              min_results: 1
+              concierge_not_mentions: [hockey]
+
+      - block: 2
+        description: "Dance disambiguator fires once then resolves"
+        tags: [regression]
+        turns:
+          - query: "dance camps in Toronto"
+            expect:
+              route: SHOW_CLARIFY
+          - query: "hip hop"
+            expect:
+              route: SHOW_RESULTS
+              min_results: 1
+
+      - block: 3
+        description: "Geolocation prompt on 'near me'"
+        tags: [smoke, regression]
+        turns:
+          - query: "swimming camps near me"
+            expect:
+              route: NEEDS_GEOLOCATION
+          - query: "Toronto"
+            expect:
+              route: SHOW_RESULTS
+              min_results: 1
+              concierge_mentions: [Toronto]
+
+      - block: 4
+        description: "Overnight detection + session persistence"
+        tags: [regression]
+        turns:
+          - query: "overnight hockey camps for 12 year olds in Ontario"
+            expect:
+              route: SHOW_RESULTS
+              min_results: 1
+              concierge_mentions: [overnight]
+          - query: "what about soccer"
+            expect:
+              min_results: 1
+              concierge_not_mentions: [hockey]
+              concierge_mentions: [soccer]
+
+      - block: 5
+        description: "Zero results advisor suggests broadening"
+        tags: [regression, edge_case]
+        turns:
+          - query: "polo camps in Saskatoon"
+            expect:
+              route: ZERO_RESULTS
+
+      - block: 6
+        description: "Surprise Me inherits location, changes activity"
+        tags: [smoke]
+        turns:
+          - query: "art camps in Vancouver"
+            expect:
+              route: SHOW_RESULTS
+              min_results: 1
+          - action: surprise_me
+            expect:
+              min_results: 1
+              concierge_not_mentions: [art]
+
+      - block: 7
+        description: "Affirmative path — accept geo suggestion"
+        tags: [regression]
+        turns:
+          - query: "polo camps in Saskatoon"
+            expect:
+              route: ZERO_RESULTS
+          - query: "yes"
+            expect:
+              route: SHOW_RESULTS
+              min_results: 1
+
+  - app: ssc
+    description: Summer Sports Concierge
+    config: ""   # fill in when app is ready
+    blocks: []

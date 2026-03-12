@@ -1,0 +1,20 @@
+app_name: Camp Search Concierge
+default_env: prod
+timeout_ms: 45000
+report_dir: qa/reports
+screenshot_on_fail: true
+
+environments:
+  prod:    https://m4e45ybzwfwgut3lpa9xeb.streamlit.app
+  local:   http://localhost:8501
+
+selectors:
+  chat_input:    "[data-testid='stChatInputTextArea']"
+  spinner:       "[data-testid='stSpinner']"
+  chat_message:  ".stChatMessage"
+  expander:      "[data-testid='stExpander']"
+  alert:         "[data-testid='stAlert']"
+  surprise_me:   "button:has-text('Surprise')"
+
+notifications:
+  slack_webhook: ""   # set to Slack webhook URL or leave empty

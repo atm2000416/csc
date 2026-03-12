@@ -3,25 +3,28 @@ db/sync_from_dump.py
 Sync the new CSC database from a fresh SQL dump of the legacy camp directory.
 
 What this syncs:
-  1. NEW camps      — cids in dump (status=1, with city) not present in new DB → INSERT
-  2. RE-ACTIVATED   — cids status=0 in new DB, now status=1 in dump → UPDATE status=1
-  3. DEACTIVATED    — cids status=1 in new DB, now status=0 in dump → UPDATE status=0
-                      (requires --deactivate flag; only touches camps whose ID came from
-                       the old DB, not manually-created location branches)
+  1. NEW camps          — cids in dump (status=1, with city) not present in new DB → INSERT
+  2. RE-ACTIVATED       — cids status=0 in new DB, now status=1 in dump → UPDATE status=1
+  3. DEACTIVATED        — cids status=1 in new DB, now status=0 in dump → UPDATE status=0
+                          (requires --deactivate flag; only touches camps whose ID came from
+                           the old DB, not manually-created location branches)
   NOTE: Uses status (field 6) as the activation criterion — the only active/inactive
         signal in the legacy schema. Field 17 (showAnalytics) was previously mislabelled
         as is_member; it defaults to 1 for almost all camps and is not a membership flag.
-  4. SEED PROGRAMS  — for newly-active camps with no programs: create default program
-                      and infer activity tags from dump session names (--seed-programs flag)
-  4b. REFRESH PROGRAMS — replace single generic placeholder programs (name=camp name)
-                      with individual session records from the dump (--refresh-programs flag)
-  5. METADATA       — tier/website changes for active camps (--update-meta flag)
-  6. LOCATIONS      — new extra_locations not yet in new DB → INSERT
-  7. PROGRAM DATES  — program_dates table refreshed from session_date in dump
+  4. SEED PROGRAMS      — for newly-active camps with no programs: create default program
+                          and infer activity tags from dump session names (--seed-programs flag)
+  4b. REFRESH PROGRAMS  — replace single generic placeholder programs (name=camp name)
+                          with individual session records from the dump (--refresh-programs flag)
+  4c. IMPORT ALL        — replace ALL programs for ALL active camps with dump sessions.
+                          Covers every camp regardless of current program count. Camps with
+                          no sessions in the dump are left untouched. (--import-all-sessions)
+  5. METADATA           — tier/website changes for active camps (--update-meta flag)
+  6. LOCATIONS          — new extra_locations not yet in new DB → INSERT
+  7. PROGRAM DATES      — program_dates table refreshed from session_date in dump
 
 What this does NOT touch:
   - activity_tags (curated in new DB)
-  - Programs for camps that ALREADY have programs (existing curation preserved)
+  - Camps with no sessions in the dump (existing programs preserved)
   - Camps added manually in new DB (IDs not present in dump)
 
 Usage:
@@ -40,6 +43,11 @@ Usage:
   # Replace placeholder programs with real sessions (always dry-run first)
   python3 db/sync_from_dump.py --dump /path/to/new_dump.sql --refresh-programs --dry-run
   python3 db/sync_from_dump.py --dump /path/to/new_dump.sql --refresh-programs
+
+  # Comprehensive: import ALL sessions for ALL active camps from the dump
+  # (recommended after receiving a new dump — run dry-run first)
+  python3 db/sync_from_dump.py --dump /path/to/new_dump.sql --import-all-sessions --dry-run
+  python3 db/sync_from_dump.py --dump /path/to/new_dump.sql --import-all-sessions
 
   # Run only a specific section
   python3 db/sync_from_dump.py --dump /path/to/new_dump.sql --only dates
@@ -657,7 +665,7 @@ def infer_tags(session_names: list, tag_slug_to_id: dict) -> set:
 # ── Main sync logic ───────────────────────────────────────────────────────────
 
 def run(dump_path, dry_run, only, update_meta, deactivate=False, skip_ids=None,
-        seed_programs=False, refresh_programs=False):
+        seed_programs=False, refresh_programs=False, import_all_sessions=False):
     print(f"Reading dump: {dump_path}")
     with open(dump_path, 'r', encoding='utf-8', errors='replace') as f:
         content = f.read()
@@ -689,6 +697,9 @@ def run(dump_path, dry_run, only, update_meta, deactivate=False, skip_ids=None,
         'programs_seeded': 0,
         'programs_refreshed': 0,
         'programs_refresh_skipped': 0,
+        'sessions_imported': 0,
+        'sessions_skipped': 0,
+        'sessions_unchanged': 0,
         'meta_updated': 0,
         'locations_added': 0,
         'dates_inserted': 0,
@@ -951,6 +962,121 @@ def run(dump_path, dry_run, only, update_meta, deactivate=False, skip_ids=None,
                 conn.commit()
             print()
 
+    # ── 4c. Import all sessions — comprehensive program sync for ALL camps ────
+    if import_all_sessions and only in (None, 'import', 'all'):
+        print("=== Import all sessions (comprehensive program sync) ===")
+
+        # Load every active camp in the DB
+        cursor.execute("SELECT id, camp_name FROM camps WHERE status = 1")
+        all_active = {r['id']: r['camp_name'] for r in cursor.fetchall()}
+        print(f"  {len(all_active)} active camps — parsing dump sessions...")
+
+        all_sessions = parse_sessions_full(content, set(all_active.keys()))
+        camps_with_sessions = len(all_sessions)
+        camps_no_sessions   = len(all_active) - camps_with_sessions
+        total_session_recs  = sum(len(v) for v in all_sessions.values())
+        print(f"  Dump has sessions for {camps_with_sessions} camps "
+              f"({camps_no_sessions} will be skipped — no sessions in dump)")
+        print(f"  Total unique session records to import: {total_session_recs}")
+        print()
+
+        # Load active tag slug → id map
+        cursor.execute("SELECT id, slug FROM activity_tags WHERE is_active = 1")
+        tag_slug_to_id = {r['slug']: r['id'] for r in cursor.fetchall()}
+
+        # Load existing program names per camp (for change detection in dry-run)
+        cursor.execute(
+            "SELECT camp_id, GROUP_CONCAT(name ORDER BY name SEPARATOR '|||') as names "
+            "FROM programs WHERE status = 1 GROUP BY camp_id"
+        )
+        existing_names = {
+            r['camp_id']: set(r['names'].split('|||'))
+            for r in cursor.fetchall()
+        }
+
+        imported = skipped = unchanged = 0
+        for camp_id in sorted(all_active):
+            sessions = all_sessions.get(camp_id)
+            if not sessions:
+                skipped += 1
+                continue
+
+            dump_name_set = {s['name'].strip() for s in sessions}
+            db_name_set   = existing_names.get(camp_id, set())
+            new_names     = dump_name_set - db_name_set
+            gone_names    = db_name_set - dump_name_set
+
+            if not new_names and not gone_names:
+                unchanged += 1
+                if dry_run:
+                    pass  # silent — nothing to do
+                continue
+
+            camp_name = all_active[camp_id]
+            print(f"  {'DRY ' if dry_run else ''}SYNC  id={camp_id}: {camp_name!r}  "
+                  f"+{len(new_names)} new  -{len(gone_names)} removed  "
+                  f"(total → {len(sessions)})")
+
+            if dry_run:
+                for name in sorted(new_names)[:3]:
+                    tags = sorted(infer_tags([name], tag_slug_to_id))
+                    print(f"    + {name!r:50s}  tags={tags}")
+                if len(new_names) > 3:
+                    print(f"    … (+{len(new_names)-3} more new)")
+                imported += 1
+                continue
+
+            # Delete all existing programs and their tags/dates for this camp
+            cursor.execute(
+                "SELECT id FROM programs WHERE camp_id = %s AND status = 1",
+                (camp_id,)
+            )
+            old_ids = [r['id'] for r in cursor.fetchall()]
+            if old_ids:
+                id_list = ','.join(str(x) for x in old_ids)
+                cursor.execute(f"DELETE FROM program_tags  WHERE program_id IN ({id_list})")
+                cursor.execute(f"DELETE FROM program_dates WHERE program_id IN ({id_list})")
+                cursor.execute(f"DELETE FROM programs      WHERE id          IN ({id_list})")
+
+            # Insert fresh session records
+            for s in sessions:
+                cursor.execute(
+                    "INSERT INTO programs "
+                    "(camp_id, name, type, age_from, age_to, "
+                    " cost_from, cost_to, start_date, end_date, status) "
+                    "VALUES (%s, %s, %s, %s, %s, %s, %s, %s, %s, 1)",
+                    (
+                        camp_id, s["name"], s["type"],
+                        s["age_from"], s["age_to"],
+                        s["cost_from"], s["cost_to"],
+                        s["date_from"], s["date_to"],
+                    )
+                )
+                prog_id = cursor.lastrowid
+                for slug in sorted(infer_tags([s["name"]], tag_slug_to_id)):
+                    tag_id = tag_slug_to_id.get(slug)
+                    if tag_id:
+                        cursor.execute(
+                            "INSERT IGNORE INTO program_tags (program_id, tag_id) "
+                            "VALUES (%s, %s)",
+                            (prog_id, tag_id)
+                        )
+
+            imported += 1
+            if imported % 25 == 0:
+                conn.commit()
+
+        stats['sessions_imported'] = imported
+        stats['sessions_skipped']  = skipped
+        stats['sessions_unchanged'] = unchanged
+        if not dry_run and imported % 25 != 0:
+            conn.commit()
+
+        print()
+        print(f"  {'(DRY RUN) ' if dry_run else ''}Result: "
+              f"{imported} camps synced, {unchanged} unchanged, {skipped} skipped (no dump data)")
+        print()
+
     # ── 5. Metadata updates ───────────────────────────────────────────────────
     if update_meta and only in (None, 'meta', 'all'):
         print("=== Metadata updates (tier/website) ===")
@@ -1188,6 +1314,10 @@ def run(dump_path, dry_run, only, update_meta, deactivate=False, skip_ids=None,
     if refresh_programs:
         print(f"  Programs {'would be ' if dry_run else ''}refreshed:        {stats['programs_refreshed']}")
         print(f"  Programs skipped (no sessions in dump):  {stats['programs_refresh_skipped']}")
+    if import_all_sessions:
+        print(f"  Camps {'would be ' if dry_run else ''}synced (changed):  {stats['sessions_imported']}")
+        print(f"  Camps unchanged (already up to date):    {stats['sessions_unchanged']}")
+        print(f"  Camps skipped (no sessions in dump):     {stats['sessions_skipped']}")
     if update_meta:
         print(f"  Metadata {'would be ' if dry_run else ''}updated:          {stats['meta_updated']}")
     print(f"  Locations {'would be ' if dry_run else ''}added:            {stats['locations_added']}")
@@ -1202,7 +1332,7 @@ if __name__ == "__main__":
     parser.add_argument("--dry-run", action="store_true",
                         help="Preview changes without writing to DB")
     parser.add_argument("--only",
-                        choices=["status", "new", "seed", "refresh", "meta", "locations", "dates", "all"],
+                        choices=["status", "new", "seed", "refresh", "import", "meta", "locations", "dates", "all"],
                         default=None,
                         help="Run only a specific sync section")
     parser.add_argument("--update-meta", action="store_true",
@@ -1218,6 +1348,11 @@ if __name__ == "__main__":
                         help="Replace single generic placeholder programs with individual "
                              "session records imported from the dump. Infers activity tags "
                              "per session name. Always dry-run first.")
+    parser.add_argument("--import-all-sessions", action="store_true",
+                        help="Comprehensive sync: for every active camp that has sessions "
+                             "in the dump, replace ALL its programs with the dump's session "
+                             "records. Camps with no sessions in the dump are left untouched. "
+                             "Recommended after each new dump. Always dry-run first.")
     parser.add_argument("--skip-ids",
                         help="Comma-separated camp IDs to skip during deactivation "
                              "(e.g. manually-promoted sub-locations: 422,529,579)")
@@ -1226,4 +1361,5 @@ if __name__ == "__main__":
     args = parser.parse_args()
     skip_ids = set(int(x) for x in args.skip_ids.split(",")) if args.skip_ids else None
     run(args.dump, args.dry_run, args.only, args.update_meta, args.deactivate, skip_ids,
-        seed_programs=args.seed_programs, refresh_programs=args.refresh_programs)
+        seed_programs=args.seed_programs, refresh_programs=args.refresh_programs,
+        import_all_sessions=args.import_all_sessions)

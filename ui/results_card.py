@@ -1,14 +1,19 @@
 """
 ui/results_card.py
-Renders a single camp program result card in Streamlit.
+Renders camp program result cards in Streamlit.
 
-Visual hierarchy:
+Visual hierarchy (full card):
   Line 1 — Session Information  (programs.name)
   Line 2 — Camp Name            (camps.camp_name, tier-coloured)
   Line 3 — Session Details      (type · ages · location · cost · gender)
   Line 4 — AI Rationale         (reranker blurb explaining why this fits)
+
+When a camp has multiple ranked sessions, the top-ranked session is shown as the
+full card; additional sessions from the same camp are collapsed into an expander
+below it (render_extra_sessions).
 """
 import streamlit as st
+from datetime import date as _date
 
 
 _TIER_COLOUR = {
@@ -27,6 +32,25 @@ _TYPE_LABEL = {
 }
 
 _GENDER_LABEL = {1: "Boys", 2: "Girls"}
+
+_MONTHS = ["Jan","Feb","Mar","Apr","May","Jun",
+           "Jul","Aug","Sep","Oct","Nov","Dec"]
+
+
+def _date_range_str(start, end) -> str:
+    """Format a date range as 'Jul 6 – 10' or 'Jul 28 – Aug 1'."""
+    if not start:
+        return ""
+    try:
+        s = start if hasattr(start, 'month') else _date.fromisoformat(str(start))
+        e = end   if hasattr(end,   'month') else _date.fromisoformat(str(end))   if end else None
+    except (ValueError, TypeError):
+        return ""
+    if e and s.month == e.month:
+        return f"{_MONTHS[s.month-1]} {s.day} – {e.day}"
+    if e:
+        return f"{_MONTHS[s.month-1]} {s.day} – {_MONTHS[e.month-1]} {e.day}"
+    return f"{_MONTHS[s.month-1]} {s.day}"
 
 
 def _camps_url(slug: str, camp_id: int) -> str:
@@ -150,3 +174,86 @@ def render_card(result: dict):
     )
 
     st.markdown(card_html, unsafe_allow_html=True)
+
+
+# ── Compact row style (used inside the expander) ──────────────────────────────
+_ROW_NAME = (
+    "font-family:Nunito,sans-serif; font-weight:700; font-size:0.88rem; "
+    "color:#2F4F4F; margin:0 0 2px 0;"
+)
+_ROW_META = (
+    "font-family:Lato,sans-serif; font-size:0.78rem; color:#5a7070; margin:0;"
+)
+_ROW_LINK = (
+    "font-size:0.75rem; font-weight:700; font-family:Nunito,sans-serif; "
+    "color:#8A9A5B; text-decoration:none; white-space:nowrap;"
+)
+
+
+def render_extra_sessions(extra: list[dict], camp_name: str, tier: str) -> None:
+    """
+    Render an expander below the primary card listing additional ranked sessions
+    from the same camp in a compact format.
+
+    extra      — list of result dicts (same shape as render_card input)
+    camp_name  — displayed in the expander label
+    tier       — used for the accent colour on session names
+    """
+    if not extra:
+        return
+
+    n      = len(extra)
+    label  = f"{'1 more session' if n == 1 else f'{n} more sessions'} at {camp_name}"
+    tier_col = _TIER_COLOUR.get(tier, _TIER_COLOUR["bronze"])
+
+    # Pull the expander flush against the card above it
+    st.markdown(
+        '<style>.extra-session-expander{margin-top:-14px !important;}</style>',
+        unsafe_allow_html=True,
+    )
+
+    with st.expander(label, expanded=False):
+        rows_html = []
+        for r in extra:
+            name      = r.get("name") or "Session"
+            ages      = _age_str(r.get("age_from"), r.get("age_to"))
+            cost      = _cost_str(r.get("cost_from"), r.get("cost_to"))
+            camp_type = _TYPE_LABEL.get(str(r.get("type", "")), "")
+            # Prefer program_dates upcoming entries, fall back to program start/end
+            pdates    = r.get("program_dates") or []
+            if pdates:
+                first = pdates[0]
+                date_s = _date_range_str(first.get("start_date"), first.get("end_date"))
+            else:
+                date_s = _date_range_str(r.get("start_date"), r.get("end_date"))
+
+            meta_parts = [p for p in [camp_type, ages, cost, date_s] if p]
+            meta_str   = "  ·  ".join(meta_parts)
+
+            slug    = r.get("slug", "")
+            camp_id = r.get("camp_id")
+            link_html = ""
+            if slug and camp_id:
+                link_html = (
+                    f'<a href="{_camps_url(slug, camp_id)}" target="_blank" '
+                    f'style="{_ROW_LINK}">View →</a>'
+                )
+
+            rows_html.append(
+                f'<div style="display:flex; justify-content:space-between; '
+                f'align-items:flex-start; padding:8px 0; '
+                f'border-bottom:1px solid #eef1e8;">'
+                f'  <div style="flex:1; min-width:0; padding-right:12px;">'
+                f'    <p style="{_ROW_NAME} color:{tier_col};">{name}</p>'
+                f'    <p style="{_ROW_META}">{meta_str}</p>'
+                f'  </div>'
+                f'  <div style="padding-top:2px;">{link_html}</div>'
+                f'</div>'
+            )
+
+        # Remove bottom border from last row
+        all_rows = "".join(rows_html)
+        st.markdown(
+            f'<div style="padding:0 4px;">{all_rows}</div>',
+            unsafe_allow_html=True,
+        )

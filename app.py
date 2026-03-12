@@ -271,7 +271,7 @@ from core.zero_results_advisor import diagnose
 from core.tracer import init_trace, record, render_trace
 from core.category_disambiguator import get_broad_parent, get_viable_children
 from core.concierge_response import generate as generate_concierge_response
-from ui.results_card import render_card
+from ui.results_card import render_card, render_extra_sessions
 from ui.filter_sidebar import render_filters, get_filter_values
 from ui.clarification_widget import render_clarification
 from ui.surprise_me import render_surprise_me  # noqa: F401 — kept for compat
@@ -319,11 +319,32 @@ def display_results(results: list[dict]):
     if not results:
         st.info("No camps found matching your search. Try adjusting your filters.")
         return
-    st.markdown(f'<p class="result-count">{len(results)} result{"s" if len(results) != 1 else ""} found</p>',
-                unsafe_allow_html=True)
+
+    # Group by camp_id, preserving rank order (first occurrence = camp's rank)
+    groups: dict[int, list[dict]] = {}
+    for r in results:
+        cid = r.get("camp_id") or id(r)   # fallback key for results with no camp_id
+        if cid not in groups:
+            groups[cid] = []
+        groups[cid].append(r)
+
+    n_camps    = len(groups)
+    n_sessions = len(results)
+    if n_sessions > n_camps:
+        count_label = (f'{n_camps} camp{"s" if n_camps != 1 else ""} · '
+                       f'{n_sessions} sessions found')
+    else:
+        count_label = f'{n_sessions} result{"s" if n_sessions != 1 else ""} found'
+
+    st.markdown(f'<p class="result-count">{count_label}</p>', unsafe_allow_html=True)
     render_filters()
-    for result in results:
-        render_card(result)
+
+    for camp_sessions in groups.values():
+        top    = camp_sessions[0]
+        extras = camp_sessions[1:]
+        render_card(top)
+        if extras:
+            render_extra_sessions(extras, top.get("camp_name", ""), top.get("tier", "bronze"))
 
 
 _BUBBLE_BASE = (

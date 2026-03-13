@@ -596,6 +596,7 @@ def main():
     # Handle category disambiguation button choice (no new chat input needed)
     if st.session_state.get("_disambiguation_choice") and not user_input:
         choice = st.session_state.pop("_disambiguation_choice")
+        st.session_state.pop("_pending_category_picker", None)
         init_trace()
         # Persist chosen tags into QueryState so next typed turn inherits them.
         qs = get_query_state()
@@ -648,6 +649,8 @@ def main():
             _render_history()
             if prior:
                 display_results(prior)
+            # Re-render disambiguation buttons if the user hasn't picked yet
+            _render_pending_picker()
         else:
             st.markdown(
                 '<p style="color:#78909c; font-size:0.92rem; margin-top:2rem; text-align:center;">'
@@ -658,6 +661,7 @@ def main():
         return
 
     session = st.session_state.session_context
+    st.session_state.pop("_pending_category_picker", None)
 
     # Render prior conversation history, then show + store current user message
     _render_history()
@@ -1005,10 +1009,30 @@ def _render_category_picker(parent_slug: str, options: list[dict],
     parent_name = parent_slug.replace("-multi", "").replace("-", " ").title()
 
     _speak(f"**{parent_name}** covers a lot of ground! Which area interests you most?")
-    # Build button row: up to 4 child options + an "All" fallback
-    display_options = options[:4]
-    btn_labels = [opt["name"] for opt in display_options] + [f"All {parent_name}"]
-    btn_slugs  = [opt["slug"] for opt in display_options] + [None]  # None = keep parent
+
+    # Persist picker config so buttons survive page refresh / reboot
+    st.session_state["_pending_category_picker"] = {
+        "parent_slug": parent_slug,
+        "options": options[:4],
+        "merged_params": merged_params,
+        "raw_query": raw_query,
+    }
+    _render_pending_picker()
+
+
+def _render_pending_picker():
+    """Re-render disambiguation buttons from persisted session state (survives page reload)."""
+    picker = st.session_state.get("_pending_category_picker")
+    if not picker:
+        return
+    parent_slug = picker["parent_slug"]
+    options     = picker["options"]
+    merged_params = picker["merged_params"]
+    raw_query   = picker["raw_query"]
+    parent_name = parent_slug.replace("-multi", "").replace("-", " ").title()
+
+    btn_labels = [opt["name"] for opt in options] + [f"All {parent_name}"]
+    btn_slugs  = [opt["slug"] for opt in options] + [None]
 
     cols = st.columns(len(btn_labels))
     for col, label, slug in zip(cols, btn_labels, btn_slugs):

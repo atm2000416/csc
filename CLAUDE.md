@@ -126,6 +126,13 @@ tests/
 
 ## Conventions
 
+### camps.ca URL format (DO NOT CHANGE)
+**Confirmed working format:** `https://www.camps.ca/{prettyurl}/{camp_id}?{UTM}`
+- Example: `https://www.camps.ca/camp-kidstown/2020?utm_source=camps.ca&utm_medium=ai-search&utm_campaign=csc`
+- `prettyurl` alone (no ID) → **404**. The camp ID is required.
+- `_camps_url(prettyurl, camp_id)` in `ui/results_card.py` is the single source of truth — all camps.ca links go through it
+- `camp_id` comes from `result.get("camp_id")` (the `camps.id` FK on programs); never use `programs.id`
+
 ### Database
 - `get_connection()` returns a pooled MySQL connection — always close **both** cursor AND conn
 - `cursor = conn.cursor(dictionary=True)` — rows returned as dicts

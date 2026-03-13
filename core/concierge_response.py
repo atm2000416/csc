@@ -43,7 +43,7 @@ Return ONLY the response text. No JSON. No markdown headers. No bullet points.
 
 def _template_fallback(results: list[dict], params: dict, route: str) -> str:
     """
-    Template-based response used when Gemini is unavailable.
+    Template-based response used when Claude API is unavailable.
     Always returns a non-empty string.
     """
     top = results[0] if results else {}

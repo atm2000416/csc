@@ -238,4 +238,4 @@ if __name__ == "__main__":
 
 
 # ── Note: Pure unit tests for _coerce_parsed and parse_intent error handling
-# are in tests/test_intent_parser_unit.py (mocks google.genai, no network needed)
+# are in tests/test_intent_parser_unit.py (mocks anthropic, no network needed)

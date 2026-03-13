@@ -1,6 +1,6 @@
 """
 tests/test_intent_parser_unit.py
-Pure unit tests for core/intent_parser.py — no network, no Gemini API required.
+Pure unit tests for core/intent_parser.py — no network, no Claude API required.
 Tests _coerce_parsed() and parse_intent() error handling.
 """
 import os

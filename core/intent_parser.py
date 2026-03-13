@@ -91,7 +91,7 @@ def _get_active_slugs() -> set[str]:
 
 
 def _coerce_parsed(parsed: dict) -> dict:
-    """Coerce Gemini JSON output to expected Python types before constructing IntentResult."""
+    """Coerce Claude JSON output to expected Python types before constructing IntentResult."""
     # List fields — ensure list, never None
     for key in ("tags", "exclude_tags", "cities", "traits", "needs_clarification"):
         val = parsed.get(key)

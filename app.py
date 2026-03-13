@@ -647,7 +647,7 @@ def main():
             current_date=datetime.date.today().isoformat(),
         )
 
-    # Inject geo coordinates from fuzzy hints directly — bypasses Gemini for
+    # Inject geo coordinates from fuzzy hints directly — bypasses Claude API for
     # reliable lat/lon resolution without hallucination risk.
     if fuzzy_hints.get("geo_coords") and intent.lat is None:
         gc = fuzzy_hints["geo_coords"]

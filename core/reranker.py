@@ -23,7 +23,7 @@ def rerank(
     top_n: int = 10,
 ) -> list[dict]:
     """
-    Rerank and annotate results using Gemini.
+    Rerank and annotate results using Claude.
 
     Args:
         results: List of program dicts from CSSL

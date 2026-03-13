@@ -51,6 +51,6 @@ def get_taxonomy_context() -> dict:
 
 
 def get_taxonomy_prompt() -> str:
-    """Return formatted taxonomy string for injection into Gemini system prompt."""
+    """Return formatted taxonomy string for injection into Claude system prompt."""
     taxonomy = get_taxonomy_context()
     return format_taxonomy_for_prompt(taxonomy)

@@ -80,7 +80,7 @@ def test_reranker_skips_on_high_ics_small_pool():
 
 
 def test_reranker_fallback_score_is_half():
-    """When Gemini fails, fallback rerank_score should be 0.5, not 1.0."""
+    """When Claude API fails, fallback rerank_score should be 0.5, not 1.0."""
     from core.reranker import rerank
 
     results = [_make_result(i) for i in range(1, 20)]

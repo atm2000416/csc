@@ -11,7 +11,7 @@ Single source of truth for:
   - AGE_ALIASES      : age language → age_from/age_to brackets
 
 Loaded into memory at app startup.
-Injected into Intent Parser Gemini system prompt as structured context.
+Injected into Intent Parser Claude system prompt as structured context.
 Refreshed every 24h or on admin activity_tags table update.
 """
 
@@ -1042,11 +1042,13 @@ FUZZY_ALIASES: dict[str, list[str] | dict | None] = {
     'empowerment camp': ["empowerment"],
     'girl empowerment': ["empowerment"],
     'self empowerment': ["empowerment"],
+    'confidence': ["empowerment"],
     'confidence building': ["empowerment"],
     'self-confidence': ["empowerment"],
     'self confidence': ["empowerment"],
     'build confidence': ["empowerment"],
     'boost confidence': ["empowerment"],
+    'gain confidence': ["empowerment"],
     'self esteem': ["empowerment"],
     'self-esteem': ["empowerment"],
     'confident': ["empowerment"],
@@ -2198,7 +2200,7 @@ GEO_COORDS: dict[str, tuple[float, float, int]] = {
 # Helper: format compact taxonomy string for Intent Parser system prompt
 # ─────────────────────────────────────────────────────────────────────────────
 def format_taxonomy_for_prompt(taxonomy: dict = TAXONOMY_CONTEXT) -> str:
-    """Returns compact taxonomy string for injection into Gemini system prompt."""
+    """Returns compact taxonomy string for injection into Claude system prompt."""
     lines = []
     current_domain = None
     for slug, meta in taxonomy.items():

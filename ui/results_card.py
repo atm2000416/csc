@@ -53,7 +53,7 @@ def _date_range_str(start, end) -> str:
     return f"{_MONTHS[s.month-1]} {s.day}"
 
 
-_UTM = "utm_source=campsca&utm_medium=ai-search&utm_campaign=csc"
+_UTM = "utm_source=campsca-ourkids&utm_medium=ai-search&utm_campaign=csc"
 
 
 def _camps_url(prettyurl: str) -> str:

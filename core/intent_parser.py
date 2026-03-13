@@ -215,6 +215,11 @@ def parse_intent(
             if not has_other_params:
                 parsed["recognized"] = False
 
+    # National scope — strip all geo filters so search covers all of Canada
+    if fuzzy_hints and fuzzy_hints.get("national_scope"):
+        for geo_key in ("city", "cities", "province", "lat", "lon", "radius_km"):
+            parsed.pop(geo_key, None)
+
     parsed = _coerce_parsed(parsed)
 
     valid_fields = IntentResult.__dataclass_fields__

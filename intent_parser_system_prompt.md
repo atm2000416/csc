@@ -92,6 +92,8 @@ The city name as a proper noun. Use the most specific location mentioned.
 ### province (string)
 Canadian province or US state full name. Examples: "Ontario", "British Columbia", "Quebec",
 "New York", "California". Extract from city context if possible.
+- "Canada", "across Canada", "all over Canada", "nationwide", "anywhere in Canada",
+  "any province", "all provinces" → set province: null AND city: null (no geo filter — search all camps)
 
 ### type (string)
 One of: "Day", "Overnight", "Both", "Virtual" — ONLY these four values are valid.

@@ -44,7 +44,17 @@ def preprocess(raw_query: str) -> dict:
         "geo_coords": None,
         "age_bracket": None,
         "needs_geolocation": False,
+        "national_scope": False,
     }
+
+    # National scope — "across Canada", "all over Canada", etc. → remove geo filter
+    _NATIONAL_PHRASES = [
+        "across canada", "all over canada", "anywhere in canada",
+        "nationwide", "all provinces", "any province", "canada wide",
+        "canada-wide", "all of canada", "throughout canada",
+    ]
+    if any(phrase in normalized for phrase in _NATIONAL_PHRASES):
+        hints["national_scope"] = True
 
     def word_match(term: str, text: str) -> bool:
         """Match term as whole word(s) within text."""

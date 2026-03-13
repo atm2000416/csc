@@ -52,6 +52,7 @@ def _get_pool() -> pooling.MySQLConnectionPool:
             password=get_secret("DB_PASSWORD", ""),
             charset="utf8mb4",
             use_pure=True,
+            connect_timeout=10,
             **ssl_args,
         )
     return _pool

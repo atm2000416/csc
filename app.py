@@ -603,6 +603,8 @@ def main():
         sync_mirror()
         record("input", {"raw_query": choice["raw_query"], "path": "disambiguation",
                          "source": "category_disambiguation"})
+        _render_history()
+        _show_user_bubble(choice.get("label", choice["raw_query"]))
         _run_search(choice["params"], choice["raw_query"],
                     st.session_state.session_context, sidebar_filters)
         return
@@ -1011,6 +1013,7 @@ def _render_category_picker(parent_slug: str, options: list[dict],
             st.session_state["_disambiguation_choice"] = {
                 "params": {**merged_params, "tags": chosen_tags},
                 "raw_query": raw_query,
+                "label": label,
             }
             st.rerun()
 

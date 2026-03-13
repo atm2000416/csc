@@ -189,6 +189,8 @@ def merge_intent(intent: IntentResult) -> dict:
             qs.clear_field("date_to")
         if new.get("type") is None and qs.type is not None:
             qs.clear_field("type")
+        if new.get("gender") is None and qs.gender is not None:
+            qs.clear_field("gender")
 
     # ------------------------------------------------------------------
     # Geography — build a GeoScope from intent and call replace_geo()

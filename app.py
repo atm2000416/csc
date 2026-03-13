@@ -743,6 +743,26 @@ def _run_search(merged_params: dict, raw_query: str, session: dict, sidebar_filt
         "sample_camps": [r.get("camp_name") for r in results[:5]],
     })
 
+    # Virtual fallback: is_virtual=True is a hard filter; many programmes aren't
+    # flagged virtual in the DB even when they offer online options.  If the filter
+    # caused zero results, retry without it and surface a note to the user.
+    virtual_fallback_used = False
+    if not results and merged_params.get("is_virtual"):
+        merged_params = {**merged_params, "is_virtual": False}
+        with st.spinner("Searching camps..."):
+            results, rcs = cssl_query(merged_params, limit=pool_size)
+        if results:
+            virtual_fallback_used = True
+            record("cssl_virtual_fallback", {
+                "results_returned": len(results), "rcs": rcs,
+                "note": "is_virtual filter dropped — no programmes flagged virtual",
+            })
+
+    _virtual_note = (
+        "_Note: I couldn't find programmes specifically flagged as online, "
+        "but here are some that may offer virtual or hybrid sessions._\n\n"
+    ) if virtual_fallback_used else ""
+
     ics = getattr(intent, "ics", 1.0) if intent else 1.0
     if intent:
         merged_params["ics"] = intent.ics
@@ -761,7 +781,7 @@ def _run_search(merged_params: dict, raw_query: str, session: dict, sidebar_filt
                           "top_camps": [r.get("camp_name") for r in final],
                           "concierge_msg": msg[:200]})
         render_trace()
-        _speak(msg)
+        _speak(_virtual_note + msg)
         display_results(final)
         st.session_state["_last_results"] = final
         set_cache(cache_key, {"results": final, "concierge_message": msg})
@@ -794,7 +814,7 @@ def _run_search(merged_params: dict, raw_query: str, session: dict, sidebar_filt
                                "top_camps": [r.get("camp_name") for r in final],
                                "concierge_msg": msg[:200]})
             render_trace()
-            _speak(msg)
+            _speak(_virtual_note + msg)
             display_results(final)
             st.session_state["_last_results"] = final
             set_cache(cache_key, {"results": final, "concierge_message": msg})
@@ -814,7 +834,7 @@ def _run_search(merged_params: dict, raw_query: str, session: dict, sidebar_filt
                           "clarification_dims": decision.clarification_dimensions,
                           "concierge_msg": msg[:200]})
         render_trace()
-        _speak(msg)
+        _speak(_virtual_note + msg)
         display_results(final)
         st.session_state["_last_results"] = final
         render_clarification(decision.clarification_dimensions)
@@ -838,7 +858,7 @@ def _run_search(merged_params: dict, raw_query: str, session: dict, sidebar_filt
                           "advisor_type": zero_diag.get("type") if zero_diag else None})
         render_trace()
         if results:
-            _speak(clarify_msg)
+            _speak(_virtual_note + clarify_msg)
             display_results(final)
             st.session_state["_last_results"] = final
             if intent:
@@ -882,6 +902,7 @@ def _diagnose_zero_results(merged_params: dict) -> dict:
         program_type=merged_params.get("type"),
         date_from=merged_params.get("date_from"),
         date_to=merged_params.get("date_to"),
+        is_virtual=bool(merged_params.get("is_virtual")),
     )
 
     ps = diagnosis.get("pending_suggestion") or {}

@@ -22,11 +22,12 @@ def diagnose(
     program_type: str | None = None,
     date_from: str | None = None,
     date_to: str | None = None,
+    is_virtual: bool = False,
 ) -> dict:
     """
     Find where the requested activity exists, closest first.
-    Applies the same type and date filters as the original search so the
-    program counts are accurate (no false geo suggestions).
+    Applies the same type, date, and is_virtual filters as the original search
+    so the program counts are accurate (no false geo suggestions).
 
     Returns one of:
       - geo_broaden_specific: activity exists nearby, suggest city
@@ -48,6 +49,9 @@ def diagnose(
 
     if program_type and program_type in _TYPE_SQL:
         extra_conditions += f" AND {_TYPE_SQL[program_type]}"
+
+    if is_virtual:
+        extra_conditions += " AND p.is_virtual = 1"
 
     if date_from and date_to:
         joins = (

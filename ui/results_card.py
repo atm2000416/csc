@@ -56,8 +56,8 @@ def _date_range_str(start, end) -> str:
 _UTM = "utm_source=camps.ca&utm_medium=ai-search&utm_campaign=csc"
 
 
-def _camps_url(prettyurl: str) -> str:
-    return f"https://www.camps.ca/{prettyurl}?{_UTM}"
+def _camps_url(prettyurl: str, camp_id) -> str:
+    return f"https://www.camps.ca/{prettyurl}/{camp_id}?{_UTM}"
 
 
 def _normalise_website(url: str) -> str:
@@ -160,7 +160,8 @@ def render_card(result: dict):
     # ── Buttons ────────────────────────────────────────────────────────────────
     buttons_html = ""
     if prettyurl:
-        buttons_html += f'<a href="{_camps_url(prettyurl)}" target="_blank" style="{_BTN}">View on camps.ca →</a>'
+        camp_id = result.get("camp_id") or result.get("id", "")
+        buttons_html += f'<a href="{_camps_url(prettyurl, camp_id)}" target="_blank" style="{_BTN}">View on camps.ca →</a>'
     if website:
         buttons_html += f'<a href="{_normalise_website(website)}" target="_blank" style="{_BTN}">Camp Website →</a>'
 
@@ -236,8 +237,9 @@ def render_extra_sessions(extra: list[dict], camp_name: str, tier: str) -> None:
             prettyurl = r.get("prettyurl") or r.get("slug", "")
             link_html = ""
             if prettyurl:
+                camp_id = r.get("camp_id") or r.get("id", "")
                 link_html = (
-                    f'<a href="{_camps_url(prettyurl)}" target="_blank" '
+                    f'<a href="{_camps_url(prettyurl, camp_id)}" target="_blank" '
                     f'style="{_ROW_LINK}">View →</a>'
                 )
 

@@ -53,16 +53,20 @@ def _date_range_str(start, end) -> str:
     return f"{_MONTHS[s.month-1]} {s.day}"
 
 
+_UTM = "utm_source=campsca&utm_medium=ai-search&utm_campaign=csc"
+
+
 def _camps_url(prettyurl: str) -> str:
-    return f"https://www.camps.ca/{prettyurl}"
+    return f"https://www.camps.ca/{prettyurl}?{_UTM}"
 
 
 def _normalise_website(url: str) -> str:
     if not url:
         return ""
-    if url.startswith("http://") or url.startswith("https://"):
-        return url
-    return "https://" + url
+    if not (url.startswith("http://") or url.startswith("https://")):
+        url = "https://" + url
+    sep = "&" if "?" in url else "?"
+    return f"{url}{sep}{_UTM}"
 
 
 def _cost_str(cost_from, cost_to) -> str:

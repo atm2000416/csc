@@ -1,4 +1,4 @@
-# Soft Sage Design System v1.0
+# Soft Sage Design System v1.1
 
 ## Colour Tokens
 | Token | Hex | Usage |
@@ -21,14 +21,16 @@
     background: rgba(138,154,91,0.88);
     backdrop-filter: blur(12px);
     -webkit-backdrop-filter: blur(12px);
-    height: 72px;
+    height: 72px;                /* 60px on mobile ≤768px */
     position: fixed; top: 0; left: 0; width: 100%;
     z-index: 1000;
     box-shadow: 0 2px 12px rgba(47,79,79,0.15);
 }
 ```
-Content below header needs `margin-top: 88px`.
-Sticky filter bar: `top: 72px`.
+Content below header needs `margin-top: 88px` (76px on mobile).
+Sticky filter bar: `top: 72px` (60px on mobile).
+Badge (`.camps-topbar .badge`) is hidden on mobile ≤768px.
+Topbar action buttons (`.topbar-btn`) are hidden on mobile ≤480px.
 
 ## Topbar Action Buttons
 ```css
@@ -93,7 +95,9 @@ box-shadow: 0 2px 8px rgba(47,79,79,0.08);
 - Program name: Nunito 800, `#2F4F4F`
 - Camp name: Nunito 600, tier colour
 - Blurb: Lato italic, `#4a6060`
-- Buttons: `background: #8A9A5B`, `border-radius: 24px`
+- Buttons: `background: #8A9A5B`, `border-radius: 24px`, `min-height: 44px` (touch target)
+- Pills: `font-size: 0.82rem`, `padding: 4px 10px`, `margin-bottom: 4px` (wraps cleanly on narrow screens)
+- Card outer padding: `0 0.4rem` (tight — content padding is on the main-content wrapper)
 
 ## Tier Colours
 | Tier | Hex |
@@ -101,6 +105,21 @@ box-shadow: 0 2px 8px rgba(47,79,79,0.08);
 | Gold | `#B8860B` |
 | Silver | `#808080` |
 | Bronze | `#8B4513` |
+
+## Mobile Breakpoints
+
+| Breakpoint | Width | Changes |
+|---|---|---|
+| Tablet | ≤768px | Topbar 60px, badge hidden, action buttons smaller, min touch targets 44px, filter top offset 60px |
+| Phone | ≤480px | Topbar action buttons hidden, card padding reduced, chat bubble max-width 92% |
+
+**Touch target rule (Apple HIG / Google Material 3):** All tappable elements minimum 44×44px.
+Applied via `min-height: 44px` on `.stLinkButton a`, `.stButton > button`, and `_BTN` inline style.
+
+**Font size rule:** Body text ≥ 16px (`1rem`) on mobile to prevent iOS auto-zoom on input focus.
+Applied via `font-size: 1rem` on `[data-testid="stChatInput"] textarea` at ≤768px.
+
+**Filter layout:** 5-across columns replaced with 2-row layout (2+2+1) so each control is half-width on mobile — tappable without pinching.
 
 ## config.toml
 ```toml

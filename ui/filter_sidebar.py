@@ -44,17 +44,19 @@ def render_filters():
     the bar sits between the results-count row and the cards.
     """
     with st.expander("🔍 Filters", expanded=False):
-        col1, col2, col3, col4, col5 = st.columns([2, 2, 2, 2, 1])
-        with col1:
+        row1_col1, row1_col2 = st.columns(2)
+        with row1_col1:
             st.slider("Age", min_value=4, max_value=18, value=(4, 18),
                       key="filter_age")
-        with col2:
+        with row1_col2:
             st.selectbox("Type", _TYPES, key="filter_type")
-        with col3:
+
+        row2_col1, row2_col2, row2_col3 = st.columns([3, 3, 2])
+        with row2_col1:
             st.number_input("Max cost ($)", min_value=0, value=0, step=100,
                             key="filter_cost")
-        with col4:
+        with row2_col2:
             st.selectbox("Province", _PROVINCES, key="filter_province")
-        with col5:
+        with row2_col3:
             st.markdown("<br>", unsafe_allow_html=True)
             st.checkbox("Debug", value=False, key="filter_debug")

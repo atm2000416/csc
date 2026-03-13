@@ -4,13 +4,14 @@ Streamlit + Aiven MySQL + Claude AI. Auto-deploys to Streamlit Cloud on push to 
 
 ---
 
-## Current State (as of 2026-03-12)
+## Current State (as of 2026-03-13)
 
 - Production on Streamlit Cloud, all features working
 - LLM stack fully migrated to Claude (Haiku + Sonnet) — no Gemini references remain
 - All 269 camps with OurKids dump data have full per-session programme records
 - QA suite: 40/40 passing
 - Architecture docs: `docs/architecture.md` (full), `docs/database.md`, `docs/testing.md`
+- Automated DB sync built (`db/sync_from_source.py` + `.github/workflows/sync.yml`) — pending OurKids DBA creating `csc_reader` read-only user (Monday 2026-03-16)
 
 ---
 
@@ -20,6 +21,7 @@ Streamlit + Aiven MySQL + Claude AI. Auto-deploys to Streamlit Cloud on push to 
 |-------|-----------|
 | UI | Streamlit ≥ 1.35 |
 | Database | Aiven MySQL 8.0 (SSL via `ca.pem` or `DB_SSL_CA_CERT` secret) |
+| Data Sync | GitHub Actions (`sync.yml`) — every 2h, reads OurKids MySQL directly |
 | Intent Parser | Claude Haiku 4.5 (`claude-haiku-4-5-20251001`) |
 | Reranker | Claude Haiku 4.5 |
 | Concierge | Claude Sonnet 4.6 (`claude-sonnet-4-6`) |
@@ -99,7 +101,8 @@ core/
 
 db/
   connection.py                 MySQL connection pool (SSL; ca.pem or DB_SSL_CA_CERT secret)
-  sync_from_dump.py             **Main data sync tool** — run when OurKids sends new dump
+  sync_from_source.py           **Primary data sync** — queries OurKids MySQL directly (GitHub Actions)
+  sync_from_dump.py             **Emergency fallback** — manual sync from SQL dump file
   taxonomy_loader.py            load activity_tags from DB at startup; fallback to taxonomy_mapping
 
 ui/
@@ -176,18 +179,31 @@ Thresholds: `ICS_HIGH_THRESHOLD` / `RCS_HIGH_THRESHOLD` secrets (default 0.70 ea
 
 ## Data Sync Workflow
 
-Run when OurKids provides a new dump file:
+### Normal operation — automated (GitHub Actions)
+
+`db/sync_from_source.py` runs every 2 hours via `.github/workflows/sync.yml`. It connects
+to OurKids MySQL as the read-only `csc_reader` user and writes changes to Aiven.
+
+Manual trigger: GitHub → Actions → "Sync OurKids → Aiven" → Run workflow.
 
 ```bash
-# 1. Standard sync (status changes, new camps, locations)
-python3 db/sync_from_dump.py --dump /path/to/dump.sql --dry-run
-python3 db/sync_from_dump.py --dump /path/to/dump.sql
+# Local dry-run (verify source connection + show what would change)
+python3 db/sync_from_source.py --dry-run
 
-# 2. Full programme sync — ALWAYS run after a new dump
+# What GitHub Actions runs automatically
+python3 db/sync_from_source.py --deactivate --skip-ids 422,529,579,1647
+```
+
+Requires `SOURCE_DB_*` env vars (see Secrets section). The `DB_*` Aiven vars are the same
+as those used by the app.
+
+### Emergency fallback — manual dump sync
+
+Use only if OurKids source DB is unreachable or a schema change is under investigation.
+
+```bash
 python3 db/sync_from_dump.py --dump /path/to/dump.sql --import-all-sessions --dry-run
 python3 db/sync_from_dump.py --dump /path/to/dump.sql --import-all-sessions
-
-# 3. Optional: deactivate departed camps + refresh metadata
 python3 db/sync_from_dump.py --dump /path/to/dump.sql --deactivate --update-meta \
   --skip-ids 422,529,579,1647
 ```
@@ -219,17 +235,22 @@ git push origin main
 
 ## Secrets (Streamlit Cloud)
 
-| Secret | Purpose |
-|--------|---------|
-| `ANTHROPIC_API_KEY` | Claude API |
-| `DB_HOST`, `DB_PORT`, `DB_NAME`, `DB_USER`, `DB_PASSWORD` | Aiven MySQL |
-| `DB_SSL_CA_CERT` | Aiven CA certificate (full PEM string) |
-| `ICS_HIGH_THRESHOLD` | Decision matrix ICS cutoff (default `0.70`) |
-| `RCS_HIGH_THRESHOLD` | Decision matrix RCS cutoff (default `0.70`) |
-| `RERANKER_THRESHOLD` | Pool size above which reranker fires (default `15`) |
-| `DIVERSITY_MAX_PER_CAMP` | Max programmes per camp before diversity filter (default `2`) |
-| `RESULTS_POOL_SIZE` | CSSL pool limit (default `100`) |
-| `LOG_INTERACTIONS` | Enable interaction logging to DB (default `true`) |
+| Secret | Streamlit Cloud | GitHub Actions | Purpose |
+|--------|:--------------:|:--------------:|---------|
+| `ANTHROPIC_API_KEY` | ✓ | — | Claude API |
+| `DB_HOST`, `DB_PORT`, `DB_NAME`, `DB_USER`, `DB_PASSWORD` | ✓ | ✓ | Aiven MySQL |
+| `DB_SSL_CA_CERT` | ✓ | ✓ | Aiven CA certificate (full PEM string) |
+| `SOURCE_DB_HOST` | — | ✓ | OurKids MySQL hostname/IP |
+| `SOURCE_DB_PORT` | — | ✓ | OurKids MySQL port (default `3306`) |
+| `SOURCE_DB_NAME` | — | ✓ | OurKids database name |
+| `SOURCE_DB_USER` | — | ✓ | `csc_reader` (read-only) |
+| `SOURCE_DB_PASSWORD` | — | ✓ | csc_reader password |
+| `ICS_HIGH_THRESHOLD` | ✓ | — | Decision matrix ICS cutoff (default `0.70`) |
+| `RCS_HIGH_THRESHOLD` | ✓ | — | Decision matrix RCS cutoff (default `0.70`) |
+| `RERANKER_THRESHOLD` | ✓ | — | Pool size above which reranker fires (default `15`) |
+| `DIVERSITY_MAX_PER_CAMP` | ✓ | — | Max programmes per camp before diversity filter (default `2`) |
+| `RESULTS_POOL_SIZE` | ✓ | — | CSSL pool limit (default `100`) |
+| `LOG_INTERACTIONS` | ✓ | — | Enable interaction logging to DB (default `true`) |
 
 See `secrets.toml.example` for a template.
 

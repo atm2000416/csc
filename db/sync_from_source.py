@@ -1,0 +1,821 @@
+"""
+db/sync_from_source.py
+Sync CSC Aiven DB directly from the OurKids MySQL source database.
+
+Replaces the manual dump-file workflow. Connects to OurKids MySQL as a
+read-only user (csc_reader) and writes updates to the Aiven destination DB.
+
+Operations (always run):
+  1. Upsert active camps       — INSERT new, UPDATE tier/meta/prettyurl
+  2. Sync programs             — DELETE + reinsert sessions per active camp
+  3. Infer program_tags        — same _KEYWORD_TO_TAGS map as sync_from_dump.py
+  4. Sync program_dates        — from session_date table
+
+Operations (flag-gated):
+  --deactivate                 — status=0 for camps gone from source
+  --skip-ids 422,529,579,1647  — protect manually-promoted sub-locations
+  --dry-run                    — print counts, make no writes
+
+Source connection:
+  SOURCE_DB_HOST, SOURCE_DB_PORT, SOURCE_DB_NAME, SOURCE_DB_USER, SOURCE_DB_PASSWORD
+  (env vars or Streamlit secrets)
+
+Destination connection:
+  DB_HOST, DB_PORT, DB_NAME, DB_USER, DB_PASSWORD, DB_SSL_CA_CERT
+  (same as the main app — reads via config.get_secret)
+
+Usage:
+  # Dry run first
+  python3 db/sync_from_source.py --dry-run
+
+  # Standard sync with deactivations
+  python3 db/sync_from_source.py --deactivate --skip-ids 422,529,579,1647
+"""
+import re
+import sys
+import os
+import argparse
+from collections import defaultdict
+from datetime import date as _date
+
+import mysql.connector
+
+sys.path.insert(0, os.path.abspath(os.path.join(os.path.dirname(__file__), "..")))
+from config import get_secret
+from db.connection import get_connection
+
+# ── Constants ─────────────────────────────────────────────────────────────────
+
+PROTECTED_IDS = {422, 529, 579, 1647}
+
+TIER_MAP = {
+    'gold': 'gold',
+    'silver': 'silver',
+    'bronze': 'bronze',
+    'double': 'silver',   # legacy tier name
+    'single': 'bronze',
+}
+
+PROVINCE_MAP = {
+    'ON': 'Ontario', 'On': 'Ontario', 'ont': 'Ontario', 'Ont': 'Ontario',
+    'ontario': 'Ontario',
+    'BC': 'British Columbia', 'B.C.': 'British Columbia',
+    'AB': 'Alberta', 'Ab': 'Alberta',
+    'QC': 'Quebec', 'Qc': 'Quebec',
+    'MB': 'Manitoba', 'SK': 'Saskatchewan', 'NS': 'Nova Scotia',
+    'NB': 'New Brunswick', 'NL': 'Newfoundland', 'PE': 'Prince Edward Island',
+}
+
+_SKIP_PREFIXES = ("new program", "copy of")
+
+
+def normalise_province(p):
+    p = (p or '').strip()
+    return PROVINCE_MAP.get(p, p) if p else None
+
+
+def normalise_city(c):
+    return c.strip().title() if c else None
+
+
+def slugify(text):
+    s = text.lower().strip()
+    s = re.sub(r'[^a-z0-9]+', '-', s)
+    return s.strip('-')
+
+
+# ── Activity tag inference ─────────────────────────────────────────────────────
+# Same map as sync_from_dump.py — keep in sync if either is updated.
+
+_KEYWORD_TO_TAGS = [
+    # ── Tech / STEM ──────────────────────────────────────────────────────────
+    (["robotics", "robot", "robotic"],                      ["robotics"]),
+    (["coding", "code", "programming", "programmer",
+      "software", "developer", "learn to code"],            ["programming-multi"]),
+    (["stem camp", "stem program", "stem learning",
+      "science tech", "science, tech", "science and tech"], ["stem"]),
+    (["stem"],                                              ["stem"]),
+    (["steam"],                                             ["steam"]),
+    (["minecraft"],                                         ["minecraft", "video-game-design"]),
+    (["roblox"],                                            ["roblox", "video-game-design"]),
+    (["python"],                                            ["python"]),
+    (["scratch coding", "mit scratch", "scratch junior",
+      "block coding", "visual coding", "scratch program",
+      "scratch camp"],                                      ["scratch"]),
+    (["scratch"],                                           ["scratch"]),
+    (["java"],                                              ["java"]),
+    (["arduino"],                                           ["arduino"]),
+    (["raspberry pi"],                                      ["raspberry-pi"]),
+    (["3d printing", "3d-printing"],                        ["3d-printing"]),
+    (["3d design", "3d-design", "3d modelling",
+      "3d modeling"],                                       ["3d-design"]),
+    (["artificial intelligence", "machine learning",
+      "ai camp", "ai program"],                             ["ai-artificial-intelligence"]),
+    (["drone", "uav", "unmanned aerial"],                   ["drone-technology"]),
+    (["virtual reality", "vr camp", "vr headset"],          ["virtual-reality"]),
+    (["lego robotics", "lego mindstorm"],                   ["robotics", "lego"]),
+    (["lego building", "lego engineering"],                 ["lego", "engineering"]),
+    (["lego"],                                              ["lego"]),
+    (["makerspace", "maker space", "maker camp"],           ["makerspace"]),
+    (["mechatronics"],                                      ["mechatronics"]),
+    (["micro:bit", "micro bit", "microbit"],                ["micro-bit"]),
+    (["c++", "c plus plus"],                                ["c-plus-plus"]),
+    (["c#", "c-sharp", "csharp"],                           ["c-sharp"]),
+    (["swift", "ios development", "iphone app"],            ["swift-apple"]),
+    (["pygame"],                                            ["pygame"]),
+    (["web design", "website design"],                      ["web-design"]),
+    (["web dev", "web development"],                        ["web-development"]),
+    (["video game design", "game design", "game dev",
+      "game development", "game creation"],                 ["video-game-design"]),
+    (["video game development"],                            ["video-game-development"]),
+    (["esports", "e-sports", "competitive gaming",
+      "gaming camp", "gaming tournament"],                  ["gaming"]),
+    (["animation"],                                         ["animation"]),
+    (["technology camp", "tech camp"],                      ["technology"]),
+    (["engineering"],                                       ["engineering"]),
+    (["architecture"],                                      ["architecture"]),
+    (["science"],                                           ["science-multi"]),
+    (["math", "mathematics", "algebra", "calculus",
+      "numeracy"],                                          ["math"]),
+    (["space", "astronomy", "astrophysics", "nasa"],        ["space"]),
+    (["forensic", "csi camp"],                              ["forensic-science"]),
+    (["marine biology", "ocean science"],                   ["marine-biology"]),
+    (["meteorology", "weather science"],                    ["meteorology"]),
+    (["health science", "medical science",
+      "medicine camp", "pharmacy"],                         ["health-science"]),
+    (["zoology", "zoo camp"],                               ["zoology"]),
+    (["animals", "animal care", "veterinary"],              ["animals"]),
+    (["nature", "environment", "ecology",
+      "conservation", "environmental"],                     ["nature-environment"]),
+    (["archaeology", "paleontology", "fossil"],             ["archaeology-paleontology"]),
+    # ── Sports ───────────────────────────────────────────────────────────────
+    (["soccer", "football (soccer)", "futsal"],             ["soccer"]),
+    (["basketball"],                                        ["basketball"]),
+    (["tennis"],                                            ["tennis"]),
+    (["volleyball"],                                        ["volleyball"]),
+    (["swimming", "swim lesson", "swim camp",
+      "learn to swim"],                                     ["swimming"]),
+    (["hockey"],                                            ["hockey"]),
+    (["baseball", "softball"],                              ["baseball-softball"]),
+    (["football", "american football", "cfl"],              ["football"]),
+    (["flag football"],                                     ["flag-football"]),
+    (["lacrosse"],                                          ["lacrosse"]),
+    (["gymnastics", "gymnastic"],                           ["gymnastics"]),
+    (["martial arts"],                                      ["martial-arts"]),
+    (["karate"],                                            ["karate"]),
+    (["taekwondo", "tae kwon do"],                          ["taekwondo"]),
+    (["archery"],                                           ["archery"]),
+    (["badminton"],                                         ["badminton"]),
+    (["cycling", "bicycle camp"],                           ["cycling"]),
+    (["golf"],                                              ["golf"]),
+    (["cricket"],                                           ["cricket"]),
+    (["rugby"],                                             ["rugby"]),
+    (["ultimate frisbee", "ultimate disc"],                 ["ultimate-frisbee"]),
+    (["fencing"],                                           ["fencing"]),
+    (["figure skating", "figure skate"],                    ["figure-skating"]),
+    (["ice skating", "skating camp"],                       ["ice-skating"]),
+    (["skiing", "ski camp", "downhill ski"],                ["skiing"]),
+    (["snowboarding"],                                      ["snowboarding"]),
+    (["rock climbing", "climbing wall"],                    ["rock-climbing"]),
+    (["parkour"],                                           ["parkour"]),
+    (["trampoline"],                                        ["trampoline"]),
+    (["track and field", "track & field", "athletics"],     ["track-and-field"]),
+    (["dodgeball"],                                         ["dodgeball"]),
+    (["ping pong", "table tennis"],                         ["ping-pong"]),
+    (["squash"],                                            ["squash"]),
+    (["pickleball"],                                        ["pickleball"]),
+    (["cheerleading", "cheer camp"],                        ["cheer"]),
+    (["disc golf"],                                         ["disc-golf"]),
+    (["gaga ball", "ga-ga"],                                ["gaga"]),
+    (["bmx", "motocross"],                                  ["bmx-motocross"]),
+    (["skateboard"],                                        ["skateboarding"]),
+    (["rollerblad", "rollerblade"],                         ["rollerblading"]),
+    (["mountain bike", "mountain biking"],                  ["mountain-biking"]),
+    (["ninja warrior", "ninja obstacle", "ninja camp",
+      "ninja training", "obstacle course"],                 ["ninja-warrior"]),
+    (["paintball"],                                         ["paintball"]),
+    (["water polo"],                                        ["water-polo"]),
+    (["multi sport", "multi-sport", "multisport",
+      "all sports", "variety sport"],                       ["sport-multi"]),
+    # ── Water sports ─────────────────────────────────────────────────────────
+    (["sailing", "sail camp", "cansail"],                   ["sailing-marine-skills"]),
+    (["canoeing", "canoe camp"],                            ["canoeing"]),
+    (["kayak"],                                             ["kayaking-sea-kayaking"]),
+    (["waterskiing", "water skiing", "wakeboard",
+      "wake board"],                                        ["waterskiing-wakeboarding"]),
+    (["rowing"],                                            ["rowing"]),
+    (["surfing"],                                           ["surfing"]),
+    (["fishing"],                                           ["fishing"]),
+    (["paddle board", "paddleboard", "sup camp"],           ["stand-up-paddle-boarding"]),
+    (["scuba", "diving camp"],                              ["diving"]),
+    (["whitewater", "white water", "rafting"],              ["whitewater-rafting"]),
+    (["board sailing", "windsurfing"],                      ["board-sailing"]),
+    (["tubing"],                                            ["tubing"]),
+    # ── Visual arts ──────────────────────────────────────────────────────────
+    (["arts and crafts", "arts & crafts",
+      "art and craft"],                                     ["arts-crafts"]),
+    (["drawing", "sketching", "illustration"],              ["drawing"]),
+    (["painting"],                                          ["painting"]),
+    (["pottery"],                                           ["pottery"]),
+    (["ceramics"],                                          ["ceramics"]),
+    (["sculpture"],                                         ["sculpture"]),
+    (["photography"],                                       ["photography"]),
+    (["videography"],                                       ["videography"]),
+    (["filmmaking", "film making", "film camp",
+      "movie making"],                                      ["filmmaking"]),
+    (["fashion design", "fashion camp"],                    ["fashion-design"]),
+    (["knitting", "crochet"],                               ["knitting-and-crochet"]),
+    (["mixed media"],                                       ["mixed-media"]),
+    (["papier mache", "papier-mache"],                      ["papier-mache"]),
+    (["cartooning", "cartoon"],                             ["cartooning"]),
+    (["comic art", "comic book"],                           ["comic-art"]),
+    (["woodworking", "wood shop"],                          ["woodworking"]),
+    (["sewing", "textile"],                                 ["sewing"]),
+    # ── Dance ────────────────────────────────────────────────────────────────
+    (["ballet"],                                            ["ballet"]),
+    (["jazz dance", "jazz class"],                          ["jazz"]),
+    (["hip hop", "hip-hop"],                                ["hip-hop"]),
+    (["breakdancing", "break dancing", "breakdance"],       ["breakdancing"]),
+    (["contemporary dance"],                                ["contemporary"]),
+    (["lyrical"],                                           ["lyrical"]),
+    (["tap dance", "tap class"],                            ["tap"]),
+    (["ballroom"],                                          ["ballroom"]),
+    (["acro dance", "acrodance", "acrobatics"],             ["acro-dance"]),
+    (["modern dance"],                                      ["modern"]),
+    (["dance"],                                             ["dance-multi"]),
+    # ── Performing arts / music ──────────────────────────────────────────────
+    (["musical theatre", "musical theater"],                ["musical-theatre"]),
+    (["theatre arts", "theater arts", "theatre camp",
+      "drama camp"],                                        ["theatre-arts"]),
+    (["acting", "film & tv", "film and tv",
+      "screen acting"],                                     ["acting-film-tv"]),
+    (["improv comedy", "sketch comedy"],                    ["comedy", "theatre-arts"]),
+    (["improv"],                                            ["comedy", "theatre-arts"]),
+    (["comedy"],                                            ["comedy"]),
+    (["glee"],                                              ["glee"]),
+    (["magic camp", "magic show"],                          ["magic"]),
+    (["puppetry"],                                          ["puppetry"]),
+    (["playwriting"],                                       ["playwriting"]),
+    (["singing", "vocal", "voice lesson",
+      "choir", "choral"],                                   ["vocal-training-singing"]),
+    (["guitar"],                                            ["guitar"]),
+    (["piano", "keyboard"],                                 ["piano"]),
+    (["percussion", "drums", "drumming"],                   ["percussion"]),
+    (["violin", "cello", "viola", "string"],                ["string"]),
+    (["songwriting", "song writing"],                       ["songwriting"]),
+    (["music recording", "music production",
+      "recording studio"],                                  ["music-recording"]),
+    (["dj", "djing", "turntable"],                          ["djing"]),
+    (["band camp", "jam camp", "rock camp"],                ["jam-camp"]),
+    (["instrument", "musical instrument"],                  ["musical-instrument-training"]),
+    (["music"],                                             ["music-multi"]),
+    (["performing arts"],                                   ["performing-arts-multi"]),
+    # ── Language / academic ──────────────────────────────────────────────────
+    (["chess"],                                             ["chess"]),
+    (["board game", "board-game", "tabletop"],              ["board-games"]),
+    (["dungeons and dragons", "dungeons & dragons", "d&d",
+      "dnd", "d & d"],                                      ["dungeons-and-dragons"]),
+    (["debate"],                                            ["debate"]),
+    (["public speaking", "speech"],                         ["public-speaking"]),
+    (["creative writing"],                                  ["creative-writing"]),
+    (["journalism"],                                        ["journalism"]),
+    (["storytelling"],                                      ["storytelling"]),
+    (["essay writing", "essay camp"],                       ["essay-writing"]),
+    (["reading"],                                           ["reading"]),
+    (["podcasting", "podcast"],                             ["podcasting"]),
+    (["youtube", "vlog", "vlogging"],                       ["youtube-vlogging"]),
+    (["writing"],                                           ["writing"]),
+    (["french immersion", "french camp",
+      "immersion française", "parler français",
+      "francais", "français"],                              ["language-instruction"]),
+    (["english instruction", "esl", "fsl",
+      "language camp", "bilingual", "language immersion",
+      "mandarin", "spanish camp", "learn french",
+      "learn english"],                                     ["language-instruction"]),
+    (["french"],                                            ["language-instruction"]),
+    (["tutoring", "tutor", "academic support",
+      "homework help", "learning centre",
+      "academic enrichment"],                               ["academic-tutoring-multi"]),
+    (["logical thinking", "critical thinking",
+      "logic"],                                             ["logical-thinking"]),
+    (["test prep", "sat prep", "act prep",
+      "standardized test"],                                 ["test-preparation"]),
+    (["credit course", "credit class", "high school credit",
+      "university credit"],                                 ["credit-courses"]),
+    # ── Leadership / personal dev ────────────────────────────────────────────
+    (["leadership"],                                        ["leadership-training"]),
+    (["empowerment"],                                       ["empowerment"]),
+    (["social justice"],                                    ["social-justice"]),
+    (["financial literacy", "money management"],            ["financial-literacy"]),
+    (["entrepreneurship", "entrepreneur", "startup"],       ["entrepreneurship"]),
+    (["cit", "counsellor in training",
+      "counselor in training"],                             ["cit-lit-program"]),
+    # ── Outdoor / adventure ──────────────────────────────────────────────────
+    (["wilderness trip", "canoe trip", "out-tripping",
+      "outtripping"],                                       ["wilderness-out-tripping"]),
+    (["wilderness", "bushcraft", "backcountry"],            ["wilderness-skills"]),
+    (["ropes course", "high ropes", "low ropes"],           ["ropes-course"]),
+    (["survival skills", "survival camp"],                  ["survival-skills"]),
+    (["urban exploration"],                                 ["urban-exploration"]),
+    (["hiking", "backpacking", "trekking"],                 ["hiking"]),
+    (["travel camp", "teen travel", "world travel"],        ["travel"]),
+    (["adventure camp", "adventure program"],               ["adventure"]),
+    (["safari"],                                            ["safari"]),
+    (["zip line", "zipline"],                               ["zip-line"]),
+    # ── Equestrian ───────────────────────────────────────────────────────────
+    (["horseback", "horse riding", "horse camp",
+      "equestrian", "equine", "pony", "stable"],            ["horseback-riding-equestrian"]),
+    # ── Health / wellness ────────────────────────────────────────────────────
+    (["yoga"],                                              ["yoga"]),
+    (["meditation"],                                        ["meditation"]),
+    (["mindfulness"],                                       ["mindfulness-training"]),
+    (["pilates"],                                           ["pilates"]),
+    (["nutrition", "healthy eating"],                       ["nutrition"]),
+    (["fitness", "conditioning", "bootcamp", "boot camp"],  ["health-fitness"]),
+    (["lifeguard", "lifesaving", "first aid", "cpr",
+      "emergency response", "bronze cross",
+      "water safety", "standard first aid",
+      "nls", "national lifeguard"],                         ["first-aid-lifesaving"]),
+    (["cooking", "culinary", "chef", "kitchen",
+      "junior chef", "food prep", "canning"],               ["cooking"]),
+    (["baking", "cake decorating", "pastry", "cupcake"],    ["baking-decorating"]),
+    # ── Misc arts ────────────────────────────────────────────────────────────
+    (["circus", "acrobat", "aerial"],                       ["circus"]),
+]
+
+
+def infer_tags(session_names: list, tag_slug_to_id: dict) -> set:
+    """Return matched activity tag slugs for a list of session names."""
+    combined = " | ".join(session_names).lower()
+    found = set()
+    for keywords, slugs in _KEYWORD_TO_TAGS:
+        for kw in keywords:
+            if kw in combined:
+                for slug in slugs:
+                    if slug in tag_slug_to_id:
+                        found.add(slug)
+                break
+    return found
+
+
+# ── Source DB helpers ─────────────────────────────────────────────────────────
+
+def get_source_connection():
+    return mysql.connector.connect(
+        host=get_secret("SOURCE_DB_HOST"),
+        port=int(get_secret("SOURCE_DB_PORT", "3306")),
+        database=get_secret("SOURCE_DB_NAME"),
+        user=get_secret("SOURCE_DB_USER"),
+        password=get_secret("SOURCE_DB_PASSWORD"),
+        connect_timeout=10,
+    )
+
+
+def fetch_source_camps(src_cursor) -> dict:
+    """Returns {cid: {cid, camp_name, tier, status, lat, lon, prettyurl}}"""
+    src_cursor.execute("""
+        SELECT cid, camp_name, eListingType, status, Lat, Lon, prettyURL
+        FROM camps
+    """)
+    result = {}
+    for row in src_cursor.fetchall():
+        cid = row['cid']
+        try:
+            lat = float(row['Lat']) if row['Lat'] and row['Lat'] != '0' else None
+            lon = float(row['Lon']) if row['Lon'] and row['Lon'] != '0' else None
+        except (ValueError, TypeError):
+            lat = lon = None
+        result[cid] = {
+            'cid':       cid,
+            'camp_name': (row['camp_name'] or '').strip(),
+            'tier':      TIER_MAP.get(row['eListingType'] or '', 'bronze'),
+            'status':    int(row['status'] or 0),
+            'lat':       lat,
+            'lon':       lon,
+            'prettyurl': (row['prettyURL'] or '').strip() or None,
+        }
+    return result
+
+
+def fetch_source_addresses(src_cursor) -> dict:
+    """Returns {cid: {city, province, postal, address}}"""
+    src_cursor.execute("SELECT cid, address, city, province, postal FROM addresses")
+    result = {}
+    for row in src_cursor.fetchall():
+        cid = row['cid']
+        result[cid] = {
+            'city':     normalise_city(row.get('city') or ''),
+            'province': normalise_province(row.get('province') or ''),
+            'postal':   (row.get('postal') or '').strip(),
+            'address':  (row.get('address') or '').strip(),
+        }
+    return result
+
+
+def fetch_source_general_info(src_cursor) -> dict:
+    """Returns {cid: {website}}"""
+    src_cursor.execute("SELECT cid, website FROM generalInfo")
+    result = {}
+    for row in src_cursor.fetchall():
+        result[row['cid']] = {'website': (row.get('website') or '').strip()}
+    return result
+
+
+def fetch_source_sessions(src_cursor, camp_ids: set) -> dict:
+    """
+    Returns {camp_id: [{"name", "type", "age_from", "age_to",
+                         "cost_from", "cost_to", "date_from", "date_to"}, ...]}
+    Deduplicates by cleaned name; skips status!=1 and draft names.
+    """
+    if not camp_ids:
+        return {}
+    placeholders = ','.join(['%s'] * len(camp_ids))
+    src_cursor.execute(f"""
+        SELECT id, camp_id, name, type, status,
+               date_from, date_to, age_from, age_to, cost_from, cost_to
+        FROM sessions
+        WHERE status = 1 AND camp_id IN ({placeholders})
+    """, tuple(camp_ids))
+
+    result = defaultdict(dict)  # camp_id → {clean_name: session_dict}
+    for row in src_cursor.fetchall():
+        name = (row.get('name') or '').strip()
+        if not name:
+            continue
+        name_lower = name.lower()
+        if any(name_lower.startswith(p) for p in _SKIP_PREFIXES):
+            continue
+        clean_key = re.sub(r'\s+', ' ', name_lower).strip()
+        cid = row['camp_id']
+        if clean_key in result[cid]:
+            continue  # keep first occurrence per unique name
+
+        date_from = str(row['date_from']) if row.get('date_from') else None
+        date_to   = str(row['date_to'])   if row.get('date_to')   else None
+        if date_from == '0000-00-00':
+            date_from = None
+        if date_to == '0000-00-00':
+            date_to = None
+
+        result[cid][clean_key] = {
+            'name':      name,
+            'type':      row.get('type') or None,
+            'age_from':  int(row['age_from']) if row.get('age_from') else None,
+            'age_to':    int(row['age_to'])   if row.get('age_to')   else None,
+            'cost_from': int(row['cost_from']) if row.get('cost_from') else None,
+            'cost_to':   int(row['cost_to'])   if row.get('cost_to')   else None,
+            'date_from': date_from,
+            'date_to':   date_to,
+        }
+
+    return {cid: list(sessions.values()) for cid, sessions in result.items()}
+
+
+def fetch_source_session_dates(src_cursor) -> list:
+    """
+    Returns list of {seid, start_date, end_date, cost_from, cost_to,
+                      before_care, after_care}
+    """
+    src_cursor.execute("""
+        SELECT seid, start_date, end_date, cost_from, cost_to,
+               before_care, after_care
+        FROM session_date
+    """)
+    rows = []
+    for row in src_cursor.fetchall():
+        rows.append({
+            'seid':        int(row['seid']),
+            'start_date':  str(row['start_date']) if row.get('start_date') else None,
+            'end_date':    str(row['end_date'])   if row.get('end_date')   else None,
+            'cost_from':   int(row['cost_from'])  if row.get('cost_from')  else None,
+            'cost_to':     int(row['cost_to'])    if row.get('cost_to')    else None,
+            'before_care': int(row.get('before_care') or 0),
+            'after_care':  int(row.get('after_care')  or 0),
+        })
+    return rows
+
+
+# ── Destination DB helpers ────────────────────────────────────────────────────
+
+def ensure_unique_slug(dest_cursor, slug_base):
+    slug = slug_base
+    counter = 1
+    while True:
+        dest_cursor.execute("SELECT id FROM camps WHERE slug = %s", (slug,))
+        if not dest_cursor.fetchone():
+            return slug
+        slug = f"{slug_base}-{counter}"
+        counter += 1
+
+
+# ── Main sync ─────────────────────────────────────────────────────────────────
+
+def run(dry_run: bool, deactivate: bool, skip_ids: set):
+    today = str(_date.today())
+
+    print("Connecting to source (OurKids)…")
+    src_conn   = get_source_connection()
+    src_cursor = src_conn.cursor(dictionary=True)
+
+    print("Fetching source data…")
+    src_camps   = fetch_source_camps(src_cursor)
+    src_addrs   = fetch_source_addresses(src_cursor)
+    src_info    = fetch_source_general_info(src_cursor)
+    src_sdates  = fetch_source_session_dates(src_cursor)
+
+    active_src_ids = {cid for cid, c in src_camps.items() if c['status'] == 1}
+    src_sessions   = fetch_source_sessions(src_cursor, active_src_ids)
+
+    src_cursor.close()
+    src_conn.close()
+
+    print(f"  Source: {len(src_camps)} camps, "
+          f"{len(active_src_ids)} active, "
+          f"{len(src_sessions)} with sessions, "
+          f"{len(src_sdates)} session_date rows\n")
+
+    print("Connecting to destination (Aiven)…")
+    dest_conn   = get_connection()
+    dest_cursor = dest_conn.cursor(dictionary=True)
+
+    dest_cursor.execute(
+        "SELECT id, camp_name, city, province, status, tier, website, prettyurl "
+        "FROM camps"
+    )
+    dest_camps = {r['id']: r for r in dest_cursor.fetchall()}
+
+    dest_cursor.execute("SELECT id, slug FROM activity_tags WHERE is_active = 1")
+    tag_slug_to_id = {r['slug']: r['id'] for r in dest_cursor.fetchall()}
+
+    stats = {
+        'new_camps': 0,
+        'reactivated': 0,
+        'deactivated': 0,
+        'meta_updated': 0,
+        'camps_synced': 0,
+        'camps_unchanged': 0,
+        'camps_skipped': 0,
+        'dates_inserted': 0,
+    }
+
+    # ── 1. Upsert active camps ─────────────────────────────────────────────────
+    print("=== Upsert active camps ===")
+    for cid, src in sorted(src_camps.items()):
+        if src['status'] != 1:
+            continue
+
+        addr = src_addrs.get(cid, {})
+        info = src_info.get(cid, {})
+        city = addr.get('city')
+        if not city:
+            continue
+
+        if cid not in dest_camps:
+            # New camp
+            slug = ensure_unique_slug(dest_cursor, slugify(src['camp_name'])) if not dry_run else slugify(src['camp_name'])
+            print(f"  NEW  id={cid}: {src['camp_name']!r} ({city}, {addr.get('province')})")
+            if not dry_run:
+                dest_cursor.execute(
+                    """
+                    INSERT INTO camps
+                        (id, camp_name, slug, tier, status, lat, lon,
+                         city, province, country, website, description, prettyurl)
+                    VALUES (%s, %s, %s, %s, 1, %s, %s, %s, %s, 1, %s, %s, %s)
+                    ON DUPLICATE KEY UPDATE id=id
+                    """,
+                    (cid, src['camp_name'], slug, src['tier'],
+                     src['lat'], src['lon'],
+                     city, addr.get('province'),
+                     info.get('website', ''), '',
+                     src['prettyurl'])
+                )
+            stats['new_camps'] += 1
+        else:
+            dest = dest_camps[cid]
+            changes = {}
+            if dest['status'] != 1:
+                changes['status'] = 1
+                stats['reactivated'] += 1
+                print(f"  RE-ACTIVATE id={cid}: {dest['camp_name']!r}")
+            if src['tier'] != dest.get('tier'):
+                changes['tier'] = src['tier']
+            w = info.get('website', '')
+            if w and w != (dest.get('website') or ''):
+                changes['website'] = w
+            if src['prettyurl'] and src['prettyurl'] != (dest.get('prettyurl') or ''):
+                changes['prettyurl'] = src['prettyurl']
+            if changes and 'status' not in changes:
+                desc = ', '.join(f"{k}→{v!r}" for k, v in changes.items())
+                print(f"  UPDATE id={cid} {dest['camp_name']!r}: {desc}")
+                stats['meta_updated'] += 1
+            if changes and not dry_run:
+                set_clause = ', '.join(f"{k}=%s" for k in changes)
+                dest_cursor.execute(
+                    f"UPDATE camps SET {set_clause} WHERE id=%s",
+                    list(changes.values()) + [cid]
+                )
+
+    # ── 2. Deactivate departed camps ──────────────────────────────────────────
+    if deactivate:
+        print("\n=== Deactivate departed camps ===")
+        deactivated = 0
+        for cid, dest in sorted(dest_camps.items()):
+            if dest['status'] != 1:
+                continue
+            if cid not in src_camps:
+                continue  # manually-created camp — leave it alone
+            if src_camps[cid]['status'] == 1:
+                continue  # still active in source
+            if cid in skip_ids:
+                print(f"  SKIP id={cid}: {dest['camp_name']!r}  (protected)")
+                continue
+            print(f"  DEACTIVATE id={cid}: {dest['camp_name']!r}")
+            if not dry_run:
+                dest_cursor.execute("UPDATE camps SET status=0 WHERE id=%s", (cid,))
+            stats['deactivated'] += 1
+            deactivated += 1
+        if not deactivated:
+            print("  No camps to deactivate.")
+
+    # ── 3. Sync programs (delete + reinsert per active camp) ──────────────────
+    print("\n=== Sync programs ===")
+
+    dest_cursor.execute(
+        "SELECT camp_id, GROUP_CONCAT(name ORDER BY name SEPARATOR '|||') AS names "
+        "FROM programs WHERE status = 1 GROUP BY camp_id"
+    )
+    existing_names = {
+        r['camp_id']: set(r['names'].split('|||'))
+        for r in dest_cursor.fetchall()
+    }
+
+    imported = skipped = unchanged = 0
+    for cid in sorted(active_src_ids):
+        sessions = src_sessions.get(cid)
+        if not sessions:
+            skipped += 1
+            continue
+
+        dump_name_set = {s['name'].strip() for s in sessions}
+        db_name_set   = existing_names.get(cid, set())
+        new_names     = dump_name_set - db_name_set
+        gone_names    = db_name_set - dump_name_set
+
+        if not new_names and not gone_names:
+            unchanged += 1
+            continue
+
+        camp_name = src_camps[cid]['camp_name']
+        print(f"  {'DRY ' if dry_run else ''}SYNC id={cid}: {camp_name!r}  "
+              f"+{len(new_names)} new  -{len(gone_names)} removed  "
+              f"(total → {len(sessions)})")
+
+        if dry_run:
+            for name in sorted(new_names)[:3]:
+                tags = sorted(infer_tags([name], tag_slug_to_id))
+                print(f"    + {name!r:50s}  tags={tags}")
+            if len(new_names) > 3:
+                print(f"    … (+{len(new_names)-3} more new)")
+            imported += 1
+            continue
+
+        # Delete existing programs + their tags/dates for this camp
+        dest_cursor.execute(
+            "SELECT id FROM programs WHERE camp_id = %s AND status = 1", (cid,)
+        )
+        old_ids = [r['id'] for r in dest_cursor.fetchall()]
+        if old_ids:
+            id_list = ','.join(str(x) for x in old_ids)
+            dest_cursor.execute(f"DELETE FROM program_tags  WHERE program_id IN ({id_list})")
+            dest_cursor.execute(f"DELETE FROM program_dates WHERE program_id IN ({id_list})")
+            dest_cursor.execute(f"DELETE FROM programs      WHERE id          IN ({id_list})")
+
+        # Insert fresh session records
+        for s in sessions:
+            dest_cursor.execute(
+                "INSERT INTO programs "
+                "(camp_id, name, type, age_from, age_to, "
+                " cost_from, cost_to, start_date, end_date, status) "
+                "VALUES (%s, %s, %s, %s, %s, %s, %s, %s, %s, 1)",
+                (cid, s['name'], s['type'],
+                 s['age_from'], s['age_to'],
+                 s['cost_from'], s['cost_to'],
+                 s['date_from'], s['date_to'])
+            )
+            prog_id = dest_cursor.lastrowid
+            for slug in sorted(infer_tags([s['name']], tag_slug_to_id)):
+                tag_id = tag_slug_to_id.get(slug)
+                if tag_id:
+                    dest_cursor.execute(
+                        "INSERT IGNORE INTO program_tags (program_id, tag_id) VALUES (%s, %s)",
+                        (prog_id, tag_id)
+                    )
+
+        imported += 1
+        if imported % 25 == 0:
+            dest_conn.commit()
+
+    stats['camps_synced']    = imported
+    stats['camps_skipped']   = skipped
+    stats['camps_unchanged'] = unchanged
+
+    if not dry_run and imported % 25 != 0:
+        dest_conn.commit()
+
+    print(f"\n  {'(DRY) ' if dry_run else ''}Result: "
+          f"{imported} synced, {unchanged} unchanged, {skipped} skipped (no sessions)")
+
+    # ── 4. Sync program_dates ─────────────────────────────────────────────────
+    print("\n=== Sync program_dates ===")
+
+    dest_cursor.execute("SELECT id FROM programs WHERE status=1")
+    active_prog_ids = {r['id'] for r in dest_cursor.fetchall()}
+
+    matched = [
+        r for r in src_sdates
+        if r['seid'] in active_prog_ids
+        and r['end_date'] and r['end_date'] >= today
+    ]
+
+    from collections import defaultdict as _dd
+    by_prog = _dd(list)
+    for r in matched:
+        by_prog[r['seid']].append(r)
+
+    print(f"  {len(matched)} future session_date rows across {len(by_prog)} programs")
+
+    if not dry_run and by_prog:
+        prog_id_list = ','.join(str(pid) for pid in by_prog)
+        dest_cursor.execute(
+            f"DELETE FROM program_dates WHERE end_date >= %s "
+            f"AND program_id IN ({prog_id_list})",
+            (today,)
+        )
+        inserted = 0
+        for r in matched:
+            dest_cursor.execute(
+                """
+                INSERT IGNORE INTO program_dates
+                    (program_id, start_date, end_date, cost_from, cost_to,
+                     before_care, after_care)
+                VALUES (%s, %s, %s, %s, %s, %s, %s)
+                """,
+                (r['seid'], r['start_date'], r['end_date'],
+                 r['cost_from'], r['cost_to'],
+                 r['before_care'], r['after_care'])
+            )
+            inserted += 1
+            if inserted % 100 == 0:
+                dest_conn.commit()
+        stats['dates_inserted'] = inserted
+    elif dry_run:
+        stats['dates_inserted'] = len(matched)
+
+    # ── Commit & summary ──────────────────────────────────────────────────────
+    if not dry_run:
+        dest_conn.commit()
+
+    dest_cursor.close()
+    dest_conn.close()
+
+    prefix = "DRY RUN — " if dry_run else ""
+    print("\n" + "=" * 60)
+    print(f"{prefix}Sync complete")
+    print(f"  New camps inserted:       {stats['new_camps']}")
+    print(f"  Camps re-activated:       {stats['reactivated']}")
+    if deactivate:
+        print(f"  Camps deactivated:        {stats['deactivated']}")
+    print(f"  Metadata updated:         {stats['meta_updated']}")
+    print(f"  Camps synced (changed):   {stats['camps_synced']}")
+    print(f"  Camps unchanged:          {stats['camps_unchanged']}")
+    print(f"  Camps skipped (no data):  {stats['camps_skipped']}")
+    print(f"  Program dates inserted:   {stats['dates_inserted']}")
+    print("=" * 60)
+
+
+if __name__ == "__main__":
+    parser = argparse.ArgumentParser(
+        description="Sync CSC Aiven DB from OurKids source MySQL"
+    )
+    parser.add_argument("--dry-run", action="store_true",
+                        help="Preview changes without writing to DB")
+    parser.add_argument("--deactivate", action="store_true",
+                        help="Deactivate camps whose status=0 in source "
+                             "(i.e. no longer on OurKids). Always dry-run first.")
+    parser.add_argument("--skip-ids", default="",
+                        help="Comma-separated camp IDs to protect from deactivation "
+                             "(default protected: 422,529,579,1647)")
+    args = parser.parse_args()
+
+    skip_ids = PROTECTED_IDS.copy()
+    if args.skip_ids:
+        for s in args.skip_ids.split(','):
+            s = s.strip()
+            if s.isdigit():
+                skip_ids.add(int(s))
+
+    run(
+        dry_run=args.dry_run,
+        deactivate=args.deactivate,
+        skip_ids=skip_ids,
+    )

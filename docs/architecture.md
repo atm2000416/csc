@@ -3,7 +3,7 @@
 **Product:** camps.ca AI Powered Camp Finder
 **Version:** 1.0
 **Status:** Production
-**Last Updated:** 2026-03-12
+**Last Updated:** 2026-03-13
 
 ---
 
@@ -515,19 +515,43 @@ A static Python module (no DB dependency) providing all alias lookups used by th
 | `AGE_ALIASES` | 30+ | age label → `{age_from, age_to}` |
 | `TAG_METADATA` | 200+ | slug → `{display, level, domain, aliases}` |
 
-### 7.3 Data Sync (`db/sync_from_dump.py`)
+### 7.3 Data Sync
 
-Programme data is sourced from periodic SQL dumps provided by OurKids.net. The sync script is run manually whenever a new dump is received.
+Programme data is sourced directly from the OurKids MySQL database via an automated pipeline.
 
-| Flag | Effect |
-|------|--------|
-| `--import-all-sessions` | **Recommended.** For every active camp with sessions in the dump: delete existing programmes, re-import all sessions with inferred activity tags. Idempotent. |
-| `--deactivate` | Deactivate camps whose `status=0` in the dump. Always review dry-run first. |
-| `--update-meta` | Refresh tier, website, and URL slug from dump. |
-| `--seed-programs` | First-time only: create a single default programme for camps with zero programmes. |
-| `--dry-run` | Preview all changes without writing to DB. Always run before a live sync. |
+#### Automated sync (`db/sync_from_source.py` + `.github/workflows/sync.yml`)
 
-Activity tags are inferred from session names during import via a keyword map (`infer_tags()`), e.g. "Lil Chefs Camp" → `cooking`, "Zoology & Nature Camp" → `nature-environment, zoology`.
+A GitHub Actions workflow runs every 2 hours and on demand. It connects to OurKids MySQL as a read-only `csc_reader` user, detects changes, and writes updates to the Aiven destination DB.
+
+```
+OurKids MySQL (read-only)   →   GitHub Actions (every 2h)   →   Aiven MySQL (CSC)
+  csc_reader user                db/sync_from_source.py           programs, program_tags
+                                 .github/workflows/sync.yml        program_dates, camps
+```
+
+Operations performed on every run:
+
+| Operation | Effect |
+|-----------|--------|
+| Upsert active camps | INSERT new, UPDATE tier/meta/prettyurl for existing |
+| Sync programs | For camps whose session set has changed: delete existing programmes, reinsert from source + infer activity tags |
+| Sync program_dates | Refresh future date rows from `session_date` source table |
+| Deactivate departed | `--deactivate` flag: status=0 for camps no longer in source |
+
+Activity tags are inferred from session names via a keyword map (`infer_tags()`), e.g. "Lil Chefs Camp" → `cooking`, "Zoology & Nature Camp" → `nature-environment, zoology`. The `_KEYWORD_TO_TAGS` map is maintained identically in both sync scripts.
+
+**Protected IDs** (never deactivated): `422` Canlan Etobicoke · `529` Canlan Scarborough · `579` Canlan Oakville · `1647` Idea Labs Pickering.
+
+Manual trigger: GitHub repo → Actions tab → "Sync OurKids → Aiven" → Run workflow.
+
+#### Emergency fallback (`db/sync_from_dump.py`)
+
+The original dump-file sync script is kept for emergency use (e.g. OurKids DB unreachable, source schema change requiring investigation). It is not part of the normal sync cadence.
+
+```bash
+python3 db/sync_from_dump.py --dump /path/to/dump.sql --import-all-sessions --dry-run
+python3 db/sync_from_dump.py --dump /path/to/dump.sql --import-all-sessions
+```
 
 ---
 
@@ -630,21 +654,29 @@ Logs each completed search to a DB table for analytics: session ID, raw query, r
 | Application server | Streamlit Cloud | Auto-deploys on push to `main` branch |
 | Database | Aiven managed MySQL | SSL/TLS connection; CA cert via `DB_SSL_CA_CERT` Streamlit secret |
 | LLM API | Anthropic Claude | API key via `ANTHROPIC_API_KEY` Streamlit secret |
+| Data sync | GitHub Actions | Runs `db/sync_from_source.py` every 2 hours; also manually triggerable |
 | Session storage | Streamlit `session_state` | Server-side, ephemeral, per-user, no external store |
 | Semantic cache | `session_state` | Per-session only; cleared on page reload |
 
 ### Secrets Reference
 
-| Secret | Purpose |
-|--------|---------|
-| `ANTHROPIC_API_KEY` | Claude API authentication |
-| `DB_HOST`, `DB_USER`, `DB_PASSWORD`, `DB_NAME`, `DB_PORT` | MySQL connection |
-| `DB_SSL_CA_CERT` | Aiven CA certificate (base64 or PEM string) |
-| `ICS_HIGH_THRESHOLD` | Decision matrix ICS threshold (default `0.70`) |
-| `RCS_HIGH_THRESHOLD` | Decision matrix RCS threshold (default `0.70`) |
-| `RERANKER_THRESHOLD` | Pool size above which reranker fires (default `15`) |
-| `DIVERSITY_MAX_PER_CAMP` | Max programmes per camp before diversity filter (default `2`) |
-| `RESULTS_POOL_SIZE` | CSSL pool limit (default `100`) |
+Secrets are stored in two places: **Streamlit Cloud** (for the live app) and **GitHub Actions** (for the automated sync). The Aiven DB secrets must be present in both.
+
+| Secret | Streamlit Cloud | GitHub Actions | Purpose |
+|--------|:--------------:|:--------------:|---------|
+| `ANTHROPIC_API_KEY` | ✓ | — | Claude API authentication |
+| `DB_HOST`, `DB_USER`, `DB_PASSWORD`, `DB_NAME`, `DB_PORT` | ✓ | ✓ | Aiven MySQL connection |
+| `DB_SSL_CA_CERT` | ✓ | ✓ | Aiven CA certificate (PEM string) |
+| `SOURCE_DB_HOST` | — | ✓ | OurKids MySQL hostname/IP |
+| `SOURCE_DB_PORT` | — | ✓ | OurKids MySQL port (default 3306) |
+| `SOURCE_DB_NAME` | — | ✓ | OurKids database name |
+| `SOURCE_DB_USER` | — | ✓ | `csc_reader` (read-only) |
+| `SOURCE_DB_PASSWORD` | — | ✓ | csc_reader password |
+| `ICS_HIGH_THRESHOLD` | ✓ | — | Decision matrix ICS threshold (default `0.70`) |
+| `RCS_HIGH_THRESHOLD` | ✓ | — | Decision matrix RCS threshold (default `0.70`) |
+| `RERANKER_THRESHOLD` | ✓ | — | Pool size above which reranker fires (default `15`) |
+| `DIVERSITY_MAX_PER_CAMP` | ✓ | — | Max programmes per camp before diversity filter (default `2`) |
+| `RESULTS_POOL_SIZE` | ✓ | — | CSSL pool limit (default `100`) |
 
 ---
 

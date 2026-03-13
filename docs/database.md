@@ -119,29 +119,44 @@ Example hierarchy: "Hip Hop" → h3(Dance multi) → h2(Arts multi) → h1(Arts)
 
 ---
 
-## Legacy Dump Sync (`db/sync_from_dump.py`)
+## Data Sync
 
-### Activation signal
-**`status` (index 5)** in the legacy camps tuple = active/inactive.
-`showAnalytics` (index 16, defaults 1) — sales analytics toggle, not an activation signal.
+### Normal operation — automated sync (`db/sync_from_source.py`)
 
-### Workflow
+Runs every 2 hours via GitHub Actions. Queries OurKids MySQL directly as the read-only
+`csc_reader` user. Only processes camps whose session set has actually changed — unchanged
+camps are skipped entirely.
+
 ```bash
-# 1. Always dry-run first
-python3 db/sync_from_dump.py --dump /path/to/dump.sql --dry-run
+# Dry-run (always safe — reads source, writes nothing)
+python3 db/sync_from_source.py --dry-run
 
-# 2. Standard sync (new camps + re-activations + locations + program dates)
-python3 db/sync_from_dump.py --dump /path/to/dump.sql
-
-# 3. With deactivations (review dry-run output carefully first)
-python3 db/sync_from_dump.py --dump /path/to/dump.sql --deactivate --skip-ids 422,529,579,1647
-
-# 4. Full sync including tier/website metadata
-python3 db/sync_from_dump.py --dump /path/to/dump.sql --deactivate --update-meta --skip-ids 422,529,579,1647
-
-# 5. Seed programs/tags for newly-active camps with no programs
-python3 db/sync_from_dump.py --dump /path/to/dump.sql --seed-programs
+# Live sync with deactivations (what GitHub Actions runs)
+python3 db/sync_from_source.py --deactivate --skip-ids 422,529,579,1647
 ```
+
+Requires environment variables (or Streamlit secrets):
+`SOURCE_DB_HOST`, `SOURCE_DB_PORT`, `SOURCE_DB_NAME`, `SOURCE_DB_USER`, `SOURCE_DB_PASSWORD`
+plus the usual `DB_*` Aiven connection variables.
+
+Manual trigger: GitHub repo → Actions → "Sync OurKids → Aiven" → Run workflow.
+
+### Emergency fallback — dump file sync (`db/sync_from_dump.py`)
+
+Used when the OurKids source DB is unreachable or a schema change needs investigation.
+Parses a `.sql` dump file instead of querying live.
+
+```bash
+# Standard emergency re-sync
+python3 db/sync_from_dump.py --dump /path/to/dump.sql --import-all-sessions --dry-run
+python3 db/sync_from_dump.py --dump /path/to/dump.sql --import-all-sessions
+
+# Full sync with deactivations + metadata
+python3 db/sync_from_dump.py --dump /path/to/dump.sql --deactivate --update-meta \
+  --skip-ids 422,529,579,1647
+```
+
+Default dump path: `/Users/181lp/Documents/CLAUDE_code/csc_migration/camp_directory_dump20260311.sql`
 
 ### Protected skip-ids (manually promoted sub-locations — never deactivate)
 | ID | Camp |
@@ -151,10 +166,11 @@ python3 db/sync_from_dump.py --dump /path/to/dump.sql --seed-programs
 | 579 | Canlan Sports - Oakville |
 | 1647 | Idea Labs Kids Pickering & Whitby |
 
-### What sync does NOT touch
-- `activity_tags`, `program_tags` — curated manually in new DB
-- Programs/tags for existing active camps
-- Camps with IDs above ~2110 (manually created location branches)
+### Activation signal
+**`status` (field 5/`status` column)** = active/inactive in both legacy and source schemas.
+`showAnalytics` (index 16, defaults 1) — sales analytics toggle, not an activation signal.
 
-### Default dump path
-`/Users/181lp/Documents/CLAUDE_code/csc_migration/camp_directory_dump20260311.sql`
+### What sync does NOT touch
+- `activity_tags` — curated manually in Aiven DB
+- Camps with IDs not present in the source (manually created location branches)
+- Programs for camps whose session set is unchanged (automated sync skips them)

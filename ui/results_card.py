@@ -53,7 +53,7 @@ def _date_range_str(start, end) -> str:
     return f"{_MONTHS[s.month-1]} {s.day}"
 
 
-_UTM = "utm_source=campsca-ourkids&utm_medium=ai-search&utm_campaign=csc"
+_UTM = "utm_source=camps.ca&utm_medium=ai-search&utm_campaign=csc"
 
 
 def _camps_url(prettyurl: str) -> str:
@@ -86,17 +86,17 @@ def _age_str(age_from, age_to) -> str:
 
 
 _BTN = (
-    "display:inline-block; margin-right:8px; "
-    "padding:5px 14px; border-radius:24px; font-size:0.78rem; font-weight:700; "
+    "display:inline-flex; align-items:center; margin-right:8px; margin-bottom:6px; "
+    "padding:10px 16px; border-radius:24px; font-size:0.84rem; font-weight:700; "
     "font-family:Nunito,sans-serif; text-decoration:none; "
-    "background:#8A9A5B; color:white; "
+    "background:#8A9A5B; color:white; min-height:44px; "
     "box-shadow:3px 3px 8px rgba(117,131,77,0.35);"
 )
 
 _PILL = (
-    "display:inline-block; margin:0 5px 0 0; "
-    "padding:2px 10px; border-radius:20px; "
-    "font-size:0.76rem; font-weight:600; font-family:Nunito,sans-serif; "
+    "display:inline-block; margin:0 5px 4px 0; "
+    "padding:4px 10px; border-radius:20px; "
+    "font-size:0.82rem; font-weight:600; font-family:Nunito,sans-serif; "
     "background:#f0f4e8; color:#4a6040; border:1px solid #d0dbb8;"
 )
 
@@ -168,7 +168,7 @@ def render_card(result: dict):
 
     # ── Assemble card ──────────────────────────────────────────────────────────
     card_html = (
-        f'<div style="padding:0 1.4rem; margin-bottom:10px;">'
+        f'<div style="padding:0 0.4rem; margin-bottom:10px;">'
         f'<div style="border-left:4px solid {tier_col}; border-radius:12px; '
         f'background:#ffffff; padding:14px 16px 12px 16px; '
         f'box-shadow:0 2px 8px rgba(47,79,79,0.08);">'

@@ -250,6 +250,71 @@ section[data-testid="stBottom"] > div,
 
 /* ── Dividers ── */
 hr { border-color: #d8e4d0 !important; margin: 0.8rem 0 !important; }
+
+/* ── Mobile — tablet (≤768px) ── */
+@media (max-width: 768px) {
+    .camps-topbar {
+        padding: 0 0.75rem;
+        height: 60px;
+    }
+    .camps-topbar .logo {
+        font-size: 1.25rem;
+    }
+    .camps-topbar .badge {
+        display: none;
+    }
+    .topbar-btn {
+        padding: 5px 12px;
+        font-size: 0.78rem;
+    }
+    .main-content {
+        padding: 0 0.6rem;
+        margin-top: 76px;
+    }
+    [data-testid="stExpander"] {
+        top: 60px !important;
+    }
+    /* Larger touch targets for link buttons */
+    .stLinkButton a {
+        padding: 0.55rem 1rem !important;
+        font-size: 0.84rem !important;
+        min-height: 44px !important;
+        display: inline-flex !important;
+        align-items: center !important;
+    }
+    /* Larger touch targets for st.buttons */
+    .stButton > button {
+        padding: 0.55rem 1.1rem !important;
+        min-height: 44px !important;
+    }
+    /* Chat input larger tap target */
+    [data-testid="stChatInput"] textarea {
+        font-size: 1rem !important;
+        padding: 0.7rem 1.1rem !important;
+    }
+}
+
+/* ── Mobile — phone (≤480px) ── */
+@media (max-width: 480px) {
+    /* Hide topbar action buttons — use chat for navigation */
+    .topbar-btn {
+        display: none;
+    }
+    .camps-topbar .logo {
+        font-size: 1.15rem;
+    }
+    .main-content {
+        padding: 0 0.4rem;
+    }
+    /* Full-width chat bubbles */
+    [data-testid="stChatMessage"] > div {
+        max-width: 92% !important;
+    }
+    /* Reduce card outer padding */
+    .result-count {
+        padding: 0 0.5rem;
+    }
+}
 </style>
 """, unsafe_allow_html=True)
 

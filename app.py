@@ -315,6 +315,37 @@ def process_results(results: list[dict], raw_query: str, intent_params: dict) ->
     return rerank(diverse, raw_query, intent_params, top_n=10)
 
 
+@st.cache_data(ttl=300, show_spinner=False)
+def _fetch_all_camp_programs(camp_id: int, exclude_program_id: int, camp_name: str) -> list[dict]:
+    """
+    Return all active, non-expired programs for a camp, excluding the one
+    already shown as the primary card and the generic placeholder (name=camp name).
+    """
+    try:
+        from db.connection import get_connection
+        conn   = get_connection()
+        cursor = conn.cursor(dictionary=True)
+        cursor.execute(
+            "SELECT p.id, p.name, p.type, p.age_from, p.age_to, "
+            "       p.cost_from, p.cost_to, p.start_date, p.end_date, "
+            "       c.camp_name, c.tier, c.city, c.province, c.slug, c.website, "
+            "       p.camp_id "
+            "FROM programs p "
+            "JOIN camps c ON c.id = p.camp_id "
+            "WHERE p.camp_id = %s AND p.status = 1 AND p.id != %s "
+            "  AND p.name != %s "
+            "  AND (p.end_date IS NULL OR p.end_date >= CURDATE()) "
+            "ORDER BY p.name",
+            (camp_id, exclude_program_id, camp_name)
+        )
+        rows = cursor.fetchall()
+        cursor.close()
+        conn.close()
+        return rows
+    except Exception:
+        return []
+
+
 def display_results(results: list[dict]):
     if not results:
         st.info("No camps found matching your search. Try adjusting your filters.")
@@ -323,28 +354,34 @@ def display_results(results: list[dict]):
     # Group by camp_id, preserving rank order (first occurrence = camp's rank)
     groups: dict[int, list[dict]] = {}
     for r in results:
-        cid = r.get("camp_id") or id(r)   # fallback key for results with no camp_id
+        cid = r.get("camp_id") or id(r)
         if cid not in groups:
             groups[cid] = []
         groups[cid].append(r)
 
-    n_camps    = len(groups)
-    n_sessions = len(results)
-    if n_sessions > n_camps:
-        count_label = (f'{n_camps} camp{"s" if n_camps != 1 else ""} · '
-                       f'{n_sessions} sessions found')
-    else:
-        count_label = f'{n_sessions} result{"s" if n_sessions != 1 else ""} found'
-
+    n_camps = len(groups)
+    count_label = f'{n_camps} camp{"s" if n_camps != 1 else ""} found'
     st.markdown(f'<p class="result-count">{count_label}</p>', unsafe_allow_html=True)
     render_filters()
 
     for camp_sessions in groups.values():
-        top    = camp_sessions[0]
-        extras = camp_sessions[1:]
+        top = camp_sessions[0]
         render_card(top)
-        if extras:
-            render_extra_sessions(extras, top.get("camp_name", ""), top.get("tier", "bronze"))
+
+        # Build the full session list for the expander:
+        # reranker extras + any remaining DB programs not yet shown
+        camp_id   = top.get("camp_id")
+        camp_name = top.get("camp_name", "")
+        shown_ids = {r.get("id") for r in camp_sessions}
+
+        db_extras = _fetch_all_camp_programs(camp_id, top.get("id", -1), camp_name)
+        # Merge: reranker extras first (they have blurbs), then DB extras not already shown
+        reranker_extras = camp_sessions[1:]
+        db_only = [r for r in db_extras if r.get("id") not in shown_ids]
+        all_extras = reranker_extras + db_only
+
+        if all_extras:
+            render_extra_sessions(all_extras, camp_name, top.get("tier", "bronze"))
 
 
 _BUBBLE_BASE = (

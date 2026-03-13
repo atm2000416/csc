@@ -53,8 +53,8 @@ def _date_range_str(start, end) -> str:
     return f"{_MONTHS[s.month-1]} {s.day}"
 
 
-def _camps_url(slug: str, camp_id: int) -> str:
-    return f"https://www.camps.ca/{slug}/{camp_id}"
+def _camps_url(prettyurl: str) -> str:
+    return f"https://www.camps.ca/{prettyurl}"
 
 
 def _normalise_website(url: str) -> str:
@@ -113,8 +113,7 @@ def render_card(result: dict):
     gender       = _GENDER_LABEL.get(result.get("gender"), "")
     rationale    = result.get("blurb") or ""
     website      = result.get("website", "")
-    camp_slug    = result.get("slug", "")
-    camp_id      = result.get("camp_id")
+    prettyurl    = result.get("prettyurl") or result.get("slug", "")
 
     # ── Line 1: Session Information ────────────────────────────────────────────
     line1 = (
@@ -156,8 +155,8 @@ def render_card(result: dict):
 
     # ── Buttons ────────────────────────────────────────────────────────────────
     buttons_html = ""
-    if camp_slug and camp_id:
-        buttons_html += f'<a href="{_camps_url(camp_slug, camp_id)}" target="_blank" style="{_BTN}">View on camps.ca →</a>'
+    if prettyurl:
+        buttons_html += f'<a href="{_camps_url(prettyurl)}" target="_blank" style="{_BTN}">View on camps.ca →</a>'
     if website:
         buttons_html += f'<a href="{_normalise_website(website)}" target="_blank" style="{_BTN}">Camp Website →</a>'
 
@@ -230,12 +229,11 @@ def render_extra_sessions(extra: list[dict], camp_name: str, tier: str) -> None:
             meta_parts = [p for p in [camp_type, ages, cost, date_s] if p]
             meta_str   = "  ·  ".join(meta_parts)
 
-            slug    = r.get("slug", "")
-            camp_id = r.get("camp_id")
+            prettyurl = r.get("prettyurl") or r.get("slug", "")
             link_html = ""
-            if slug and camp_id:
+            if prettyurl:
                 link_html = (
-                    f'<a href="{_camps_url(slug, camp_id)}" target="_blank" '
+                    f'<a href="{_camps_url(prettyurl)}" target="_blank" '
                     f'style="{_ROW_LINK}">View →</a>'
                 )
 

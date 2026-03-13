@@ -328,7 +328,7 @@ def _fetch_all_camp_programs(camp_id: int, exclude_program_id: int, camp_name: s
         cursor.execute(
             "SELECT p.id, p.name, p.type, p.age_from, p.age_to, "
             "       p.cost_from, p.cost_to, p.start_date, p.end_date, "
-            "       c.camp_name, c.tier, c.city, c.province, c.slug, c.website, "
+            "       c.camp_name, c.tier, c.city, c.province, c.slug, c.prettyurl, c.website, "
             "       p.camp_id "
             "FROM programs p "
             "JOIN camps c ON c.id = p.camp_id "

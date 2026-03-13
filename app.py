@@ -842,8 +842,9 @@ def _run_search(merged_params: dict, raw_query: str, session: dict, sidebar_filt
 
     # Route handlers
     if decision.route == Route.SHOW_RESULTS:
-        final = process_results(results, raw_query, merged_params)
-        msg = generate_concierge_response(final, raw_query, merged_params, "SHOW_RESULTS")
+        with st.spinner("Finding the best matches…"):
+            final = process_results(results, raw_query, merged_params)
+            msg = generate_concierge_response(final, raw_query, merged_params, "SHOW_RESULTS")
         record("output", {"route": "SHOW_RESULTS", "final_count": len(final),
                           "top_camps": [r.get("camp_name") for r in final],
                           "concierge_msg": msg[:200]})
@@ -867,16 +868,17 @@ def _run_search(merged_params: dict, raw_query: str, session: dict, sidebar_filt
             "combined_count": len(all_results),
         })
         if all_results:
-            final = process_results(all_results, raw_query, merged_params)
-            max_score = max((r.get("rerank_score", 0.0) for r in final), default=0.0)
-            if max_score < 0.45 and not results:
-                diag = _diagnose_zero_results(merged_params)
-                record("output", {"route": "ZERO_RESULTS", "reason": "casl_low_relevance",
-                                  "advisor_type": diag.get("type")})
-                render_trace()
-                _show_zero_results(diag)
-                return
-            msg = generate_concierge_response(final, raw_query, merged_params, "BROADEN_SEARCH")
+            with st.spinner("Finding the best matches…"):
+                final = process_results(all_results, raw_query, merged_params)
+                max_score = max((r.get("rerank_score", 0.0) for r in final), default=0.0)
+                if max_score < 0.45 and not results:
+                    diag = _diagnose_zero_results(merged_params)
+                    record("output", {"route": "ZERO_RESULTS", "reason": "casl_low_relevance",
+                                      "advisor_type": diag.get("type")})
+                    render_trace()
+                    _show_zero_results(diag)
+                    return
+                msg = generate_concierge_response(final, raw_query, merged_params, "BROADEN_SEARCH")
             record("output", {"route": "BROADEN_SEARCH", "final_count": len(final),
                                "top_camps": [r.get("camp_name") for r in final],
                                "concierge_msg": msg[:200]})
@@ -895,8 +897,9 @@ def _run_search(merged_params: dict, raw_query: str, session: dict, sidebar_filt
             _show_zero_results(diag)
 
     elif decision.route == Route.SHOW_CLARIFY:
-        final = process_results(results, raw_query, merged_params)
-        msg = generate_concierge_response(final, raw_query, merged_params, "SHOW_CLARIFY")
+        with st.spinner("Finding the best matches…"):
+            final = process_results(results, raw_query, merged_params)
+            msg = generate_concierge_response(final, raw_query, merged_params, "SHOW_CLARIFY")
         record("output", {"route": "SHOW_CLARIFY", "final_count": len(final),
                           "clarification_dims": decision.clarification_dimensions,
                           "concierge_msg": msg[:200]})
@@ -913,9 +916,10 @@ def _run_search(merged_params: dict, raw_query: str, session: dict, sidebar_filt
         clarify_msg = ""
         zero_diag = None
         if results:
-            final = process_results(results, raw_query, merged_params)
-            clarify_final_count = len(final)
-            clarify_msg = generate_concierge_response(final, raw_query, merged_params, "SHOW_CLARIFY")
+            with st.spinner("Finding the best matches…"):
+                final = process_results(results, raw_query, merged_params)
+                clarify_final_count = len(final)
+                clarify_msg = generate_concierge_response(final, raw_query, merged_params, "SHOW_CLARIFY")
         elif not decision.clarification_dimensions:
             # No results and no clarification dims — pre-diagnose before render_trace
             zero_diag = _diagnose_zero_results(merged_params)

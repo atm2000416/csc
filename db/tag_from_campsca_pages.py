@@ -202,6 +202,170 @@ WEBITEMS_TO_SLUG: dict[str, str] = {
 }
 
 
+# ── URL overrides ─────────────────────────────────────────────────────────────
+# Two classes of broken URLs in the Excel:
+#   1. /camp/* pages — newer SEO pages with only a general all-camps dropdown
+#   2. Dash-format .php pages (e.g. /golf-camps.php) — redirect to homepage
+# Both return all 276 camps regardless of activity.
+# Map them to working underscore/specific .php equivalents.
+CAMP_PAGE_OVERRIDES: dict[str, str] = {
+    # ── Dash-format .php → correct underscore versions ──
+    "/baseball-camps.php":          "/baseball_camps.php",
+    "/basketball-camps.php":        "/basketball-summer-camps.php",
+    "/cheerleading-camps.php":      "/cheerleading-summer-camps.php",
+    "/dance-camps.php":             "/dance_camps.php",
+    "/dance-programs.php":          "/dance_camps.php",
+    "/drama-acting-camps.php":      "/drama_camps.php",
+    "/golf-camps.php":              "/golf_camps.php",
+    "/gymnastics-camps.php":        "/gymnastics_camps.php",
+    "/hockey-camps.php":            "/hockey_schools_camps.php",
+    "/horse-camps.php":             "/horse_camps.php",
+    "/lacrosse-camps.php":          "/lacrosse-summer-camps.php",
+    "/karate-camps.php":            "/martial_arts_camps.php",
+    "/kayaking-camps.php":          "/kayak-camp.php",
+    "/leadership-camps.php":        "/education_camps.php",
+    "/math-camps.php":              "/math-camp.php",
+    "/music-camps.php":             "/music_camps.php",
+    "/music-programs.php":          "/music_camps.php",
+    "/engineering-camps.php":       "/engineer-camps.php",
+    "/fishing-camps.php":           "/fish-camps.php",
+    "/fitness-boot-camps.php":      "/boot-camps-fitness.php",
+    "/film-video-camps.php":        "/arts_camps.php",
+    "/fashion-camps.php":           "/arts_camps.php",
+    "/cycling-camps.php":           "/sports_camps.php",
+    "/camp/animal-camps":                       "/animal-camps.php",
+    "/camp/martial-arts-camps":                 "/martial_arts_camps.php",
+    "/camp/martial-arts-programs":              "/martial_arts_camps.php",
+    "/camp/taekwondo-camps":                    "/taekwondo-camps.php",
+    "/camp/taekwondo-classes":                  "/taekwondo-camps.php",
+    "/camp/rugby-camps":                        "/rugby-camps-for-kids.php",
+    "/camp/yoga-camps":                         "/yoga-camps.php",
+    "/camp/yoga-programs":                      "/yoga-camps.php",
+    "/camp/debate-and-public-speaking-camps":   "/debate-and-speech-camps-for-kids.php",
+    "/camp/public-speaking-classes":            "/debate-and-speech-camps-for-kids.php",
+    "/camp/magic-camps":                        "/magic-camps.php",
+    "/camp/minecraft-camps":                    "/minecraft-camps.php",
+    "/camp/minecraft-programs":                 "/minecraft-camps.php",
+    "/camp/stem-camps":                         "/stem-camps.php",
+    "/camp/stem-programs":                      "/stem-camps.php",
+    "/camp/steam-camps":                        "/stem-camps.php",
+    "/camp/steam-programs":                     "/stem-camps.php",
+    "/camp/technology-camps":                   "/technology-camps.php",
+    "/camp/technology-programs":               "/technology-camps.php",
+    "/camp/horse-camps-alberta":               "/horse_camps.php",
+    "/camp/horseback-riding-lessons":          "/horse_camps.php",
+    "/camp/swimming-camps":                    "/swimming_camps.php",
+    "/camp/tennis-programs":                   "/tennis_camps.php",
+    "/camp/volleyball-programs":               "/volleyball_camps.php",
+    "/camp/robotics-classes":                  "/robotics-camp-kids.php",
+    "/camp/musical-theatre-camps":             "/drama_camps.php",
+    "/camp/theatre-arts-camps":               "/drama_camps.php",
+    "/camp/theatre-arts-programs":            "/drama_camps.php",
+    "/camp/acting-film-tv":                   "/drama_camps.php",
+    "/camp/acting-classes":                   "/drama_camps.php",
+    "/camp/comedy-camps":                     "/drama_camps.php",
+    "/camp/arts-crafts-camps":               "/arts_camps.php",
+    "/camp/arts-crafts-programs":            "/arts_camps.php",
+    "/camp/visual-arts-camps":               "/arts_camps.php",
+    "/camp/visual-arts-classes":             "/arts_camps.php",
+    "/camp/drawing-camps":                   "/arts_camps.php",
+    "/camp/drawing-classes":                 "/arts_camps.php",
+    "/camp/online-drawing-classes":          "/arts_camps.php",
+    "/camp/painting-camps":                  "/arts_camps.php",
+    "/camp/painting-classes":               "/arts_camps.php",
+    "/camp/coding-classes":                  "/summer-programming.php",
+    "/camp/online-coding-classes":           "/summer-programming.php",
+    "/camp/engineering-programs":            "/engineer-camps.php",
+    "/camp/lego-programs":                   "/lego-camps.php",
+    "/camp/video-game-web-design":           "/game-design-camps.php",
+    "/camp/roblox-camps":                    "/game-design-camps.php",
+    "/camp/soccer-programs":                 "/soccer_camps.php",
+    "/camp/toronto-soccer-camps":            "/soccer_camps.php",
+    "/camp/girls-soccer":                    "/soccer_camps.php",
+    "/camp/basketball-programs":             "/basketball-summer-camps.php",
+    "/camp/baseball-programs":               "/baseball_camps.php",
+    "/camp/hockey-programs":                 "/hockey_schools_camps.php",
+    "/camp/sailing-lessons":                 "/sailing_camps.php",
+    "/camp/nature-camps":                    "/adventure_camps.php",
+    "/camp/nature-environment-programs":     "/adventure_camps.php",
+    "/camp/wilderness-skills-camps":         "/wilderness_trip_camps.php",
+    "/camp/canoe-camps":                     "/kayak-camp.php",
+    "/camp/waterski-camps":                  "/wakeboard-camp.php",
+    "/camp/figure-skating-camps":            "/skating_camps.php",
+    "/camp/ball-sports-camps":              "/multi-sports-camp.php",
+    "/camp/performing-arts-programs":        "/performing-arts-camp.php",
+    "/camp/math-programs":                   "/math-camp.php",
+    "/camp/language-studies-camps":         "/french-camps.php",
+    "/camp/language-studies-programs":      "/french-camps.php",
+    "/camp/tutoring-programs":              "/education_camps.php",
+    "/camp/tutoring-programs-instructor-led": "/education_camps.php",
+    "/camp/leadership-training-programs":   "/education_camps.php",
+    "/camp/creative-writing-camps":         "/education_camps.php",
+    "/camp/creative-writing-classes":       "/education_camps.php",
+    "/camp/writing-classes":               "/education_camps.php",
+    "/camp/writing-journalism-camps":      "/education_camps.php",
+    "/camp/reading-camps":                 "/education_camps.php",
+    "/camp/reading-programs":             "/education_camps.php",
+    "/camp/power-of-words":              "/education_camps.php",
+    "/camp/photography-camps":           "/arts_camps.php",
+    "/camp/video-photography-programs":  "/arts_camps.php",
+    "/camp/filmmaking-camps":            "/arts_camps.php",
+    "/camp/animation-camps":             "/arts_camps.php",
+    "/camp/animation-3-d-design":        "/arts_camps.php",
+    "/camp/music-recording-camps":       "/music_camps.php",
+    "/camp/guitar-camps":               "/music_camps.php",
+    "/camp/guitar-lessons":             "/music_camps.php",
+    "/camp/piano-camps":               "/music_camps.php",
+    "/camp/piano-lessons":             "/music_camps.php",
+    "/camp/singing-vocal-training-camps": "/music_camps.php",
+    "/camp/singing-lessons":            "/music_camps.php",
+    "/camp/percussion-camps":           "/music_camps.php",
+    "/camp/music-lessons":             "/music_camps.php",
+    "/camp/music-lessons-online":       "/music_camps.php",
+    "/camp/jam-camps":                 "/music_camps.php",
+    "/camp/hip-hop-dance-classes":     "/dance_camps.php",
+    "/camp/hiphop-camps":              "/dance_camps.php",
+    "/camp/jazz-dance-lessons":        "/dance_camps.php",
+    "/camp/jazz-dance-camps":         "/dance_camps.php",
+    "/camp/ballet-classes":           "/dance_camps.php",
+    "/camp/ballet-camps":            "/dance_camps.php",
+    "/camp/ballroom-dance-lessons":   "/dance_camps.php",
+    "/camp/ballroom-dance-camps":    "/dance_camps.php",
+    "/camp/breakdancing-lessons":     "/dance_camps.php",
+    "/camp/breakdancing-camps":      "/dance_camps.php",
+    "/camp/acro-camps":              "/dance_camps.php",
+    "/camp/acro-classes":           "/dance_camps.php",
+    # ── Additional broken dash-format pages found during scrape ──
+    "/tutors-and-learning-centres.php":  "/tutoring-centres.php",
+    "/paintball-camps.php":              "/paintball_camps.php",
+    "/sailing-camps.php":                "/sailing_camps.php",
+    "/science-camps.php":                "/science_camps.php",
+    "/soccer-camps.php":                 "/soccer_camps.php",
+    "/swimming-camps.php":               "/swimming_camps.php",
+    "/tennis-camps.php":                 "/tennis_camps.php",
+    "/volleyball-camps.php":             "/volleyball_camps.php",
+    "/weight-loss-camps.php":            "/weight-loss-fitness-camps.php",
+    "/wilderness-trips-camps.php":       "/wilderness_trip_camps.php",
+    "/video-game-design-camps.php":      "/game-design-camps.php",
+    "/skating-camps.php":                "/skate-camp.php",
+    "/performing-arts-camps.php":        "/performing-arts-camp.php",
+    "/robotics-camps.php":               "/robotics-camp-kids.php",
+    "/wakeboarding-camps.php":           "/wakeboard-camp.php",
+    "/programming-camps.php":            "/summer-programming.php",
+    "/ski-camps.php":                    "/ski-camp.php",
+    "/skateboarding-camps.php":          "/skate-camp.php",
+    "/survival-camps.php":               "/wilderness-skills-camps.php",
+    "/rock-climbing-camps.php":          None,   # no working page; skip
+    "/super-camps.php":                  None,   # no working page; skip
+    "/dwaynederosario.php":              None,   # celebrity page; skip
+    "/sueeckersley.php":                 None,   # celebrity page; skip
+    "/ashleighmcivor.php":               None,   # celebrity page; skip
+    "/science-programs.php":             "/science_camps.php",
+    "/swimming-lessons.php":             "/swimming_camps.php",
+    "/skating_camps.php":                "/skate-camp.php",
+}
+
+
 def parse_webitems(list_options: str) -> list[str]:
     """Extract SQLwebitems values from a list_options string."""
     m = re.search(r'SQLwebitems:\s*(.+?)(?:\s*,\s*SQL|\s*$)', list_options)
@@ -223,7 +387,8 @@ def load_pages_from_excel(xlsx_path: str) -> list[tuple[str, list[str]]]:
     df = pd.read_excel(xlsx_path)
 
     seen_urls: set[str] = set()
-    pages: list[tuple[str, list[str]]] = []
+    # effective_url → accumulated tag slugs (merge multiple /camp/* → same .php)
+    url_slugs: dict[str, list[str]] = {}
 
     for _, row in df.iterrows():
         url = str(row.get("page URL", "") or "").strip()
@@ -237,13 +402,32 @@ def load_pages_from_excel(xlsx_path: str) -> list[tuple[str, list[str]]]:
         items = parse_webitems(opts)
         slugs = [WEBITEMS_TO_SLUG[i] for i in items if i in WEBITEMS_TO_SLUG]
         if slugs:
-            pages.append((url, slugs))
+            # Substitute broken URLs with working equivalents; None = skip entirely
+            effective_url = CAMP_PAGE_OVERRIDES.get(url, url)
+            if effective_url is None:
+                continue
+            if effective_url not in url_slugs:
+                url_slugs[effective_url] = []
+            for s in slugs:
+                if s not in url_slugs[effective_url]:
+                    url_slugs[effective_url].append(s)
+
+    pages: list[tuple[str, list[str]]] = list(url_slugs.items())
 
     return pages
 
 
-def fetch_camp_ids(path: str) -> list[int]:
-    """Fetch a camps.ca category page and extract camp IDs from links."""
+def fetch_camp_ids(path: str, cur=None) -> list[int]:
+    """Fetch a camps.ca category page and extract camp IDs from links.
+
+    Handles two page formats:
+      - Older pages: <a href="/slug/ID">          (gymnastics_camps.php style)
+      - Newer pages: <option value="/slug/ID">    (hockey-camps.php style)
+
+    Note: /camp/* format pages (newer SEO pages) use a general all-camps
+    navigation dropdown that does not expose category-specific camp IDs —
+    these pages return 0 and are skipped by the caller.
+    """
     url = f"https://www.camps.ca{path}"
     try:
         req = urllib.request.Request(url, headers={"User-Agent": "Mozilla/5.0"})
@@ -252,7 +436,8 @@ def fetch_camp_ids(path: str) -> list[int]:
     except urllib.error.URLError as e:
         print(f"  FETCH ERROR: {e}")
         return []
-    ids = re.findall(r'href=["\']\/[a-z0-9\-]+\/(\d+)["\']', html)
+    pattern = r'(?:href|value)=["\']\/[a-z0-9\-]+\/(\d+)["\']'
+    ids = re.findall(pattern, html)
     return list({int(i) for i in ids})
 
 
@@ -270,12 +455,13 @@ def main():
     pages = load_pages_from_excel(xlsx)
     print(f"Loaded {len(pages)} unique activity pages from Excel\n")
 
-    conn = get_connection()
-    cur = conn.cursor(dictionary=True)
-
-    # Pre-load tag slug → id map
-    cur.execute("SELECT id, slug FROM activity_tags WHERE is_active = 1")
-    slug_to_id = {r["slug"]: r["id"] for r in cur.fetchall()}
+    # Pre-load tag slug → id map (fresh connection, then close)
+    _conn = get_connection()
+    _cur = _conn.cursor(dictionary=True)
+    _cur.execute("SELECT id, slug FROM activity_tags WHERE is_active = 1")
+    slug_to_id = {r["slug"]: r["id"] for r in _cur.fetchall()}
+    _cur.close()
+    _conn.close()
 
     total_ins = total_skp = 0
     results = []
@@ -287,6 +473,10 @@ def main():
             print("0 camps, skip")
             continue
 
+        # Fresh DB connection per page — avoids Aiven idle-timeout drops
+        conn = get_connection()
+        cur = conn.cursor(dictionary=True)
+
         # Filter to active camps in our DB
         ph = ",".join(["%s"] * len(camp_ids))
         cur.execute(
@@ -294,6 +484,7 @@ def main():
         )
         db_ids = [r["id"] for r in cur.fetchall()]
         if not db_ids:
+            cur.close(); conn.close()
             print(f"{len(camp_ids)} on page, 0 in DB, skip")
             continue
 
@@ -305,33 +496,35 @@ def main():
         prog_ids = [r["id"] for r in cur.fetchall()]
 
         tag_ids = [slug_to_id[s] for s in tag_slugs if s in slug_to_id]
+        pairs = [(pid, tid) for pid in prog_ids for tid in tag_ids]
         ins = skp = 0
-        for pid in prog_ids:
-            for tid in tag_ids:
-                if dry_run:
-                    ins += 1
-                else:
-                    cur.execute(
-                        "INSERT IGNORE INTO program_tags (program_id, tag_id, is_primary) "
-                        "VALUES (%s, %s, 0)",
-                        (pid, tid),
-                    )
-                    if cur.rowcount > 0:
-                        ins += 1
-                    else:
-                        skp += 1
+        if dry_run:
+            ins = len(pairs)
+        else:
+            # Bulk INSERT IGNORE in chunks of 500 for speed
+            chunk_size = 500
+            for i in range(0, len(pairs), chunk_size):
+                chunk = pairs[i : i + chunk_size]
+                placeholders = ",".join(["(%s,%s,0)"] * len(chunk))
+                flat = [v for pair in chunk for v in pair]
+                cur.execute(
+                    f"INSERT IGNORE INTO program_tags (program_id, tag_id, is_primary) "
+                    f"VALUES {placeholders}",
+                    flat,
+                )
+                ins += cur.rowcount
+            skp = len(pairs) - ins
 
         if not dry_run:
             conn.commit()
+        cur.close()
+        conn.close()
 
         total_ins += ins
         total_skp += skp
         results.append((path, len(camp_ids), len(db_ids), ins, skp))
         print(f"{len(camp_ids)} camps ({len(db_ids)} in DB) → +{ins} new tags, {skp} existed")
         time.sleep(0.3)
-
-    cur.close()
-    conn.close()
 
     print(f"\n{'[DRY RUN] ' if dry_run else ''}COMPLETE")
     print(f"Total new tag rows: {total_ins:,}")

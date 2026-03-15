@@ -4,12 +4,14 @@ Streamlit + Aiven MySQL + Claude AI. Auto-deploys to Streamlit Cloud on push to 
 
 ---
 
-## Current State (as of 2026-03-13)
+## Current State (as of 2026-03-15)
 
 - Production on Streamlit Cloud, all features working
 - LLM stack fully migrated to Claude (Haiku + Sonnet) — no Gemini references remain
 - All 269 camps with OurKids dump data have full per-session programme records
-- QA suite: 40/40 passing
+- Activity tags backfilled from camps.ca category pages (sitemap-validated): 728 camps, 10,724 new tags added
+- `db/camp_tag_overrides.json` persists scraped tags through every automated sync cycle
+- QA suite: 87/87 non-API tests passing; 40 intent parser tests require ANTHROPIC_API_KEY
 - Architecture docs: `docs/architecture.md` (full), `docs/database.md`, `docs/testing.md`
 - Automated DB sync built (`db/sync_from_source.py` + `.github/workflows/sync.yml`) — pending OurKids DBA creating `csc_reader` read-only user (Monday 2026-03-16)
 
@@ -270,6 +272,8 @@ See `secrets.toml.example` for a template.
 - **Reranker JSON error**: `raw.find('{"ranked"')` + `raw_decode` is the extraction pattern — handles preamble text from Claude
 - **Session state after refactor**: `accumulated_params` is a mirror — if a bug shows stale values, the root cause is always a mutation that bypassed `QueryState` + `sync_mirror()`
 - **Duplicate programmes from sync**: Run `--dry-run` first; the import is idempotent only if the prior run fully completed
+- **Activity tag scraping — URL corruption risk**: dash-format camps.ca URLs (e.g. `/gymnastics-camps.php`) redirect to homepage returning ALL 276 camps — will mass-tag every program incorrectly. Always use underscore `.php` format validated against `sitemap.xml`. `CAMP_PAGE_OVERRIDES` in `db/tag_from_campsca_pages.py` maps all known broken URLs to correct ones; `None` = skip page. After scraping, run `db/export_camp_tag_overrides.py` to regenerate `camp_tag_overrides.json`.
+- **Trait fuzzy aliases**: when adding a new trait word (e.g. "resilience"), add both the noun AND adjectival forms separately to `TRAIT_ALIASES` in `taxonomy_mapping.py`
 
 ---
 

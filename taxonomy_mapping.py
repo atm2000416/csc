@@ -1805,6 +1805,7 @@ TRAIT_ALIASES: dict[str, list[str]] = {
     'religion camp': ["religious-faith"],
     'religious': ["religious-faith"],
     'religious values': ["religious-faith"],
+    'resilience': ["resilience"],
     'resilient': ["resilience"],
     'respect others': ["tolerance"],
     'responsible': ["responsibility"],

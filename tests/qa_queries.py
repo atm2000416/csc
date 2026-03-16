@@ -221,7 +221,7 @@ QA_QUERIES = [
         "query": "online coding camp",
         "expect_tags_include": ["programming-multi"],
         "expect_is_virtual": True,
-        "expect_type": "Virtual Program",
+        "expect_type": "Virtual",
         "note": "Virtual program detection",
     },
     {
@@ -282,8 +282,8 @@ QA_QUERIES = [
     },
     {
         "query": "camps that build self-confidence",
-        "expect_traits_include": ["empowerment"],
-        "note": "V1 QA: Self-confidence → empowerment trait",
+        "expect_tags_include": ["empowerment"],
+        "note": "V1 QA: Self-confidence → empowerment tag (sub-tag of leadership-multi)",
     },
     {
         "query": "financial literacy camps in toronto",

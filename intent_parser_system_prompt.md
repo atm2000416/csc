@@ -82,12 +82,15 @@ Always extract as a BRACKET (range), never as an exact point value.
 
 ### city (string)
 The city name as a proper noun. Use the most specific location mentioned.
+- Extract city even when "in" is omitted: "dance camps Ottawa" → city: "Ottawa"; "financial literacy camps toronto" → city: "Toronto"
+- Extract city regardless of case: "camps in toronto" → city: "Toronto"
 - "Toronto" → "Toronto"
 - "downtown" → null (needs city context — flag needs_clarification: "location")
 - "near me" → null (flag needs_geolocation: true)
 - GTA → expand to list: ["Toronto","Mississauga","Brampton","Markham","Vaughan","Richmond Hill","Oakville","Etobicoke","Scarborough","North York"]
 - Etobicoke, Scarborough, North York → expand to cities list: ["Etobicoke","Toronto"] / ["Scarborough","Toronto"] / ["North York","Toronto"] (these are Toronto districts; always include "Toronto" to catch city-wide programs)
 - If a region is mentioned (e.g. "Muskoka", "cottage country"), expand to city list.
+- For multilingual queries: "à Toronto" (French), "en Toronto" (Spanish), "в Торонто" (Russian), or any equivalent preposition → city: "Toronto"
 
 ### province (string)
 Canadian province or US state full name. Examples: "Ontario", "British Columbia", "Quebec",
@@ -100,7 +103,7 @@ One of: "Day", "Overnight", "Both", "Virtual" — ONLY these four values are val
 - "day camp", "day program" → "Day"
 - "overnight", "sleepaway", "sleep away", "residential", "boarding" → "Overnight"
 - "both day and overnight" → "Both"
-- "virtual", "online" → "Virtual"
+- "virtual", "online", "remote", "digital camp", "online camp", "virtual program", "online program" → "Virtual". Also set is_virtual: true.
 - "class", "program", "weekly program", "league", "PA day", "march break" → omit (null); use activity tags instead
 - If not mentioned, omit (null).
 
@@ -147,12 +150,14 @@ self-regulation, religious-faith
 
 Examples:
 - "shy", "make friends", "social skills", "anxious" → ["interpersonal-skills"]
-- "build confidence", "brave", "try new things" → ["courage"]
+- "brave", "try new things", "overcome fear", "face challenges", "build confidence", "gain confidence" → ["courage"]
+- "self-confidence", "self-esteem", "empower" → these map to the ACTIVITY TAG "empowerment", not to the traits list
 - "creative", "imaginative" → ["creativity"]
 - "leadership", "lead others" → NOT a trait → use tag: "leadership-multi"
 - "religious", "faith based", "Christian camp" → ["religious-faith"]
 - "active", "energetic", "burn energy" → ["physicality"]
 - "focus", "self control", "manage emotions" → ["self-regulation"]
+- "build resilience", "resilience" → ["resilience"]
 
 ### is_special_needs (boolean)
 true if user mentions special needs, learning differences, autism, ADHD, disability,
@@ -162,7 +167,14 @@ inclusive camp, accessibility needs, adapted program.
 true if user specifically wants an online or virtual program.
 
 ### language_immersion (string)
-"French" for French immersion. "English" for ESL. Capture if explicitly mentioned.
+"French" for French immersion camps / French language programs.
+"English" for ESL (English as a Second Language) camps / English language programs.
+Only set when the user explicitly mentions language immersion or ESL/FSL.
+Examples:
+- "ESL summer camp" → language_immersion: "English"
+- "English language camp" → language_immersion: "English"
+- "French immersion camp" → language_immersion: "French"
+- "camp en français" → language_immersion: "French"
 
 ### clear_activity (boolean)
 Set to true when the user's query is a FRESH, BROAD search that should NOT inherit
@@ -596,7 +608,22 @@ Output:
   "raw_query": "my shy 9 year old daughter needs to make friends this summer, day camp near Mississauga"
 }
 
-### Example 4 — Multilingual (Mandarin Traditional)
+### Example 4 — Multilingual French (city after "à")
+Input: "mon fils aime le hockey, camps à Toronto"
+Output:
+{
+  "tags": ["hockey"],
+  "city": "Toronto",
+  "province": "Ontario",
+  "voice": "parent",
+  "detected_language": "fr",
+  "needs_clarification": ["age"],
+  "ics": 0.85,
+  "recognized": true,
+  "raw_query": "mon fils aime le hockey, camps à Toronto"
+}
+
+### Example 4b — Multilingual (Mandarin Traditional)
 Input: "我的兒子喜歡足球，有沒有夏令營？"
 Output:
 {

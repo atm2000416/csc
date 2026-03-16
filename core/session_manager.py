@@ -104,11 +104,15 @@ def _build_geo_scope(new: dict) -> GeoScope | None:
 # Main merge
 # ---------------------------------------------------------------------------
 
-def merge_intent(intent: IntentResult) -> dict:
+def merge_intent(intent: IntentResult, fuzzy_hints: dict | None = None) -> dict:
     """
     Merge new intent into the accumulated QueryState.
     All state changes go through QueryState mutation methods.
     Returns the derived flat dict (to_cssl_params()) for backward compat.
+
+    fuzzy_hints: output of fuzzy_preprocessor.preprocess() for this turn.
+    Used to distinguish user-named cities (geo_expansion present) from
+    cities that Claude carried over from session context.
     """
     session  = st.session_state.session_context
     qs: QueryState = session["_query_state"]
@@ -136,6 +140,27 @@ def merge_intent(intent: IntentResult) -> dict:
         for f in ("tags", "exclude_tags"):
             if getattr(qs, f) is not None:
                 qs.clear_field(f)
+
+    # Rule 2b: model is confident (ics ≥ 0.7) but found NO tags, NO traits, and
+    # NO other structured parameters → user is exploring ("show me something different",
+    # "what else is there?") with zero extractable intent. Clear stale tags so prior
+    # activity doesn't silently anchor results.
+    # Guard: any structured parameter (city, type, gender, age, cost, language) means
+    # the user is REFINING, not starting fresh — do not fire in that case.
+    _has_structured_params = any([
+        new.get("city"), new.get("cities"), new.get("province"),
+        new.get("type"), new.get("gender"),
+        new.get("age_from") is not None and new["age_from"] is not None,
+        new.get("age_to") is not None and new["age_to"] is not None,
+        new.get("cost_max"), new.get("language_immersion"),
+    ])
+    if (intent.recognized and intent.ics >= 0.7
+            and not intent.tags and not intent.traits
+            and not _has_structured_params):
+        if qs.tags is not None:
+            qs.clear_field("tags")
+        if qs.traits is not None:
+            qs.clear_field("traits")
 
     # Rule 3: explicit fresh-search signal — clear activity and dates, keep geo.
     if intent.clear_activity:
@@ -178,7 +203,7 @@ def merge_intent(intent: IntentResult) -> dict:
             qs.apply_inferred_update(key, val)
 
     # ------------------------------------------------------------------
-    # RC-4 post-merge: if the activity switched, strip any type/dates
+    # RC-4 post-merge: if the activity switched, strip type/dates/gender/age
     # that the scalar merge re-inherited from session context.
     # Guard: only strip if the model did NOT explicitly state them.
     # ------------------------------------------------------------------
@@ -191,6 +216,12 @@ def merge_intent(intent: IntentResult) -> dict:
             qs.clear_field("type")
         if new.get("gender") is None and qs.gender is not None:
             qs.clear_field("gender")
+        if new.get("age_from") is None and qs.age_from is not None:
+            qs.clear_field("age_from")
+        if new.get("age_to") is None and qs.age_to is not None:
+            qs.clear_field("age_to")
+        if not new.get("traits") and qs.traits is not None:
+            qs.clear_field("traits")
 
     # ------------------------------------------------------------------
     # Geography — build a GeoScope from intent and call replace_geo()
@@ -201,6 +232,18 @@ def merge_intent(intent: IntentResult) -> dict:
     # ------------------------------------------------------------------
     geo_scope = _build_geo_scope(new)
     if geo_scope is not None:
+        # Strip cities that the model carried from session context when the user
+        # is expressing a province-wide (or no-city) intent.
+        # Condition: province present, no explicit city, no lat/lon from this turn,
+        # AND fuzzy_preprocessor found no geo_expansion (no place name in query).
+        # In this case any "cities" in the intent are context bleed, not new user input.
+        if (
+            geo_scope.get("province")
+            and not geo_scope.get("city")
+            and geo_scope.get("lat") is None
+            and not (fuzzy_hints or {}).get("geo_expansion")
+        ):
+            geo_scope.pop("cities", None)  # type: ignore[misc]
         qs.replace_geo(geo_scope)  # type: ignore[arg-type]
 
     # ------------------------------------------------------------------

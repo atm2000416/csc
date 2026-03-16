@@ -4,7 +4,27 @@ CSSL — Camp SQL Search Logic
 Executes structured MySQL queries against programs, camps, activity_tags.
 Returns result pool and RCS (Result Confidence Score).
 """
+import json
+import os
+
 from db.connection import get_connection
+
+# ---------------------------------------------------------------------------
+# camps.ca-page-derived override index
+# Built once at module load from db/camp_tag_overrides.json (committed to repo).
+# Provides a parallel lookup path: slug → [camp_ids] that guarantees any camp
+# camps.ca listed on a category page is included, even if program_tags has gaps.
+# ---------------------------------------------------------------------------
+_SLUG_TO_CAMP_IDS: dict[str, list[int]] = {}
+try:
+    _overrides_path = os.path.join(os.path.dirname(__file__), "..", "db", "camp_tag_overrides.json")
+    with open(_overrides_path) as _f:
+        for _cid_str, _slugs in json.load(_f).items():
+            _cid = int(_cid_str)
+            for _slug in _slugs:
+                _SLUG_TO_CAMP_IDS.setdefault(_slug, []).append(_cid)
+except (FileNotFoundError, json.JSONDecodeError, ValueError):
+    pass  # Fail silently — program_tags path still works without overrides
 
 
 def query(params: dict, limit: int = 100) -> tuple[list[dict], float]:
@@ -29,11 +49,32 @@ def query(params: dict, limit: int = 100) -> tuple[list[dict], float]:
     expanded_tags = expand_via_categories(params.get("tags", []), cursor)
     tag_ids = resolve_tag_ids(expanded_tags, cursor)
     if tag_ids:
-        joins.append("JOIN program_tags pt ON p.id = pt.program_id")
+        # Parallel lookup: collect override camp_ids for all expanded slugs.
+        # These are camps that camps.ca itself listed on a category page —
+        # guaranteed to be relevant even if program_tags is missing a row.
+        override_camp_ids: list[int] = []
+        seen_override: set[int] = set()
+        for slug in expanded_tags:
+            for cid in _SLUG_TO_CAMP_IDS.get(slug, []):
+                if cid not in seen_override:
+                    seen_override.add(cid)
+                    override_camp_ids.append(cid)
+
         ph = ", ".join(f"%(tag_{i})s" for i in range(len(tag_ids)))
-        conditions.append(f"pt.tag_id IN ({ph})")
         for i, tid in enumerate(tag_ids):
             args[f"tag_{i}"] = tid
+
+        if override_camp_ids:
+            # Use EXISTS (no JOIN needed) so the OR with camp_id doesn't
+            # require program_tags to have a matching row for override camps.
+            camp_ph = ", ".join(str(cid) for cid in override_camp_ids)  # ints — safe
+            conditions.append(
+                f"(EXISTS (SELECT 1 FROM program_tags WHERE program_id = p.id AND tag_id IN ({ph}))"
+                f" OR p.camp_id IN ({camp_ph}))"
+            )
+        else:
+            joins.append("JOIN program_tags pt ON p.id = pt.program_id")
+            conditions.append(f"pt.tag_id IN ({ph})")
 
     # Exclude tags
     exclude_ids = resolve_tag_ids(params.get("exclude_tags", []), cursor)
@@ -194,7 +235,10 @@ def query(params: dict, limit: int = 100) -> tuple[list[dict], float]:
              WHERE pt2.program_id = p.id AND pt2.tag_id IN ({ph_sp})
             ) AS _primary_match,
             (SELECT COUNT(*) FROM program_tags WHERE program_id = p.id) AS _tag_count,"""
-        specialty_boost = "_primary_match ASC, _tag_count ASC,"
+        # COALESCE(_primary_match, 1): override-only programs have NULL here
+        # (no matching program_tags row), treat as "not primary" so they rank
+        # after programs with an explicit tag match.
+        specialty_boost = "COALESCE(_primary_match, 1) ASC, _tag_count ASC,"
     else:
         specialty_select = ""
         specialty_boost = ""

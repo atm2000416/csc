@@ -12,12 +12,11 @@ Run after tag_from_campsca_pages.py:
     python3 db/export_camp_tag_overrides.py
 """
 import json
-import sys
+import os
 
-sys.path.insert(0, "/Users/181lp/Documents/CLAUDE_code/projects/csc")
 from db.connection import get_connection
 
-OUTPUT = "/Users/181lp/Documents/CLAUDE_code/projects/csc/db/camp_tag_overrides.json"
+OUTPUT = os.path.join(os.path.dirname(__file__), "camp_tag_overrides.json")
 
 conn = get_connection()
 cur = conn.cursor(dictionary=True)

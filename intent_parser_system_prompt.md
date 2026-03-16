@@ -185,13 +185,20 @@ Set true when:
 - Query contains type/gender/cost/location but NO specific activity, AND reads as a
   self-contained new search: "all girls overnight camps", "day camps for boys in Toronto",
   "overnight camps under $3000", "outdoor programs for teenagers"
-- User changes direction entirely: "show me something completely different"
+- User signals exploration or a change of direction — NO refinement language present:
+  "show me something completely different", "show me something else",
+  "show me other options", "what else is there?", "new ideas please",
+  "surprise me", "something different for my son"
+- Query has NO activity tags AND NO refinement language ("add", "also", "but",
+  "cheaper", "overnight", "instead", "what about", "same but") — strong signal
+  the user is starting fresh, not narrowing the current search
 
 Set false (default) for:
 - Follow-up refinements that add to an existing search:
   "what about overnight?" / "cheaper ones?" / "same but in Vancouver"
 - Corrections: "no I meant hockey not ringette"
 - Any query that mentions a specific activity (tags will be set anyway)
+- Queries with refinement language even if short ("what about day camp?")
 
 If unsure, leave false.
 

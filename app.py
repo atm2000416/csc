@@ -411,6 +411,29 @@ def _fetch_all_camp_programs(camp_id: int, exclude_program_id: int, camp_name: s
         return []
 
 
+def _maybe_offer_more_camps(pool: list[dict], final: list[dict],
+                            raw_query: str, merged_params: dict) -> None:
+    """
+    If the CSSL pool contained more unique camps than we displayed,
+    offer to show them via a conversational prompt.
+    Called after display_results() for any route that shows results.
+    """
+    shown_camp_ids = {r.get("camp_id") for r in final}
+    overflow = [r for r in pool if r.get("camp_id") not in shown_camp_ids]
+    n_more = len({r.get("camp_id") for r in overflow})
+    if n_more <= 0:
+        return
+    tags = merged_params.get("tags", [])
+    tag_label = tags[0].replace("-multi", "").replace("-", " ") if tags else "this activity"
+    st.session_state["_more_camps_pool"]   = overflow
+    st.session_state["_more_camps_query"]  = raw_query
+    st.session_state["_more_camps_params"] = merged_params
+    _speak(
+        f"I also found **{n_more} more camp{'s' if n_more != 1 else ''}** "
+        f"with {tag_label} sessions. Would you like to see them?"
+    )
+
+
 def display_results(results: list[dict]):
     if not results:
         st.info("No camps found matching your search. Try adjusting your filters.")
@@ -667,7 +690,21 @@ def main():
     _render_history()
     _show_user_bubble(user_input)
 
-    # Affirmative suggestion check
+    # Show-more camps: user said yes to a previous "X more camps" offer
+    if st.session_state.get("_more_camps_pool") and is_affirmative(user_input):
+        overflow_pool   = st.session_state.pop("_more_camps_pool")
+        overflow_query  = st.session_state.pop("_more_camps_query", user_input)
+        overflow_params = st.session_state.pop("_more_camps_params", {})
+        init_trace()
+        with st.spinner("Finding more matches…"):
+            more_final = process_results(overflow_pool, overflow_query, overflow_params)
+        n_shown = len({r.get("camp_id") for r in more_final})
+        _speak(f"Here are {n_shown} more camp{'s' if n_shown != 1 else ''}:")
+        display_results(more_final)
+        st.session_state["_last_results"] = more_final
+        return
+
+    # Affirmative suggestion check (geo-broaden)
     pending = session.get("pending_suggestion")
     if pending and is_affirmative(user_input):
         qs = get_query_state()
@@ -752,7 +789,7 @@ def main():
     })
 
     # Merge with session
-    merged_params = merge_intent(intent)
+    merged_params = merge_intent(intent, fuzzy_hints=fuzzy_hints)
 
     # Apply sidebar filters (override intent with explicit UI filters)
     merged_params.update(sidebar_filters)
@@ -788,6 +825,8 @@ def main():
 
 
 def _run_search(merged_params: dict, raw_query: str, session: dict, sidebar_filters: dict, intent=None):
+    # Clear any stale "show more" state from the previous search turn.
+    st.session_state.pop("_more_camps_pool", None)
     pool_size = int(get_secret("RESULTS_POOL_SIZE", "100"))
 
     # Semantic cache check
@@ -855,6 +894,7 @@ def _run_search(merged_params: dict, raw_query: str, session: dict, sidebar_filt
         render_trace()
         _speak(_virtual_note + msg)
         display_results(final)
+        _maybe_offer_more_camps(results, final, raw_query, merged_params)
         st.session_state["_last_results"] = final
         set_cache(cache_key, {"results": final, "concierge_message": msg})
         store_results([r["id"] for r in final])
@@ -889,6 +929,7 @@ def _run_search(merged_params: dict, raw_query: str, session: dict, sidebar_filt
             render_trace()
             _speak(_virtual_note + msg)
             display_results(final)
+            _maybe_offer_more_camps(all_results, final, raw_query, merged_params)
             st.session_state["_last_results"] = final
             set_cache(cache_key, {"results": final, "concierge_message": msg})
             store_results([r["id"] for r in final])
@@ -910,6 +951,7 @@ def _run_search(merged_params: dict, raw_query: str, session: dict, sidebar_filt
         render_trace()
         _speak(_virtual_note + msg)
         display_results(final)
+        _maybe_offer_more_camps(results, final, raw_query, merged_params)
         st.session_state["_last_results"] = final
         render_clarification(decision.clarification_dimensions)
         if intent:
@@ -970,9 +1012,14 @@ def _diagnose_zero_results(merged_params: dict) -> dict:
     except Exception:
         pass
 
+    # When lat/lon was used, city is None — use first entry from cities list
+    # so the advisor says "near Etobicoke" instead of "in Ontario".
+    searched_city = merged_params.get("city") or (
+        (merged_params.get("cities") or [None])[0]
+    )
     diagnosis = diagnose(
         tag_ids=tag_ids,
-        searched_city=merged_params.get("city"),
+        searched_city=searched_city,
         searched_province=merged_params.get("province"),
         program_type=merged_params.get("type"),
         date_from=merged_params.get("date_from"),

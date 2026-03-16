@@ -238,7 +238,7 @@ Manual trigger: GitHub → Actions → "Sync OurKids → Aiven" → Run workflow
 
 **Google Drive setup:**
 - Service account: `youtube-php-api@youtube-bonbon-431918-h7.iam.gserviceaccount.com`
-- Drive folder ID: `15EsIGXhGCyHxmrdkGDCjIwcC1wEd6Wzk`
+- Drive folder ID: `16xEqbVXQgffZ_7osLEGNBT4iTMsuWHJT`
 - GitHub secrets: `GDRIVE_SERVICE_ACCOUNT_JSON` (full JSON key), `GDRIVE_FOLDER_ID`
 - Download script: `db/download_from_drive.py` — fetches most-recently-modified file in folder
 
@@ -280,7 +280,7 @@ git push origin main
 | `DB_HOST`, `DB_PORT`, `DB_NAME`, `DB_USER`, `DB_PASSWORD` | ✓ | ✓ | Aiven MySQL |
 | `DB_SSL_CA_CERT` | ✓ | ✓ | Aiven CA certificate (full PEM string) |
 | `GDRIVE_SERVICE_ACCOUNT_JSON` | — | ✓ | Google service account JSON key (full contents) |
-| `GDRIVE_FOLDER_ID` | — | ✓ | Google Drive folder ID (`15EsIGXhGCyHxmrdkGDCjIwcC1wEd6Wzk`) |
+| `GDRIVE_FOLDER_ID` | — | ✓ | Google Drive folder ID (`16xEqbVXQgffZ_7osLEGNBT4iTMsuWHJT`) |
 | `ICS_HIGH_THRESHOLD` | ✓ | — | Decision matrix ICS cutoff (default `0.70`) |
 | `RCS_HIGH_THRESHOLD` | ✓ | — | Decision matrix RCS cutoff (default `0.70`) |
 | `RERANKER_THRESHOLD` | ✓ | — | Pool size above which reranker fires (default `15`) |

@@ -57,8 +57,8 @@ def preprocess(raw_query: str) -> dict:
         hints["national_scope"] = True
 
     def word_match(term: str, text: str) -> bool:
-        """Match term as whole word(s) within text."""
-        pattern = r'(?<![a-z0-9])' + re.escape(term) + r'(?![a-z0-9])'
+        """Match term as whole word(s) within text, tolerating trailing plural 's'."""
+        pattern = r'(?<![a-z0-9])' + re.escape(term) + r's?(?![a-z0-9])'
         return bool(re.search(pattern, text))
 
     # Check geo aliases (longest match first)

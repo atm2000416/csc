@@ -1,0 +1,117 @@
+slug,bridge_camp_count,canonical_pages,override_pages,bridge_retrievable,bridge_unretrievable,tagged_via_program_tags,cssl_effective,recall,precision,jaccard
+academic-tutoring-multi,70,/education_camps.php,/tutoring-centres.php,182,4,157,182,1.000,1.000,1.000
+acro-dance,72,,/acro-camps.php; /acro-lessons.php,72,0,63,72,1.000,1.000,1.000
+acting-film-tv,86,/drama_camps.php,,84,2,74,84,1.000,1.000,1.000
+adventure-multi,8,/adventure_camps.php,/outdoor-education.php,8,0,8,8,1.000,1.000,1.000
+ai-artificial-intelligence,14,,/artificial-intelligence-camps.php,14,0,13,14,1.000,1.000,1.000
+animals,71,/animal-camps.php,/zoo-camps.php,71,0,61,71,1.000,1.000,1.000
+animation,248,,/animation-camps.php,244,4,221,244,1.000,1.000,1.000
+arts-crafts,313,,/arts-crafts-camps.php,309,4,283,309,1.000,1.000,1.000
+arts-multi,5,/arts_camps.php,/arts-camps-creativity.php,5,0,5,5,1.000,1.000,1.000
+baking-decorating,37,,/baking-camps.php,37,0,35,37,1.000,1.000,1.000
+ball-sports-multi,199,/multi-sports-camp.php,,209,4,202,209,1.000,1.000,1.000
+ballet,71,,/ballet-camps.php; /ballet-classes.php,71,0,63,71,1.000,1.000,1.000
+ballroom,61,,/ballroom-dance-lessons-and-classes.php,61,0,52,61,1.000,1.000,1.000
+baseball-softball,196,/baseball_camps.php,/baseball-lessons.php,192,4,174,192,1.000,1.000,1.000
+basketball,196,/basketball-summer-camps.php,/basketball-lessons.php,192,4,179,192,1.000,1.000,1.000
+breakdancing,61,,/breakdancing-lessons.php,61,0,52,61,1.000,1.000,1.000
+bronze-cross,11,,/bronze-cross-courses.php,11,0,11,11,1.000,1.000,1.000
+canoeing,112,/kayak-camp.php,/canoe-camps.php,112,0,109,112,1.000,1.000,1.000
+cartooning,8,,/cartooning-camps.php,8,0,7,8,1.000,1.000,1.000
+cheer,7,/cheerleading-summer-camps.php,,7,0,8,8,1.000,0.875,0.875
+chess,8,,/chess-camps.php,8,0,7,8,1.000,1.000,1.000
+circus,10,,/circus-camps.php,10,0,9,10,1.000,1.000,1.000
+cit-lit-program,79,,/counsellor-in-training-camps.php,79,0,81,86,1.000,0.919,0.919
+comedy,90,,/comedy-camps.php,88,2,77,88,1.000,1.000,1.000
+computer-multi,1,/computer_camps.php; /technology-camps.php,,1,0,1,1,1.000,1.000,1.000
+cooking,81,,/cooking-camps.php; /cooking-classes.php; /online-cooking-classes.php,81,0,79,81,1.000,1.000,1.000
+creative-writing,192,,/creative-writing-classes.php; /creative_writing_camps.php,188,4,166,188,1.000,1.000,1.000
+credit-courses,24,,/credit-courses.php,24,0,23,24,1.000,1.000,1.000
+cricket,198,,/cricket-camps.php,194,4,172,194,1.000,1.000,1.000
+cycling,251,,/bike-camps.php,247,4,226,247,1.000,1.000,1.000
+dance-multi,61,/dance_camps.php,/dance-classes.php,110,0,106,110,1.000,1.000,1.000
+debate,80,/debate-and-speech-camps-for-kids.php,,79,1,72,79,1.000,1.000,1.000
+drawing,275,,/drawing-camps.php; /drawing-lessons.php,271,4,247,271,1.000,1.000,1.000
+education-multi,5,/education_camps.php,,5,0,5,5,1.000,1.000,1.000
+empowerment,5,,/youth-empowerment-social-justice-camps.php,5,0,5,5,1.000,1.000,1.000
+engineering,121,/engineer-camps.php,,121,0,118,128,1.000,0.945,0.945
+entrepreneurship,46,,/entrepreneurship-camps.php,46,0,52,53,1.000,0.868,0.868
+fashion-design,215,/fashion-design-camp.php,/fashion-design-classes.php,211,4,187,211,1.000,1.000,1.000
+fencing,7,/fencing-camps.php,,7,0,7,7,1.000,1.000,1.000
+figure-skating,275,/skate-camp.php,,269,6,235,269,1.000,1.000,1.000
+filmmaking,205,,/filmmaking-camps.php,201,4,180,201,1.000,1.000,1.000
+financial-literacy,23,,/financial-literacy-camps.php,22,1,16,22,1.000,1.000,1.000
+first-aid-lifesaving,16,,/first-aid-camps.php; /first-aid-courses.php,16,0,14,16,1.000,1.000,1.000
+fishing,63,/fish-camps.php,,63,0,61,63,1.000,1.000,1.000
+football,35,,/football-camps.php,35,0,35,35,1.000,1.000,1.000
+glee,19,/glee-camps.php,,18,1,16,18,1.000,1.000,1.000
+golf,196,/golf_camps.php,,192,4,174,192,1.000,1.000,1.000
+guitar,103,,/guitar-camps.php; /guitar-lessons.php; /violin_guitar_camps.php,101,2,94,101,1.000,1.000,1.000
+gymnastics,21,/gymnastics_camps.php,,20,1,19,20,1.000,1.000,1.000
+health-fitness-multi,52,/boot-camps-fitness.php; /health_fitness_camps.php,,50,2,41,50,1.000,1.000,1.000
+hip-hop,88,,/hip-hop-dance-camps.php; /hip-hop-dance-classes.php,88,0,79,88,1.000,1.000,1.000
+hockey,41,/hockey_schools_camps.php,/hockey-lessons.php,40,1,38,40,1.000,1.000,1.000
+horseback-riding-equestrian,24,/horse_camps.php,/horseback-riding-lessons.php,24,0,24,24,1.000,1.000,1.000
+ice-skating,11,/skate-camp.php,,11,0,8,11,1.000,1.000,1.000
+java,11,,/java-classes.php,11,0,11,11,1.000,1.000,1.000
+jazz,95,,/jazz-dance-camps.php; /jazz-dance-lessons.php,95,0,85,95,1.000,1.000,1.000
+karate,21,/martial_arts_camps.php,/karate-lessons.php,21,0,17,21,1.000,1.000,1.000
+kayaking-sea-kayaking,80,/kayak-camp.php,,80,0,77,80,1.000,1.000,1.000
+lacrosse,196,/lacrosse-summer-camps.php,,192,4,171,192,1.000,1.000,1.000
+language-instruction,78,/esl_camps.php; /french-camps.php,,77,1,76,77,1.000,1.000,1.000
+leadership-multi,281,/leadership_camps.php,,380,6,365,387,1.000,0.982,0.982
+lego,88,/lego-camps.php,,88,0,82,88,1.000,1.000,1.000
+magic,21,/magic-camps.php,,20,1,16,20,1.000,1.000,1.000
+makerspace,10,,/maker-camps.php,10,0,9,10,1.000,1.000,1.000
+martial-arts,27,/martial_arts_camps.php,/martial-arts-lessons.php,27,0,22,27,1.000,1.000,1.000
+math,150,/math-camp.php,/math-classes.php,149,1,136,149,1.000,1.000,1.000
+minecraft,38,/minecraft-camps.php,/minecraft-classes.php,38,0,36,38,1.000,1.000,1.000
+music-multi,301,/music_camps.php,/music-lessons.php,335,6,306,335,1.000,1.000,1.000
+music-recording,90,,/music_recording.php; /music_recording_camps.php,88,2,80,88,1.000,1.000,1.000
+musical-theatre,86,,/musical-theatre-camps.php,84,2,75,84,1.000,1.000,1.000
+nature-environment,185,,/outdoor-education.php,182,3,174,189,1.000,0.963,0.963
+paintball,9,/paintball_camps.php,,9,0,9,9,1.000,1.000,1.000
+painting,258,,/painting-camps.php,254,4,230,254,1.000,1.000,1.000
+performing-arts-multi,86,/performing-arts-camp.php,,101,2,95,101,1.000,1.000,1.000
+photography,278,,/photography-camps.php; /photography-classes.php,274,4,252,274,1.000,1.000,1.000
+piano,91,,/piano-camps.php; /piano-lessons.php,89,2,82,89,1.000,1.000,1.000
+pottery,31,,/pottery-camps.php,31,0,31,31,1.000,1.000,1.000
+programming-multi,44,/summer-programming.php,/coding-classes.php; /online-coding-classes.php,63,1,63,70,1.000,0.900,0.900
+public-speaking,107,/debate-and-speech-camps-for-kids.php,/public-speaking-classes.php,106,1,97,106,1.000,1.000,1.000
+python,19,,/python-camps.php; /python-classes.php,19,0,19,19,1.000,1.000,1.000
+reading,204,,/reading-camps.php,200,4,177,200,1.000,1.000,1.000
+robotics,51,/robotics-camp-kids.php,,51,0,47,52,1.000,0.981,0.981
+rugby,198,/rugby-camps-for-kids.php,,194,4,172,194,1.000,1.000,1.000
+sailing-marine-skills,46,/sailing_camps.php,,45,1,44,45,1.000,1.000,1.000
+science-multi,169,/science_camps.php,,266,4,263,272,1.000,0.978,0.978
+scratch,11,,/scratch-camps.php,11,0,10,11,1.000,1.000,1.000
+skateboarding,11,/skate-camp.php,,11,0,8,11,1.000,1.000,1.000
+skiing,3,/ski-camp.php,,3,0,3,3,1.000,1.000,1.000
+snowboarding,0,/ski-camp.php,,0,0,0,0,1.000,1.000,1.000
+soccer,196,/soccer_camps.php,/soccer-lessons.php,192,4,179,192,1.000,1.000,1.000
+social-justice,52,,/youth-empowerment-social-justice-camps.php,52,0,52,52,1.000,1.000,1.000
+songwriting,6,,/songwriting-camps.php,6,0,6,6,1.000,1.000,1.000
+space,31,,/space.php,30,1,29,30,1.000,1.000,1.000
+sport-multi,219,/multi-sports-camp.php,,214,5,197,214,1.000,1.000,1.000
+steam,140,,/steam-camps.php; /steam-classes.php,139,1,126,147,1.000,0.946,0.946
+stem,179,/stem-camps.php,/STEM-classes.php,178,1,167,184,1.000,0.967,0.967
+string,7,,/violin_guitar_camps.php,7,0,6,7,1.000,1.000,1.000
+swimming,112,/swimming_camps.php,/swimming-classes.php,109,3,102,109,1.000,1.000,1.000
+taekwondo,6,/taekwondo-camps.php,/taekwondo-lessons.php,6,0,5,6,1.000,1.000,1.000
+technology,134,/technology-camps.php,,132,2,112,132,1.000,1.000,1.000
+tennis,196,/tennis_camps.php,/tennis-lessons.php,192,4,175,192,1.000,1.000,1.000
+theatre-arts,85,/drama_camps.php,/theatre-arts-camps.php; /theatre-arts-classes.php,83,2,76,83,1.000,1.000,1.000
+trampoline,6,,/trampoline-camps.php,6,0,5,6,1.000,1.000,1.000
+travel,57,/international_travel_camps.php,,56,1,54,56,1.000,1.000,1.000
+ultimate-frisbee,3,,/ultimate-frisbee-camps.php,3,0,3,3,1.000,1.000,1.000
+video-game-design,47,/game-design-camps.php,,46,1,42,48,1.000,0.958,0.958
+video-game-development,8,/game-design-camps.php,,8,0,8,8,1.000,1.000,1.000
+visual-arts-multi,203,,/fine_art_camps.php; /visual-arts-camps.php,332,4,314,332,1.000,1.000,1.000
+vocal-training-singing,117,,/singing-lessons.php; /vocal_camps.php,115,2,110,115,1.000,1.000,1.000
+volleyball,195,/volleyball_camps.php,/volleyball-classes.php,191,4,174,192,1.000,0.995,0.995
+water-sports-multi,3,,/summer-camps-water-sports.php; /water-sports-camps.php,166,3,168,173,1.000,0.960,0.960
+waterskiing-wakeboarding,22,/wakeboard-camp.php,,21,1,19,21,1.000,1.000,1.000
+wilderness-out-tripping,57,/wilderness_trip_camps.php,,56,1,54,56,1.000,1.000,1.000
+wilderness-skills,130,/wilderness-skills-camps.php,,129,1,124,130,1.000,0.992,0.992
+writing,213,,/writing-camps.php; /writing-classes.php,209,4,189,211,1.000,0.991,0.991
+yoga,101,/yoga-camps.php,,100,1,95,101,1.000,0.990,0.990

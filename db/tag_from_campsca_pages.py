@@ -366,6 +366,199 @@ CAMP_PAGE_OVERRIDES: dict[str, str] = {
 }
 
 
+# ── Sitemap-derived pages not in the Excel ────────────────────────────────────
+# Maps page_path → [slug_list] directly, bypassing the Excel/WEBITEMS flow.
+# Use for pages that either (a) didn't exist when the Excel was built, or
+# (b) are redirected to a broader page in CAMP_PAGE_OVERRIDES but deserve a
+# more specific slug (e.g. /ballet-camps.php → ballet, not dance-multi).
+# Processed in addition to the Excel pages — INSERT IGNORE keeps it idempotent.
+# ── Canonical Excel pages (hardcoded for CI) ──────────────────────────────────
+# Replicates the core mappings from ALL CAMP PAGES CURRENT.xlsx.
+# When the Excel is unavailable (GitHub Actions), this is used as the fallback.
+# Keep in sync with the Excel — update here when camps.ca adds a new main category.
+# Conservative: one primary slug per page; sub-activity detail comes from PAGE_SLUG_OVERRIDES.
+CANONICAL_PAGES: dict[str, list[str]] = {
+    "/adventure_camps.php":                  ["adventure-multi"],
+    "/animal-camps.php":                     ["animals"],
+    "/arts_camps.php":                       ["arts-multi"],
+    "/baseball_camps.php":                   ["baseball-softball"],
+    "/basketball-summer-camps.php":          ["basketball"],
+    "/boot-camps-fitness.php":               ["health-fitness-multi"],
+    "/cheerleading-summer-camps.php":        ["cheer"],
+    "/computer_camps.php":                   ["computer-multi"],
+    "/dance_camps.php":                      ["dance-multi"],
+    "/debate-and-speech-camps-for-kids.php": ["debate", "public-speaking"],
+    "/drama_camps.php":                      ["theatre-arts", "acting-film-tv"],
+    "/education_camps.php":                  ["education-multi", "academic-tutoring-multi"],
+    "/engineer-camps.php":                   ["engineering"],
+    "/esl_camps.php":                        ["language-instruction"],
+    "/fashion-design-camp.php":              ["fashion-design"],
+    "/fencing-camps.php":                    ["fencing"],
+    "/fish-camps.php":                       ["fishing"],
+    "/french-camps.php":                     ["language-instruction"],
+    "/game-design-camps.php":                ["video-game-design", "video-game-development"],
+    "/glee-camps.php":                       ["glee"],
+    "/golf_camps.php":                       ["golf"],
+    "/gymnastics_camps.php":                 ["gymnastics"],
+    "/health_fitness_camps.php":             ["health-fitness-multi"],
+    "/hockey_schools_camps.php":             ["hockey"],
+    "/horse_camps.php":                      ["horseback-riding-equestrian"],
+    "/international_travel_camps.php":       ["travel"],
+    "/kayak-camp.php":                       ["kayaking-sea-kayaking", "canoeing"],
+    "/lacrosse-summer-camps.php":            ["lacrosse"],
+    "/leadership_camps.php":                 ["leadership-multi"],
+    "/lego-camps.php":                       ["lego"],
+    "/magic-camps.php":                      ["magic"],
+    "/martial_arts_camps.php":               ["martial-arts", "karate"],
+    "/math-camp.php":                        ["math"],
+    "/minecraft-camps.php":                  ["minecraft"],
+    "/multi-sports-camp.php":                ["ball-sports-multi", "sport-multi"],
+    "/music_camps.php":                      ["music-multi"],
+    "/paintball_camps.php":                  ["paintball"],
+    "/performing-arts-camp.php":             ["performing-arts-multi"],
+    "/robotics-camp-kids.php":               ["robotics"],
+    "/rugby-camps-for-kids.php":             ["rugby"],
+    "/sailing_camps.php":                    ["sailing-marine-skills"],
+    "/science_camps.php":                    ["science-multi"],
+    "/skate-camp.php":                       ["figure-skating", "ice-skating", "skateboarding"],
+    "/ski-camp.php":                         ["skiing", "snowboarding"],
+    "/soccer_camps.php":                     ["soccer"],
+    "/stem-camps.php":                       ["stem"],
+    "/summer-programming.php":               ["programming-multi"],
+    "/swimming_camps.php":                   ["swimming"],
+    "/taekwondo-camps.php":                  ["taekwondo"],
+    "/technology-camps.php":                 ["technology", "computer-multi"],
+    "/tennis_camps.php":                     ["tennis"],
+    "/volleyball_camps.php":                 ["volleyball"],
+    "/wakeboard-camp.php":                   ["waterskiing-wakeboarding"],
+    "/wilderness-skills-camps.php":          ["wilderness-skills"],
+    "/wilderness_trip_camps.php":            ["wilderness-out-tripping"],
+    "/yoga-camps.php":                       ["yoga"],
+}
+
+
+# ── Sitemap-derived pages not in the Excel ────────────────────────────────────
+PAGE_SLUG_OVERRIDES: dict[str, list[str]] = {
+    # ── Arts / Dance ─────────────────────────────────────────────────────────
+    "/acro-camps.php":                             ["acro-dance"],
+    "/acro-lessons.php":                           ["acro-dance"],
+    "/animation-camps.php":                        ["animation"],
+    "/arts-camps-creativity.php":                  ["arts-multi"],
+    "/arts-crafts-camps.php":                      ["arts-crafts"],
+    "/baking-camps.php":                           ["baking-decorating"],
+    "/ballet-camps.php":                           ["ballet"],
+    "/ballet-classes.php":                         ["ballet"],
+    "/ballroom-dance-lessons-and-classes.php":     ["ballroom"],
+    "/breakdancing-lessons.php":                   ["breakdancing"],
+    "/cartooning-camps.php":                       ["cartooning"],
+    "/circus-camps.php":                           ["circus"],
+    "/comedy-camps.php":                           ["comedy"],
+    "/cooking-camps.php":                          ["cooking"],
+    "/cooking-classes.php":                        ["cooking"],
+    "/creative-writing-classes.php":               ["creative-writing"],
+    "/creative_writing_camps.php":                 ["creative-writing"],
+    "/dance-classes.php":                          ["dance-multi"],
+    "/drawing-camps.php":                          ["drawing"],
+    "/drawing-lessons.php":                        ["drawing"],
+    "/fashion-design-classes.php":                 ["fashion-design"],
+    "/filmmaking-camps.php":                       ["filmmaking"],
+    "/fine_art_camps.php":                         ["visual-arts-multi"],
+    "/guitar-camps.php":                           ["guitar"],
+    "/guitar-lessons.php":                         ["guitar"],
+    "/hip-hop-dance-camps.php":                    ["hip-hop"],
+    "/hip-hop-dance-classes.php":                  ["hip-hop"],
+    "/jazz-dance-camps.php":                       ["jazz"],
+    "/jazz-dance-lessons.php":                     ["jazz"],
+    "/music-lessons.php":                          ["music-multi"],
+    "/music_recording.php":                        ["music-recording"],
+    "/music_recording_camps.php":                  ["music-recording"],
+    "/musical-theatre-camps.php":                  ["musical-theatre"],
+    "/online-cooking-classes.php":                 ["cooking"],
+    "/painting-camps.php":                         ["painting"],
+    "/photography-camps.php":                      ["photography"],
+    "/photography-classes.php":                    ["photography"],
+    "/piano-camps.php":                            ["piano"],
+    "/piano-lessons.php":                          ["piano"],
+    "/pottery-camps.php":                          ["pottery"],
+    "/scratch-camps.php":                          ["scratch"],
+    "/singing-lessons.php":                        ["vocal-training-singing"],
+    "/songwriting-camps.php":                      ["songwriting"],
+    "/theatre-arts-camps.php":                     ["theatre-arts"],
+    "/theatre-arts-classes.php":                   ["theatre-arts"],
+    "/violin_guitar_camps.php":                    ["guitar", "string"],
+    "/visual-arts-camps.php":                      ["visual-arts-multi"],
+    "/visual-arts-programs.php":                   ["arts-crafts", "cartooning", "ceramics", "drawing", "filmmaking", "painting", "photography", "pottery", "videography"],
+    "/vocal_camps.php":                            ["vocal-training-singing"],
+    "/writing-camps.php":                          ["writing"],
+    "/writing-classes.php":                        ["writing"],
+    "/acting-classes.php":                         ["acting-film-tv", "theatre-arts"],
+    "/online-drawing-classes.php":                 ["drawing"],
+    "/online-music-lessons.php":                   ["glee", "guitar", "jam-camp", "music-recording", "musical-instrument-training", "percussion", "piano", "songwriting", "vocal-training-singing"],
+    "/painting-classes.php":                       ["painting"],
+    "/performing-arts-programs.php":               ["acting-film-tv", "magic", "modeling", "musical-theatre", "theatre-arts"],
+
+    # ── Computers & Tech ─────────────────────────────────────────────────────
+    "/artificial-intelligence-camps.php":          ["ai-artificial-intelligence"],
+    "/coding-classes.php":                         ["programming-multi"],
+    "/java-classes.php":                           ["java"],
+    "/maker-camps.php":                            ["makerspace"],
+    "/minecraft-classes.php":                      ["minecraft"],
+    "/online-coding-classes.php":                  ["programming-multi"],
+    "/python-camps.php":                           ["python"],
+    "/python-classes.php":                         ["python"],
+    "/STEM-classes.php":                           ["stem"],
+    "/steam-camps.php":                            ["steam"],
+    "/steam-classes.php":                          ["steam"],
+    "/roblox-camps.php":                           ["roblox"],
+    "/robotics-programs.php":                      ["robotics"],
+    "/technology-programs.php":                    ["technology"],
+
+    # ── Education ─────────────────────────────────────────────────────────────
+    "/chess-camps.php":                            ["chess"],
+    "/counsellor-in-training-camps.php":           ["cit-lit-program"],
+    "/credit-courses.php":                         ["credit-courses"],
+    "/entrepreneurship-camps.php":                 ["entrepreneurship"],
+    "/financial-literacy-camps.php":               ["financial-literacy"],
+    "/math-classes.php":                           ["math"],
+    "/outdoor-education.php":                      ["adventure-multi", "nature-environment"],
+    "/public-speaking-classes.php":                ["public-speaking"],
+    "/reading-camps.php":                          ["reading"],
+    "/space.php":                                  ["space"],
+    "/tutoring-centres.php":                       ["academic-tutoring-multi"],
+    "/youth-empowerment-social-justice-camps.php": ["empowerment", "social-justice"],
+    "/zoo-camps.php":                              ["animals"],
+
+    # ── Sports ────────────────────────────────────────────────────────────────
+    "/baseball-lessons.php":                       ["baseball-softball"],
+    "/basketball-lessons.php":                     ["basketball"],
+    "/bike-camps.php":                             ["cycling"],
+    "/bronze-cross-courses.php":                   ["bronze-cross"],
+    "/canoe-camps.php":                            ["canoeing"],
+    "/cricket-camps.php":                          ["cricket"],
+    "/first-aid-camps.php":                        ["first-aid-lifesaving"],
+    "/first-aid-courses.php":                      ["first-aid-lifesaving"],
+    "/football-camps.php":                         ["football"],
+    "/hockey-lessons.php":                         ["hockey"],
+    "/horseback-riding-lessons.php":               ["horseback-riding-equestrian"],
+    "/karate-lessons.php":                         ["karate"],
+    "/martial-arts-lessons.php":                   ["martial-arts"],
+    "/soccer-lessons.php":                         ["soccer"],
+    "/summer-camps-water-sports.php":              ["water-sports-multi"],
+    "/swimming-classes.php":                       ["swimming"],
+    "/taekwondo-lessons.php":                      ["taekwondo"],
+    "/tennis-lessons.php":                         ["tennis"],
+    "/trampoline-camps.php":                       ["trampoline"],
+    "/ultimate-frisbee-camps.php":                 ["ultimate-frisbee"],
+    "/volleyball-classes.php":                     ["volleyball"],
+    "/water-sports-camps.php":                     ["water-sports-multi"],
+    "/waterski-camps.php":                         ["waterskiing-wakeboarding"],
+    "/alberta-horse-camps.php":                    ["horseback-riding-equestrian"],
+    "/girls-soccer.php":                           ["soccer"],
+    "/international-travel-programs.php":          ["travel"],
+    "/toronto-soccer-camps.php":                   ["soccer"],
+}
+
+
 def parse_webitems(list_options: str) -> list[str]:
     """Extract SQLwebitems values from a list_options string."""
     m = re.search(r'SQLwebitems:\s*(.+?)(?:\s*,\s*SQL|\s*$)', list_options)
@@ -442,18 +635,42 @@ def fetch_camp_ids(path: str, cur=None) -> list[int]:
 
 
 def main():
-    import sys
-    sys.path.insert(0, "/Users/181lp/Documents/CLAUDE_code/projects/csc")
+    import os
     from db.connection import get_connection
 
     dry_run = "--dry-run" in sys.argv
-    xlsx = "/Users/181lp/Documents/CLAUDE_code/csc_collaterals/ALL CAMP PAGES CURRENT.xlsx"
 
     if dry_run:
         print("DRY RUN — no writes\n")
 
-    pages = load_pages_from_excel(xlsx)
-    print(f"Loaded {len(pages)} unique activity pages from Excel\n")
+    # Excel is the preferred source locally; in CI it won't exist — fall back to
+    # CANONICAL_PAGES which replicates its core mappings as hardcoded Python.
+    xlsx = os.environ.get(
+        "CAMP_PAGES_XLSX",
+        "/Users/181lp/Documents/CLAUDE_code/csc_collaterals/ALL CAMP PAGES CURRENT.xlsx",
+    )
+    if os.path.exists(xlsx):
+        pages = load_pages_from_excel(xlsx)
+        print(f"Loaded {len(pages)} unique activity pages from Excel")
+    else:
+        pages = list(CANONICAL_PAGES.items())
+        print(f"Excel not found — using {len(pages)} hardcoded canonical pages")
+
+    # Augment with sitemap-derived pages not in the Excel / CANONICAL_PAGES.
+    # Dedup by path: if a path is already queued, merge slugs so we don't
+    # fetch the same URL twice.
+    existing_paths = {path for path, _ in pages}
+    extra: list[tuple[str, list[str]]] = []
+    for path, slugs in PAGE_SLUG_OVERRIDES.items():
+        if path in existing_paths:
+            for i, (p, s) in enumerate(pages):
+                if p == path:
+                    pages[i] = (p, list(dict.fromkeys(s + slugs)))  # dedup, preserve order
+                    break
+        else:
+            extra.append((path, slugs))
+    pages.extend(extra)
+    print(f"Added {len(extra)} sitemap-only pages → {len(pages)} total\n")
 
     # Pre-load tag slug → id map (fresh connection, then close)
     _conn = get_connection()

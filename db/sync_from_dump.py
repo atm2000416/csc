@@ -807,6 +807,11 @@ def run(dump_path, dry_run, only, update_meta, deactivate=False, skip_ids=None,
             print("  No active camps without programs.")
             print()
         else:
+            # Only seed camps whose DB id exists as a CID in the dump
+            # (auto-increment location branches have IDs that don't match legacy CIDs)
+            dump_cids = set(dump_camps.keys())
+            needs_program = {k: v for k, v in needs_program.items() if k in dump_cids}
+
             print(f"  {len(needs_program)} active camps need programs — "
                   f"parsing sessions from dump...")
 
@@ -883,6 +888,10 @@ def run(dump_path, dry_run, only, update_meta, deactivate=False, skip_ids=None,
             print("  No camps with generic placeholder programs found.")
             print()
         else:
+            # Only refresh camps whose DB id exists as a CID in the dump
+            dump_cids = set(dump_camps.keys())
+            placeholder_camps = {k: v for k, v in placeholder_camps.items() if k in dump_cids}
+
             print(f"  {len(placeholder_camps)} camps with generic placeholders — "
                   f"parsing sessions from dump...")
 
@@ -969,6 +978,20 @@ def run(dump_path, dry_run, only, update_meta, deactivate=False, skip_ids=None,
         # Load every active camp in the DB
         cursor.execute("SELECT id, camp_name FROM camps WHERE status = 1")
         all_active = {r['id']: r['camp_name'] for r in cursor.fetchall()}
+
+        # SAFETY: Only import sessions for camps whose DB id exists as a CID in
+        # the dump.  Camps created by the sync itself (location branches, etc.)
+        # have auto-increment IDs that do NOT correspond to legacy CIDs.  If we
+        # pass those IDs to parse_sessions_full the dump's sessions for the
+        # *unrelated* legacy camp with the same CID get imported under the wrong
+        # camp — causing cross-camp data corruption.
+        dump_cids = set(dump_camps.keys())
+        id_collisions = {cid for cid in all_active if cid not in dump_cids}
+        if id_collisions:
+            print(f"  Skipping {len(id_collisions)} camps whose DB id has no "
+                  f"matching CID in dump (auto-increment location branches)")
+            all_active = {k: v for k, v in all_active.items() if k in dump_cids}
+
         print(f"  {len(all_active)} active camps — parsing dump sessions...")
 
         all_sessions = parse_sessions_full(content, set(all_active.keys()))

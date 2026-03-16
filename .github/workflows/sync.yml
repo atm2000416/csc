@@ -8,28 +8,60 @@ on:
 jobs:
   sync:
     runs-on: ubuntu-latest
+    permissions:
+      contents: write         # needed to commit updated camp_tag_overrides.json
 
     steps:
       - uses: actions/checkout@v4
+        with:
+          token: ${{ secrets.GITHUB_TOKEN }}
 
       - uses: actions/setup-python@v5
         with:
           python-version: '3.11'
 
       - name: Install dependencies
-        run: pip install mysql-connector-python
+        run: pip install mysql-connector-python google-api-python-client google-auth
 
-      - name: Run sync
-        run: python db/sync_from_source.py --deactivate --skip-ids 422,529,579,1647
+      - name: Download dump from Google Drive
+        run: python db/download_from_drive.py
         env:
-          SOURCE_DB_HOST:     ${{ secrets.SOURCE_DB_HOST }}
-          SOURCE_DB_PORT:     ${{ secrets.SOURCE_DB_PORT }}
-          SOURCE_DB_NAME:     ${{ secrets.SOURCE_DB_NAME }}
-          SOURCE_DB_USER:     ${{ secrets.SOURCE_DB_USER }}
-          SOURCE_DB_PASSWORD: ${{ secrets.SOURCE_DB_PASSWORD }}
-          DB_HOST:            ${{ secrets.DB_HOST }}
-          DB_PORT:            ${{ secrets.DB_PORT }}
-          DB_NAME:            ${{ secrets.DB_NAME }}
-          DB_USER:            ${{ secrets.DB_USER }}
-          DB_PASSWORD:        ${{ secrets.DB_PASSWORD }}
-          DB_SSL_CA_CERT:     ${{ secrets.DB_SSL_CA_CERT }}
+          GDRIVE_SERVICE_ACCOUNT_JSON: ${{ secrets.GDRIVE_SERVICE_ACCOUNT_JSON }}
+          GDRIVE_FOLDER_ID:            ${{ secrets.GDRIVE_FOLDER_ID }}
+
+      - name: Run sync from dump
+        run: >
+          python db/sync_from_dump.py
+          --dump dump.sql
+          --import-all-sessions
+          --deactivate
+          --skip-ids 422,529,579,1647
+        env:
+          DB_HOST:        ${{ secrets.DB_HOST }}
+          DB_PORT:        ${{ secrets.DB_PORT }}
+          DB_NAME:        ${{ secrets.DB_NAME }}
+          DB_USER:        ${{ secrets.DB_USER }}
+          DB_PASSWORD:    ${{ secrets.DB_PASSWORD }}
+          DB_SSL_CA_CERT: ${{ secrets.DB_SSL_CA_CERT }}
+
+      - name: Export camp_tag_overrides.json
+        run: python db/export_camp_tag_overrides.py
+        env:
+          DB_HOST:        ${{ secrets.DB_HOST }}
+          DB_PORT:        ${{ secrets.DB_PORT }}
+          DB_NAME:        ${{ secrets.DB_NAME }}
+          DB_USER:        ${{ secrets.DB_USER }}
+          DB_PASSWORD:    ${{ secrets.DB_PASSWORD }}
+          DB_SSL_CA_CERT: ${{ secrets.DB_SSL_CA_CERT }}
+
+      - name: Commit if changed
+        run: |
+          git config user.name  "github-actions[bot]"
+          git config user.email "github-actions[bot]@users.noreply.github.com"
+          git add db/camp_tag_overrides.json
+          if git diff --cached --quiet; then
+            echo "No changes to camp_tag_overrides.json"
+          else
+            git commit -m "chore: sync camp tag overrides [skip ci]"
+            git push
+          fi

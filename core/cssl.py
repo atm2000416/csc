@@ -65,12 +65,18 @@ def query(params: dict, limit: int = 100) -> tuple[list[dict], float]:
             args[f"tag_{i}"] = tid
 
         if override_camp_ids:
-            # Use EXISTS (no JOIN needed) so the OR with camp_id doesn't
-            # require program_tags to have a matching row for override camps.
+            # Parallel lookup: override camps are included even without a
+            # program_tags row.  However, for camps with multiple programs we
+            # only pull in programs that are themselves tagged — otherwise a
+            # camp with 1 relevant session and 50 unrelated ones floods the
+            # pool.  Single-program camps (placeholders) are always included
+            # so they don't get silently dropped.
             camp_ph = ", ".join(str(cid) for cid in override_camp_ids)  # ints — safe
             conditions.append(
                 f"(EXISTS (SELECT 1 FROM program_tags WHERE program_id = p.id AND tag_id IN ({ph}))"
-                f" OR p.camp_id IN ({camp_ph}))"
+                f" OR (p.camp_id IN ({camp_ph})"
+                f"     AND (SELECT COUNT(*) FROM programs p2"
+                f"          WHERE p2.camp_id = p.camp_id AND p2.status = 1) = 1))"
             )
         else:
             joins.append("JOIN program_tags pt ON p.id = pt.program_id")

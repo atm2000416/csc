@@ -312,6 +312,20 @@ See `secrets.toml.example` for a template.
 
 ---
 
+## Bug Fixes
+
+### Cross-camp data corruption — `8c32c89` (2026-03-16)
+**Symptom:** Programs appearing under wrong camps (e.g., Money Club.Org under Canlan Sports - Burnaby).
+**Root cause:** `--import-all-sessions` in `sync_from_dump.py` passed auto-increment DB IDs (2111+) to session parsers, which matched them against legacy CIDs in the OurKids dump. 849 programs landed under 580 wrong camps.
+**Fix:** Added `dump_cids` guard to all 3 session-import paths — filters camp IDs against `dump_camps.keys()` so auto-increment location branches are skipped. Corrupted data cleaned from production DB.
+
+### Override camp pool flooding — `5e1d61d` (2026-03-16)
+**Symptom:** Niche queries like "financial literacy for teens" returned 100 results dominated by irrelevant programs.
+**Root cause:** `camp_tag_overrides.json` tags at the camp level. CSSL's `OR p.camp_id IN (...)` included ALL programs at override camps — a camp with 1 relevant + 50 unrelated programs contributed all 51.
+**Fix:** Restricted override inclusion in `core/cssl.py` to programs that are themselves tagged OR the sole program at a single-program camp (placeholder).
+
+---
+
 ## Further Reading
 
 | Topic | File |

@@ -69,7 +69,7 @@ def main():
 
     # Show sample of what will be deleted
     cur.execute(f"""
-        SELECT c.id as camp_id, c.name, COUNT(DISTINCT p.id) as progs,
+        SELECT c.id as camp_id, c.camp_name, COUNT(DISTINCT p.id) as progs,
                COUNT(pt.tag_id) as nonprimary_tags
         FROM program_tags pt
         JOIN programs p ON pt.program_id = p.id
@@ -77,14 +77,14 @@ def main():
         WHERE p.camp_id IN ({ph})
           AND pt.is_primary = 0
           AND p.status = 1
-        GROUP BY c.id, c.name
+        GROUP BY c.id, c.camp_name
         ORDER BY nonprimary_tags DESC
         LIMIT 20
     """, camp_ids)
     print("\nTop 20 affected camps:")
     print(f"  {'Camp ID':>7}  {'Programs':>8}  {'Tags to remove':>14}  Name")
     for r in cur.fetchall():
-        print(f"  {r['camp_id']:>7}  {r['progs']:>8}  {r['nonprimary_tags']:>14}  {r['name'][:50]}")
+        print(f"  {r['camp_id']:>7}  {r['progs']:>8}  {r['nonprimary_tags']:>14}  {r['camp_name'][:50]}")
 
     if args.dry_run:
         print(f"\n[DRY RUN] Would delete {total} non-primary program_tags rows")

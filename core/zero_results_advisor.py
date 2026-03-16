@@ -23,10 +23,12 @@ def diagnose(
     date_from: str | None = None,
     date_to: str | None = None,
     is_virtual: bool = False,
+    age_from: int | None = None,
+    age_to: int | None = None,
 ) -> dict:
     """
     Find where the requested activity exists, closest first.
-    Applies the same type, date, and is_virtual filters as the original search
+    Applies the same type, date, age, and is_virtual filters as the original search
     so the program counts are accurate (no false geo suggestions).
 
     Returns one of:
@@ -52,6 +54,13 @@ def diagnose(
 
     if is_virtual:
         extra_conditions += " AND p.is_virtual = 1"
+
+    if age_from is not None and age_to is not None:
+        extra_conditions += (
+            " AND (p.age_from IS NULL OR p.age_from <= %s)"
+            " AND (p.age_to IS NULL OR p.age_to >= %s)"
+        )
+        args += [age_to, age_from]
 
     if date_from and date_to:
         joins = (

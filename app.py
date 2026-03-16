@@ -978,6 +978,8 @@ def _diagnose_zero_results(merged_params: dict) -> dict:
         date_from=merged_params.get("date_from"),
         date_to=merged_params.get("date_to"),
         is_virtual=bool(merged_params.get("is_virtual")),
+        age_from=merged_params.get("age_from"),
+        age_to=merged_params.get("age_to"),
     )
 
     ps = diagnosis.get("pending_suggestion") or {}

@@ -11,7 +11,8 @@ Streamlit + Aiven MySQL + Claude AI. Auto-deploys to Streamlit Cloud on push to 
 - 271 camps with full per-session programme records (36 synced in first live run)
 - Activity tags backfilled from camps.ca category pages: 728 camps, 10,724+ tags
 - `db/camp_tag_overrides.json` persists scraped tags through every automated sync cycle
-- QA suite: 48/48 intent parser tests passing (requires ANTHROPIC_API_KEY); 75/75 non-API tests passing
+- QA suite: 48/48 intent parser tests passing (requires ANTHROPIC_API_KEY); 103/103 non-API tests passing; 59/59 fuzzy tests
+- Parity suite (`tests/parity_suite.py`) measures search quality across 4 layers; fuzzy coverage ~95%+
 - Architecture docs: `docs/architecture.md` (full), `docs/database.md`, `docs/testing.md`
 - **Automated DB sync LIVE** — OurKids dumps to Google Drive; `sync.yml` downloads + syncs daily 02:00 UTC Mon–Fri
 
@@ -89,8 +90,8 @@ ui/results_card.py         render_card() + render_extra_sessions() collapsible e
 app.py                          Streamlit entry point + full pipeline orchestration
 config.py                       get_secret() — reads Streamlit secrets or os.getenv
 intent_parser_system_prompt.md  Claude system prompt (edit to tune extraction behaviour)
-taxonomy_mapping.py             2,200+ line activity taxonomy: FUZZY_ALIASES, TRAIT_ALIASES,
-                                GEO_ALIASES, GEO_COORDS, AGE_ALIASES, TAG_METADATA
+taxonomy_mapping.py             2,400+ line activity taxonomy: FUZZY_ALIASES (~1,900 entries),
+                                TRAIT_ALIASES, GEO_ALIASES, GEO_COORDS, AGE_ALIASES, TAG_METADATA
 
 core/
   llm_client.py                 get_client() → anthropic.Anthropic (shared by all LLM modules)
@@ -122,13 +123,14 @@ ui/
   clarification_widget.py       clarification prompt chips
 
 tests/
-  test_intent_parser.py         40-query QA suite — MUST stay 40/40 before every push
+  test_intent_parser.py         48-query QA suite — MUST stay 48/48 before every push
   test_query_state.py           30 QueryState invariant tests
   test_intent_parser_unit.py    unit tests for _coerce_parsed(); no API required
   test_reranker.py              reranker unit tests; no API required
   test_session_manager.py       session manager unit tests
   test_cssl.py                  SQL query tests (skips if DB unavailable)
-  test_fuzzy.py                 fuzzy preprocessor tests (no DB/API)
+  test_fuzzy.py                 59 fuzzy preprocessor tests (plurals, bare-words, taxonomy, natural-language)
+  parity_suite.py               4-layer search quality measurement (--with-fuzzy, --with-parser, --with-db)
   qa_queries.py                 test case definitions
 ```
 
@@ -162,7 +164,9 @@ tests/
   ("my son plays hockey" → gender=null; "all-girls camp" → gender="Girls")
 - `ics = 0.3` is the hardcoded API-error fallback — do NOT clear stale state on this value
 - After parse, any tag not in the live `VALID_SLUGS` set is stripped before `IntentResult` is built
-- `taxonomy_mapping.py` is the alias source for fuzzy_preprocessor; `activity_tags` DB is authoritative
+- `taxonomy_mapping.py` is the alias source for fuzzy_preprocessor (~1,900 entries covering full L2/L3 taxonomy); `activity_tags` DB is authoritative
+- `sports` bare word → L1 parent `sports` (triggers category disambiguator); `sport-multi` only via explicit "multi sport" language
+- `-multi` parent slugs are excluded from bare-word aliases — they trigger the disambiguator for better UX
 
 ### UI
 - Results card: 4 lines — session name / camp name (tier-coloured) / detail pills / AI rationale
@@ -216,7 +220,7 @@ python3 db/export_camp_tag_overrides.py
 **How page→slug mapping works:**
 1. `CANONICAL_PAGES` in `tag_from_campsca_pages.py` — 57 canonical main pages (replaces
    Excel when running in CI; Excel takes priority locally if found at `CAMP_PAGES_XLSX`)
-2. `PAGE_SLUG_OVERRIDES` — 96 sitemap-derived pages with specific slugs (ballet→ballet,
+2. `PAGE_SLUG_OVERRIDES` — 110 sitemap-derived pages with specific slugs (ballet→ballet,
    not dance-multi; photography→photography, not arts-multi etc.)
 3. `CAMP_PAGE_OVERRIDES` — URL normalisation (dash→underscore broken URLs)
 
@@ -263,7 +267,7 @@ streamlit run app.py
 # Run all tests (must be green before pushing)
 pytest tests/ -v
 
-# Run QA suite only (40/40 required)
+# Run QA suite only (48/48 required)
 pytest tests/test_intent_parser.py -v
 
 # Deploy — Streamlit Cloud auto-deploys on push
@@ -303,6 +307,8 @@ See `secrets.toml.example` for a template.
 - **Activity tag scraping — URL corruption risk**: dash-format camps.ca URLs (e.g. `/gymnastics-camps.php`) redirect to homepage returning ALL 276 camps — will mass-tag every program incorrectly. Always use underscore `.php` format validated against `sitemap.xml`. `CAMP_PAGE_OVERRIDES` maps all known broken URLs to correct ones; `None` = skip page. After scraping, run `db/export_camp_tag_overrides.py` to regenerate `camp_tag_overrides.json`.
 - **Adding a new category page**: add to `PAGE_SLUG_OVERRIDES` in `tag_from_campsca_pages.py` (path → [slugs]), run the scraper + export, commit JSON. If it's a new main page, also add to `CANONICAL_PAGES`.
 - **Trait fuzzy aliases**: when adding a new trait word (e.g. "resilience"), add both the noun AND adjectival forms separately to `TRAIT_ALIASES` in `taxonomy_mapping.py`
+- **Fuzzy preprocessor coverage**: `word_match()` handles plurals via `s?` lookahead. ~220+ bare-word self-mapping aliases cover all L2/L3 slugs. `-multi` parents excluded (disambiguator handles them). Natural variants included where slug form is awkward (e.g. "ai" → ai-artificial-intelligence, "drums" → percussion)
+- **Parity suite** (`tests/parity_suite.py`): 4-layer search quality measurement. Use as release guardrail. Layer 1a fuzzy ~95%+, Layer 1b parser 97.8%, Layer 3 retrieval 100%. Run `--with-fuzzy` for quick check, `--with-db` for full retrieval test
 
 ---
 

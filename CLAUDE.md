@@ -11,7 +11,7 @@ Streamlit + Aiven MySQL + Claude AI. Auto-deploys to Streamlit Cloud on push to 
 - All 269 camps with OurKids dump data have full per-session programme records
 - Activity tags backfilled from camps.ca category pages (sitemap-validated): 728 camps, 10,724 new tags added
 - `db/camp_tag_overrides.json` persists scraped tags through every automated sync cycle
-- QA suite: 87/87 non-API tests passing; 40 intent parser tests require ANTHROPIC_API_KEY
+- QA suite: 48/48 intent parser tests passing (requires ANTHROPIC_API_KEY); 87/87 non-API tests passing
 - Architecture docs: `docs/architecture.md` (full), `docs/database.md`, `docs/testing.md`
 - Automated DB sync built (`db/sync_from_source.py` + `.github/workflows/sync.yml`) — pending OurKids DBA creating `csc_reader` read-only user (Monday 2026-03-16)
 

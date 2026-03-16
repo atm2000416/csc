@@ -91,12 +91,20 @@ def preprocess(raw_query: str) -> dict:
                 if s not in hints["trait_hints"]:
                     hints["trait_hints"].append(s)
 
-    # Check activity aliases from FUZZY_ALIASES (lists only, longest match first)
+    # Check activity aliases from FUZZY_ALIASES (lists only, longest match first).
+    # Consume matched spans so shorter aliases can't double-dip on the same words
+    # (e.g. "financial literacy" → financial-literacy, not also reading via "literacy").
+    consumed = normalized  # mutable copy — matched terms get blanked out
     for term, mapping in _SORTED_FUZZY:
-        if word_match(term, normalized):
+        if word_match(term, consumed):
             for s in mapping:
                 if s not in hints["tag_hints"]:
                     hints["tag_hints"].append(s)
+            # Blank out matched term so substrings can't re-match
+            consumed = re.sub(
+                r'(?<![a-z0-9])' + re.escape(term) + r's?(?![a-z0-9])',
+                ' ' * len(term), consumed, count=1,
+            )
 
     # Return only non-empty/non-False values
     return {k: v for k, v in hints.items() if v}

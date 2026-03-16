@@ -297,6 +297,22 @@ def test_bare_financial_literacy():
     assert "financial-literacy" in result.get("tag_hints", [])
 
 
+def test_financial_literacy_no_reading_bleed():
+    """'financial literacy' should NOT also produce 'reading' via 'literacy' sub-match."""
+    result = preprocess("financial literacy camps for my teen")
+    hints = result.get("tag_hints", [])
+    assert "financial-literacy" in hints
+    assert "reading" not in hints, f"'reading' should not bleed from 'literacy' sub-match: {hints}"
+
+
+def test_media_literacy_no_reading_bleed():
+    """'media literacy' → journalism, NOT also reading via 'literacy' sub-match."""
+    result = preprocess("media literacy summer program")
+    hints = result.get("tag_hints", [])
+    assert "journalism" in hints
+    assert "reading" not in hints, f"'reading' should not bleed: {hints}"
+
+
 # -- Title phrase resolution (slug title as query) --
 
 def test_title_creative_writing():

@@ -14,6 +14,7 @@ This is an idempotent backfill — INSERT IGNORE means re-runs are safe.
 The automated OurKids sync (sync_from_source.py) will keep tags current once live.
 """
 
+from collections import Counter
 import re
 import ssl
 import sys
@@ -705,12 +706,33 @@ def main():
             print(f"{len(camp_ids)} on page, 0 in DB, skip")
             continue
 
-        # Get all active program IDs for these camps
+        # Get active program IDs per camp — needed for program-count gating
         ph2 = ",".join(["%s"] * len(db_ids))
         cur.execute(
-            f"SELECT id FROM programs WHERE camp_id IN ({ph2}) AND status = 1", db_ids
+            f"SELECT id, camp_id FROM programs WHERE camp_id IN ({ph2}) AND status = 1",
+            db_ids,
         )
-        prog_ids = [r["id"] for r in cur.fetchall()]
+        prog_rows = cur.fetchall()
+
+        # Gate: only INSERT INTO program_tags for camps with ≤ 5 active
+        # programs.  Multi-program camps (6+) are too diverse — the scraper
+        # can't tell which sessions match the category page, so tagging all
+        # of them pollutes the search pool.  These camps are still recorded
+        # in camp_tag_overrides.json (via export) for reference / analytics,
+        # but search relevance comes from OurKids-sourced program_tags or
+        # the CSSL single-program override path.
+        MAX_PROGRAMS_FOR_TAGGING = 5
+        camp_prog_count = Counter(r["camp_id"] for r in prog_rows)
+        prog_ids = [
+            r["id"] for r in prog_rows
+            if camp_prog_count[r["camp_id"]] <= MAX_PROGRAMS_FOR_TAGGING
+        ]
+        skipped_camps = [
+            cid for cid, cnt in camp_prog_count.items()
+            if cnt > MAX_PROGRAMS_FOR_TAGGING
+        ]
+        if skipped_camps:
+            print(f"  (skipping program_tags for {len(skipped_camps)} camps with >{MAX_PROGRAMS_FOR_TAGGING} programs)", end=" ", flush=True)
 
         tag_ids = [slug_to_id[s] for s in tag_slugs if s in slug_to_id]
         pairs = [(pid, tid) for pid in prog_ids for tid in tag_ids]

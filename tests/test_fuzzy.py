@@ -352,3 +352,27 @@ def test_natural_hip_hop_daughter():
 def test_natural_mountain_biking():
     result = preprocess("is there mountain biking at any camps")
     assert "mountain-biking" in result.get("tag_hints", [])
+
+
+# -- Sports / sport-multi taxonomy decision --
+
+def test_sports_maps_to_parent_not_multi():
+    """'sports' bare word should map to L1 parent 'sports', not L2 'sport-multi'.
+    This triggers the category disambiguator for a better UX."""
+    result = preprocess("sports")
+    hints = result.get("tag_hints", [])
+    assert "sports" in hints, f"Expected 'sports' (L1 parent) in {hints}"
+    assert "sport-multi" not in hints, f"'sport-multi' should not appear for bare 'sports': {hints}"
+
+
+def test_sports_camps_maps_to_parent():
+    result = preprocess("sports camps for kids")
+    hints = result.get("tag_hints", [])
+    assert "sports" in hints
+
+
+def test_multi_sport_maps_to_sport_multi():
+    """Explicit 'multi sport' language should resolve to sport-multi."""
+    result = preprocess("multi sport camp")
+    hints = result.get("tag_hints", [])
+    assert "sport-multi" in hints

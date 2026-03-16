@@ -1736,7 +1736,7 @@ FUZZY_ALIASES: dict[str, list[str] | dict | None] = {
     'skiing': ["skiing"],
     'social justice': ["social-justice"],
     'songwriting': ["songwriting"],
-    'sports': ["sport-multi"],
+    'sports': ["sports"],
     'test preparation': ["test-preparation"],
     'track and field': ["track-and-field"],
     'videography': ["videography"],

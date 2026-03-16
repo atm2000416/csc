@@ -4,16 +4,24 @@ Streamlit + Aiven MySQL + Claude AI. Auto-deploys to Streamlit Cloud on push to 
 
 ---
 
-## Current State (as of 2026-03-15)
+## Current State (as of 2026-03-16)
 
 - Production on Streamlit Cloud, all features working
 - LLM stack fully migrated to Claude (Haiku + Sonnet) — no Gemini references remain
-- All 269 camps with OurKids dump data have full per-session programme records
-- Activity tags backfilled from camps.ca category pages (sitemap-validated): 728 camps, 10,724 new tags added
+- 271 camps with full per-session programme records (36 synced in first live run)
+- Activity tags backfilled from camps.ca category pages: 728 camps, 10,724+ tags
 - `db/camp_tag_overrides.json` persists scraped tags through every automated sync cycle
-- QA suite: 48/48 intent parser tests passing (requires ANTHROPIC_API_KEY); 87/87 non-API tests passing
+- QA suite: 48/48 intent parser tests passing (requires ANTHROPIC_API_KEY); 75/75 non-API tests passing
 - Architecture docs: `docs/architecture.md` (full), `docs/database.md`, `docs/testing.md`
-- Automated DB sync built (`db/sync_from_source.py` + `.github/workflows/sync.yml`) — pending OurKids DBA creating `csc_reader` read-only user (Monday 2026-03-16)
+- **Automated DB sync LIVE** — OurKids dumps to Google Drive; `sync.yml` downloads + syncs daily 02:00 UTC Mon–Fri
+
+### Pending one-time action (run locally before automation takes over)
+```bash
+python3 db/tag_from_campsca_pages.py        # scrape all 148 pages (~5-10 min)
+python3 db/export_camp_tag_overrides.py     # regenerate JSON
+git add db/camp_tag_overrides.json && git commit -m "refresh: full sitemap tag coverage"
+git push
+```
 
 ---
 
@@ -23,7 +31,7 @@ Streamlit + Aiven MySQL + Claude AI. Auto-deploys to Streamlit Cloud on push to 
 |-------|-----------|
 | UI | Streamlit ≥ 1.35 |
 | Database | Aiven MySQL 8.0 (SSL via `ca.pem` or `DB_SSL_CA_CERT` secret) |
-| Data Sync | GitHub Actions (`sync.yml`) — every 2h, reads OurKids MySQL directly |
+| Data Sync | GitHub Actions (`sync.yml`) — daily 02:00 UTC Mon–Fri, downloads dump from Google Drive |
 | Intent Parser | Claude Haiku 4.5 (`claude-haiku-4-5-20251001`) |
 | Reranker | Claude Haiku 4.5 |
 | Concierge | Claude Sonnet 4.6 (`claude-sonnet-4-6`) |
@@ -188,39 +196,61 @@ Thresholds: `ICS_HIGH_THRESHOLD` / `RCS_HIGH_THRESHOLD` secrets (default 0.70 ea
 
 ## Data Sync Workflow
 
-### Normal operation — automated (GitHub Actions)
+### camps.ca category tag refresh — automated (GitHub Actions)
 
-`db/sync_from_source.py` runs every 2 hours via `.github/workflows/sync.yml`. It connects
-to OurKids MySQL as the read-only `csc_reader` user and writes changes to Aiven.
+`db/tag_from_campsca_pages.py` runs **weekly (Sunday 03:00 UTC)** via
+`.github/workflows/refresh-camp-tags.yml`. It scrapes all camps.ca category pages,
+updates `program_tags` in Aiven, exports `camp_tag_overrides.json`, and commits the
+JSON to `main` if it changed.
+
+Manual trigger: GitHub → Actions → "Refresh camps.ca Category Tags" → Run workflow.
+
+```bash
+# Local run (scrapes ~148 pages, ~5-10 min)
+python3 db/tag_from_campsca_pages.py [--dry-run]
+
+# After scraping, regenerate the JSON (also runs automatically in CI)
+python3 db/export_camp_tag_overrides.py
+```
+
+**How page→slug mapping works:**
+1. `CANONICAL_PAGES` in `tag_from_campsca_pages.py` — 57 canonical main pages (replaces
+   Excel when running in CI; Excel takes priority locally if found at `CAMP_PAGES_XLSX`)
+2. `PAGE_SLUG_OVERRIDES` — 96 sitemap-derived pages with specific slugs (ballet→ballet,
+   not dance-multi; photography→photography, not arts-multi etc.)
+3. `CAMP_PAGE_OVERRIDES` — URL normalisation (dash→underscore broken URLs)
+
+**Parallel lookup in search** (`core/cssl.py`): `_SLUG_TO_CAMP_IDS` (loaded at module
+init from `camp_tag_overrides.json`) adds `OR p.camp_id IN (...)` to every tag query —
+guaranteeing camps.ca-listed camps appear even if `program_tags` has a gap.
+
+### OurKids programme sync — automated (GitHub Actions)
+
+`db/sync_from_dump.py` runs **daily 02:00 UTC Mon–Fri** via `.github/workflows/sync.yml`.
+Workflow: downloads the latest dump from Google Drive → runs sync → exports
+`camp_tag_overrides.json` → commits if changed.
+
+**Why Google Drive (not direct DB):** OurKids DBA denied direct MySQL access from GitHub
+Actions — firewall is locked to known IPs. OurKids uploads a mysqldump to a shared Google
+Drive folder; we pull it via a service account. No firewall changes required on their side.
 
 Manual trigger: GitHub → Actions → "Sync OurKids → Aiven" → Run workflow.
 
-```bash
-# Local dry-run (verify source connection + show what would change)
-python3 db/sync_from_source.py --dry-run
-
-# What GitHub Actions runs automatically
-python3 db/sync_from_source.py --deactivate --skip-ids 422,529,579,1647
-```
-
-Requires `SOURCE_DB_*` env vars (see Secrets section). The `DB_*` Aiven vars are the same
-as those used by the app.
-
-### Emergency fallback — manual dump sync
-
-Use only if OurKids source DB is unreachable or a schema change is under investigation.
+**Google Drive setup:**
+- Service account: `youtube-php-api@youtube-bonbon-431918-h7.iam.gserviceaccount.com`
+- Drive folder ID: `15EsIGXhGCyHxmrdkGDCjIwcC1wEd6Wzk`
+- GitHub secrets: `GDRIVE_SERVICE_ACCOUNT_JSON` (full JSON key), `GDRIVE_FOLDER_ID`
+- Download script: `db/download_from_drive.py` — fetches most-recently-modified file in folder
 
 ```bash
+# Emergency manual run from a local dump file
 python3 db/sync_from_dump.py --dump /path/to/dump.sql --import-all-sessions --dry-run
-python3 db/sync_from_dump.py --dump /path/to/dump.sql --import-all-sessions
-python3 db/sync_from_dump.py --dump /path/to/dump.sql --deactivate --update-meta \
-  --skip-ids 422,529,579,1647
+python3 db/sync_from_dump.py --dump /path/to/dump.sql --import-all-sessions \
+  --deactivate --skip-ids 422,529,579,1647
 ```
 
 `--skip-ids` protects manually promoted sub-locations:
 `422` Canlan Etobicoke · `529` Canlan Scarborough · `579` Canlan Oakville · `1647` Idea Labs Pickering
-
-Default dump path: `/Users/181lp/Documents/CLAUDE_code/csc_migration/camp_directory_dump20260311.sql`
 
 ---
 
@@ -249,11 +279,8 @@ git push origin main
 | `ANTHROPIC_API_KEY` | ✓ | — | Claude API |
 | `DB_HOST`, `DB_PORT`, `DB_NAME`, `DB_USER`, `DB_PASSWORD` | ✓ | ✓ | Aiven MySQL |
 | `DB_SSL_CA_CERT` | ✓ | ✓ | Aiven CA certificate (full PEM string) |
-| `SOURCE_DB_HOST` | — | ✓ | OurKids MySQL hostname/IP |
-| `SOURCE_DB_PORT` | — | ✓ | OurKids MySQL port (default `3306`) |
-| `SOURCE_DB_NAME` | — | ✓ | OurKids database name |
-| `SOURCE_DB_USER` | — | ✓ | `csc_reader` (read-only) |
-| `SOURCE_DB_PASSWORD` | — | ✓ | csc_reader password |
+| `GDRIVE_SERVICE_ACCOUNT_JSON` | — | ✓ | Google service account JSON key (full contents) |
+| `GDRIVE_FOLDER_ID` | — | ✓ | Google Drive folder ID (`15EsIGXhGCyHxmrdkGDCjIwcC1wEd6Wzk`) |
 | `ICS_HIGH_THRESHOLD` | ✓ | — | Decision matrix ICS cutoff (default `0.70`) |
 | `RCS_HIGH_THRESHOLD` | ✓ | — | Decision matrix RCS cutoff (default `0.70`) |
 | `RERANKER_THRESHOLD` | ✓ | — | Pool size above which reranker fires (default `15`) |
@@ -267,12 +294,14 @@ See `secrets.toml.example` for a template.
 
 ## Known Patterns & Gotchas
 
-- **Zero results for an activity**: Check `activity_tags` has the slug + `is_active=1`; check `program_tags` has programmes tagged with it; check `taxonomy_mapping.py` FUZZY_ALIASES maps the user's words to that slug
-- **Camp missing from search**: `status=1`? Has programmes? Programmes tagged? Tags match query? Within geo radius? See `docs/architecture.md` §6 for full diagnosis checklist
+- **Zero results for an activity**: Check `activity_tags` has the slug + `is_active=1`; check `program_tags` has programmes tagged with it; check `taxonomy_mapping.py` FUZZY_ALIASES maps the user's words to that slug; check `camp_tag_overrides.json` has that slug for relevant camps
+- **Camp missing from search**: `status=1`? Has programmes? Programmes tagged (via `program_tags` OR `camp_tag_overrides.json`)? Tags match query? Within geo radius? See `docs/architecture.md` §6 for full diagnosis checklist
 - **Reranker JSON error**: `raw.find('{"ranked"')` + `raw_decode` is the extraction pattern — handles preamble text from Claude
 - **Session state after refactor**: `accumulated_params` is a mirror — if a bug shows stale values, the root cause is always a mutation that bypassed `QueryState` + `sync_mirror()`
+- **Stale filters between searches**: RC-4 in `session_manager.py` clears tags/traits/type/gender/age/dates on activity switch. Rule 2b clears stale tags when model is confident but finds zero tags AND zero other params (pure exploration query). Rule 3 fires on `clear_activity=True`.
 - **Duplicate programmes from sync**: Run `--dry-run` first; the import is idempotent only if the prior run fully completed
-- **Activity tag scraping — URL corruption risk**: dash-format camps.ca URLs (e.g. `/gymnastics-camps.php`) redirect to homepage returning ALL 276 camps — will mass-tag every program incorrectly. Always use underscore `.php` format validated against `sitemap.xml`. `CAMP_PAGE_OVERRIDES` in `db/tag_from_campsca_pages.py` maps all known broken URLs to correct ones; `None` = skip page. After scraping, run `db/export_camp_tag_overrides.py` to regenerate `camp_tag_overrides.json`.
+- **Activity tag scraping — URL corruption risk**: dash-format camps.ca URLs (e.g. `/gymnastics-camps.php`) redirect to homepage returning ALL 276 camps — will mass-tag every program incorrectly. Always use underscore `.php` format validated against `sitemap.xml`. `CAMP_PAGE_OVERRIDES` maps all known broken URLs to correct ones; `None` = skip page. After scraping, run `db/export_camp_tag_overrides.py` to regenerate `camp_tag_overrides.json`.
+- **Adding a new category page**: add to `PAGE_SLUG_OVERRIDES` in `tag_from_campsca_pages.py` (path → [slugs]), run the scraper + export, commit JSON. If it's a new main page, also add to `CANONICAL_PAGES`.
 - **Trait fuzzy aliases**: when adding a new trait word (e.g. "resilience"), add both the noun AND adjectival forms separately to `TRAIT_ALIASES` in `taxonomy_mapping.py`
 
 ---

@@ -211,3 +211,144 @@ def test_longest_match_priority_figure_skating():
     hints = result.get("tag_hints", [])
     assert "figure-skating" in hints, f"Expected figure-skating, got {hints}"
     assert "skateboarding" not in hints, f"skateboarding should not be in {hints}"
+
+
+# ── Parity-derived regression tests ─────────────────────────────────────────
+# These lock in fixes found by the parity suite (Layer 1a, 2026-03-16).
+# Categories: plural handling, bare-word resolution, title phrases, natural language.
+
+# -- Plural handling (word_match s? fix) --
+
+def test_plural_hockey_camps():
+    """'hockey camps' (plural) must match the 'hockey camp' alias."""
+    result = preprocess("hockey camps in Toronto")
+    assert "hockey" in result.get("tag_hints", [])
+
+
+def test_plural_soccer_camps():
+    result = preprocess("soccer camps for kids")
+    assert "soccer" in result.get("tag_hints", [])
+
+
+def test_plural_cooking_camps():
+    result = preprocess("cooking camps this summer")
+    assert "cooking" in result.get("tag_hints", [])
+
+
+def test_plural_ballet_camps():
+    result = preprocess("ballet camps near me")
+    assert "ballet" in result.get("tag_hints", [])
+
+
+def test_plural_robotics_camps():
+    result = preprocess("robotics camps for teenagers")
+    assert "robotics" in result.get("tag_hints", [])
+
+
+# -- Bare-word resolution (self-mapping aliases) --
+
+def test_bare_photography():
+    result = preprocess("photography")
+    assert "photography" in result.get("tag_hints", [])
+
+
+def test_bare_cooking():
+    result = preprocess("cooking")
+    assert "cooking" in result.get("tag_hints", [])
+
+
+def test_bare_filmmaking():
+    result = preprocess("filmmaking")
+    assert "filmmaking" in result.get("tag_hints", [])
+
+
+def test_bare_martial_arts():
+    result = preprocess("martial arts")
+    assert "martial-arts" in result.get("tag_hints", [])
+
+
+def test_bare_woodworking():
+    result = preprocess("woodworking")
+    assert "woodworking" in result.get("tag_hints", [])
+
+
+def test_bare_songwriting():
+    result = preprocess("songwriting")
+    assert "songwriting" in result.get("tag_hints", [])
+
+
+def test_bare_entrepreneurship():
+    result = preprocess("entrepreneurship")
+    assert "entrepreneurship" in result.get("tag_hints", [])
+
+
+def test_bare_skiing():
+    result = preprocess("skiing")
+    assert "skiing" in result.get("tag_hints", [])
+
+
+def test_bare_musical_theatre():
+    result = preprocess("musical theatre")
+    assert "musical-theatre" in result.get("tag_hints", [])
+
+
+def test_bare_financial_literacy():
+    result = preprocess("financial literacy")
+    assert "financial-literacy" in result.get("tag_hints", [])
+
+
+# -- Title phrase resolution (slug title as query) --
+
+def test_title_creative_writing():
+    """'creative writing' should resolve to creative-writing (not just writing)."""
+    result = preprocess("creative writing")
+    assert "creative-writing" in result.get("tag_hints", [])
+
+
+def test_title_leadership_training():
+    result = preprocess("leadership training")
+    assert "leadership-training" in result.get("tag_hints", [])
+
+
+def test_title_technology():
+    """'technology' should resolve to the technology slug, not just computers-tech."""
+    result = preprocess("technology")
+    hints = result.get("tag_hints", [])
+    assert "technology" in hints
+
+
+def test_title_public_speaking():
+    result = preprocess("public speaking")
+    assert "public-speaking" in result.get("tag_hints", [])
+
+
+def test_title_track_and_field():
+    result = preprocess("track and field")
+    assert "track-and-field" in result.get("tag_hints", [])
+
+
+# -- Natural-language grounding --
+
+def test_natural_cooking_for_kids():
+    result = preprocess("I want my kid to learn cooking")
+    assert "cooking" in result.get("tag_hints", [])
+
+
+def test_natural_photography_summer():
+    result = preprocess("photography classes this summer")
+    assert "photography" in result.get("tag_hints", [])
+
+
+def test_natural_martial_arts_son():
+    result = preprocess("martial arts for my son")
+    assert "martial-arts" in result.get("tag_hints", [])
+
+
+def test_natural_hip_hop_daughter():
+    result = preprocess("my daughter loves hip hop")
+    assert "hip-hop" in result.get("tag_hints", [])
+
+
+def test_natural_mountain_biking():
+    result = preprocess("is there mountain biking at any camps")
+    assert "mountain-biking" in result.get("tag_hints", [])

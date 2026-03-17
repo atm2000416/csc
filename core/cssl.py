@@ -230,21 +230,26 @@ def query(params: dict, limit: int = 100) -> tuple[list[dict], float]:
     )
 
     # Specialty boost — ranks specialist programs above generalist programs.
-    # Only meaningful when specific activity tags are searched.
-    # _primary_match: 0 if any searched tag is marked is_primary for this program, else 1
+    # Uses tag_role (specialty > category > activity) when available,
+    # falls back to is_primary for legacy rows.
+    # _role_match: 0=specialty, 1=category, 2=activity, 3=no match
     # _tag_count: total tags on program (fewer = more specialized)
     if tag_ids:
         ph_sp = ", ".join(f"%(tag_{i})s" for i in range(len(tag_ids)))
         specialty_select = f"""
-            (SELECT MIN(CASE WHEN pt2.is_primary = 1 THEN 0 ELSE 1 END)
+            (SELECT MIN(CASE
+                WHEN pt2.tag_role = 'specialty' THEN 0
+                WHEN pt2.tag_role = 'category'  THEN 1
+                WHEN pt2.tag_role = 'activity'  THEN 2
+                ELSE 3 END)
              FROM program_tags pt2
              WHERE pt2.program_id = p.id AND pt2.tag_id IN ({ph_sp})
-            ) AS _primary_match,
+            ) AS _role_match,
             (SELECT COUNT(*) FROM program_tags WHERE program_id = p.id) AS _tag_count,"""
-        # COALESCE(_primary_match, 1): override-only programs have NULL here
-        # (no matching program_tags row), treat as "not primary" so they rank
+        # COALESCE(_role_match, 3): override-only programs have NULL here
+        # (no matching program_tags row), treat as lowest priority so they rank
         # after programs with an explicit tag match.
-        specialty_boost = "COALESCE(_primary_match, 1) ASC, _tag_count ASC,"
+        specialty_boost = "COALESCE(_role_match, 3) ASC, _tag_count ASC,"
     else:
         specialty_select = ""
         specialty_boost = ""

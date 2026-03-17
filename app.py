@@ -411,20 +411,61 @@ def _fetch_all_camp_programs(camp_id: int, exclude_program_id: int, camp_name: s
         return []
 
 
+def _partition_by_role(results: list[dict]) -> tuple[list[dict], list[dict]]:
+    """
+    Split CSSL results into specialty/category hits vs activity-only hits.
+    _role_match: 0=specialty, 1=category, 2=activity, 3=no match (or missing).
+    """
+    specialty_hits = [r for r in results if r.get("_role_match") is not None
+                      and r["_role_match"] <= 1]
+    activity_hits  = [r for r in results if r.get("_role_match") is not None
+                      and r["_role_match"] == 2]
+    # If no role data (pre-migration), treat all as specialty
+    if not specialty_hits and not activity_hits:
+        return results, []
+    return specialty_hits, activity_hits
+
+
 def _maybe_offer_more_camps(pool: list[dict], final: list[dict],
-                            raw_query: str, merged_params: dict) -> None:
+                            raw_query: str, merged_params: dict,
+                            activity_overflow: list[dict] | None = None) -> None:
     """
     If the CSSL pool contained more unique camps than we displayed,
     offer to show them via a conversational prompt.
     Called after display_results() for any route that shows results.
+
+    activity_overflow: if provided, these are activity-role matches that were
+    held back because enough specialty matches were available.
     """
     shown_camp_ids = {r.get("camp_id") for r in final}
+
+    # Combine regular overflow with activity-role overflow
     overflow = [r for r in pool if r.get("camp_id") not in shown_camp_ids]
+    if activity_overflow:
+        activity_extra = [r for r in activity_overflow
+                          if r.get("camp_id") not in shown_camp_ids]
+        overflow = overflow + activity_extra
+
     n_more = len({r.get("camp_id") for r in overflow})
     if n_more <= 0:
         return
     tags = merged_params.get("tags", [])
     tag_label = tags[0].replace("-multi", "").replace("-", " ") if tags else "this activity"
+
+    # If we held back activity matches, mention it specifically
+    if activity_overflow:
+        n_activity = len({r.get("camp_id") for r in activity_overflow
+                          if r.get("camp_id") not in shown_camp_ids})
+        if n_activity > 0:
+            st.session_state["_more_camps_pool"]   = overflow
+            st.session_state["_more_camps_query"]  = raw_query
+            st.session_state["_more_camps_params"] = merged_params
+            _speak(
+                f"I also found **{n_activity} more camp{'s' if n_activity != 1 else ''}** "
+                f"that offer {tag_label} as an activity. Would you like to see them?"
+            )
+            return
+
     st.session_state["_more_camps_pool"]   = overflow
     st.session_state["_more_camps_query"]  = raw_query
     st.session_state["_more_camps_params"] = merged_params
@@ -873,6 +914,20 @@ def _run_search(merged_params: dict, raw_query: str, session: dict, sidebar_filt
         "but here are some that may offer virtual or hybrid sessions._\n\n"
     ) if virtual_fallback_used else ""
 
+    # Partition results by tag_role: specialty/category hits vs activity-only
+    specialty_hits, activity_hits = _partition_by_role(results)
+    n_specialty_camps = len({r.get("camp_id") for r in specialty_hits})
+    _activity_overflow = None
+    if n_specialty_camps > 10 and activity_hits:
+        # Enough specialty camps — hold back activity-only matches for "see more"
+        _activity_overflow = activity_hits
+        results = specialty_hits
+        record("role_partition", {
+            "specialty_camps": n_specialty_camps,
+            "activity_held_back": len(activity_hits),
+        })
+    # else: use combined results (original behavior)
+
     ics = getattr(intent, "ics", 1.0) if intent else 1.0
     if intent:
         merged_params["ics"] = intent.ics
@@ -894,7 +949,8 @@ def _run_search(merged_params: dict, raw_query: str, session: dict, sidebar_filt
         render_trace()
         _speak(_virtual_note + msg)
         display_results(final)
-        _maybe_offer_more_camps(results, final, raw_query, merged_params)
+        _maybe_offer_more_camps(results, final, raw_query, merged_params,
+                                activity_overflow=_activity_overflow)
         st.session_state["_last_results"] = final
         set_cache(cache_key, {"results": final, "concierge_message": msg})
         store_results([r["id"] for r in final])
@@ -929,7 +985,8 @@ def _run_search(merged_params: dict, raw_query: str, session: dict, sidebar_filt
             render_trace()
             _speak(_virtual_note + msg)
             display_results(final)
-            _maybe_offer_more_camps(all_results, final, raw_query, merged_params)
+            _maybe_offer_more_camps(all_results, final, raw_query, merged_params,
+                                    activity_overflow=_activity_overflow)
             st.session_state["_last_results"] = final
             set_cache(cache_key, {"results": final, "concierge_message": msg})
             store_results([r["id"] for r in final])
@@ -951,7 +1008,8 @@ def _run_search(merged_params: dict, raw_query: str, session: dict, sidebar_filt
         render_trace()
         _speak(_virtual_note + msg)
         display_results(final)
-        _maybe_offer_more_camps(results, final, raw_query, merged_params)
+        _maybe_offer_more_camps(results, final, raw_query, merged_params,
+                                activity_overflow=_activity_overflow)
         st.session_state["_last_results"] = final
         render_clarification(decision.clarification_dimensions)
         if intent:

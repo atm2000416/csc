@@ -317,21 +317,65 @@ def parse_sessions_by_camp(content, camp_ids: set) -> dict:
     return result
 
 
+def parse_sitems(content) -> dict:
+    """
+    Parse the sitems table from the dump.
+    Maps sitems ID → activity_tag slug via WEBITEMS_TO_SLUG.
+    Returns: {sitems_id: slug} for items that have a known mapping.
+    """
+    from db.tag_from_campsca_pages import WEBITEMS_TO_SLUG
+
+    # Build name→slug lookup (case-insensitive)
+    name_to_slug = {k.lower(): v for k, v in WEBITEMS_TO_SLUG.items()}
+
+    result = {}
+    for block_m in re.finditer(
+        r"INSERT INTO `sitems` VALUES (.*?);\n",
+        content, re.DOTALL
+    ):
+        # Each row: (id, ?, 'item_name', ...)
+        for row_m in re.finditer(
+            r"\((\d+),\d+,'((?:[^'\\]|\\.)*?)'",
+            block_m.group(1)
+        ):
+            sitems_id = int(row_m.group(1))
+            item_name = row_m.group(2).strip().replace("\\'", "'")
+            slug = name_to_slug.get(item_name.lower())
+            if slug:
+                result[sitems_id] = slug
+
+    return result
+
+
+def parse_activities_field(raw: str) -> list[int]:
+    """
+    Parse the activities text field from a session row.
+    Input:  "[133]2,[81]3,[154]1"
+    Output: [133, 81, 154]  (sitems IDs, priority discarded)
+    """
+    if not raw:
+        return []
+    return [int(m) for m in re.findall(r'\[(\d+)\]', raw)]
+
+
 def parse_sessions_full(content, camp_ids: set) -> dict:
     """
     Parse full session details from the dump for specific camp_ids.
     Deduplicates by cleaned name — returns one record per unique program name.
     Skips: status=0, blank/draft names ("New program", "Copy of ...").
-    Returns: {camp_id: [{"name", "type", "age_from", "age_to",
-                          "cost_from", "cost_to", "date_from", "date_to"}, ...]}
+    Returns: {camp_id: [{"name", "type", "category_id", "specialty_id",
+                          "age_from", "age_to", "cost_from", "cost_to",
+                          "date_from", "date_to", "activity_ids"}, ...]}
     """
-    # Schema: (id, camp_id, 'name', 'type', ?, category_id, status,
+    # Schema: (id, camp_id, 'name', 'type', category, specialty, status,
     #           'date_from', 'date_to', age_from, age_to, cost_from, cost_to, ...)
     _SESSION_RE = re.compile(
-        r"\((\d+),(\d+),'((?:[^'\\]|\\.)*?)','([^']*)',\d+,\d+,(\d+),"
+        r"\((\d+),(\d+),'((?:[^'\\]|\\.)*?)','([^']*)',(\d+),(\d+),(\d+),"
         r"'(\d{4}-\d{2}-\d{2})','(\d{4}-\d{2}-\d{2})',"
         r"(\d+),(\d+),(\d+),(\d+),"
     )
+    # Pattern to extract activities field: [id]priority encoded text
+    _ACTIVITIES_RE = re.compile(r'\[(\d+)\]\d+')
     _SKIP_PREFIXES = ("new program", "copy of")
 
     result = defaultdict(dict)  # camp_id → {clean_name: session_dict}
@@ -340,11 +384,12 @@ def parse_sessions_full(content, camp_ids: set) -> dict:
         r"INSERT INTO `sessions` VALUES (.*?);\n",
         content, re.DOTALL
     ):
-        for sm in _SESSION_RE.finditer(m.group(1)):
+        block = m.group(1)
+        for sm in _SESSION_RE.finditer(block):
             cid    = int(sm.group(2))
             if cid not in camp_ids:
                 continue
-            status = int(sm.group(5))
+            status = int(sm.group(7))
             if status != 1:
                 continue
             name = sm.group(3).strip().replace("\\'", "'")
@@ -358,17 +403,34 @@ def parse_sessions_full(content, camp_ids: set) -> dict:
             if clean_key in result[cid]:
                 continue  # keep first occurrence per unique name
 
-            date_from = sm.group(6)
-            date_to   = sm.group(7)
+            category_id  = int(sm.group(5))
+            specialty_id = int(sm.group(6))
+
+            date_from = sm.group(8)
+            date_to   = sm.group(9)
+
+            # Extract activities from the tail of this row.
+            # Find the text from end of regex match to the next row start.
+            tail_start = sm.end()
+            next_row = block.find('),(', tail_start)
+            if next_row == -1:
+                tail = block[tail_start:]
+            else:
+                tail = block[tail_start:next_row]
+            activity_ids = [int(x) for x in _ACTIVITIES_RE.findall(tail)]
+
             result[cid][clean_key] = {
-                "name":      name,
-                "type":      sm.group(4) or None,
-                "age_from":  int(sm.group(8)) or None,
-                "age_to":    int(sm.group(9)) or None,
-                "cost_from": int(sm.group(10)) or None,
-                "cost_to":   int(sm.group(11)) or None,
-                "date_from": date_from if date_from != "0000-00-00" else None,
-                "date_to":   date_to   if date_to   != "0000-00-00" else None,
+                "name":         name,
+                "type":         sm.group(4) or None,
+                "category_id":  category_id or None,
+                "specialty_id": specialty_id or None,
+                "age_from":     int(sm.group(10)) or None,
+                "age_to":       int(sm.group(11)) or None,
+                "cost_from":    int(sm.group(12)) or None,
+                "cost_to":      int(sm.group(13)) or None,
+                "date_from":    date_from if date_from != "0000-00-00" else None,
+                "date_to":      date_to   if date_to   != "0000-00-00" else None,
+                "activity_ids": activity_ids,
             }
 
     # Convert inner dicts to lists
@@ -662,6 +724,79 @@ def infer_tags(session_names: list, tag_slug_to_id: dict) -> set:
     return found
 
 
+def insert_sitems_tags(cursor, prog_id: int, session: dict,
+                       sitems_to_slug: dict, tag_slug_to_id: dict) -> int:
+    """
+    Insert program_tags from OurKids sitems data (specialty, category, activities).
+    Returns the number of tags inserted.
+    Falls back to infer_tags() if no sitems data resolves to valid tags.
+    """
+    inserted = 0
+    seen_tag_ids: set[int] = set()
+
+    # 1. Specialty — highest priority tag_role
+    spec_id = session.get("specialty_id")
+    if spec_id:
+        slug = sitems_to_slug.get(spec_id)
+        if slug:
+            tag_id = tag_slug_to_id.get(slug)
+            if tag_id and tag_id not in seen_tag_ids:
+                cursor.execute(
+                    "INSERT IGNORE INTO program_tags "
+                    "(program_id, tag_id, is_primary, tag_role) "
+                    "VALUES (%s, %s, 1, 'specialty')",
+                    (prog_id, tag_id)
+                )
+                seen_tag_ids.add(tag_id)
+                inserted += cursor.rowcount
+
+    # 2. Category — skip if same tag as specialty
+    cat_id = session.get("category_id")
+    if cat_id:
+        slug = sitems_to_slug.get(cat_id)
+        if slug:
+            tag_id = tag_slug_to_id.get(slug)
+            if tag_id and tag_id not in seen_tag_ids:
+                cursor.execute(
+                    "INSERT IGNORE INTO program_tags "
+                    "(program_id, tag_id, is_primary, tag_role) "
+                    "VALUES (%s, %s, 0, 'category')",
+                    (prog_id, tag_id)
+                )
+                seen_tag_ids.add(tag_id)
+                inserted += cursor.rowcount
+
+    # 3. Activities — skip duplicates of specialty/category
+    for act_id in session.get("activity_ids", []):
+        slug = sitems_to_slug.get(act_id)
+        if slug:
+            tag_id = tag_slug_to_id.get(slug)
+            if tag_id and tag_id not in seen_tag_ids:
+                cursor.execute(
+                    "INSERT IGNORE INTO program_tags "
+                    "(program_id, tag_id, is_primary, tag_role) "
+                    "VALUES (%s, %s, 0, 'activity')",
+                    (prog_id, tag_id)
+                )
+                seen_tag_ids.add(tag_id)
+                inserted += cursor.rowcount
+
+    # 4. Fallback: if no sitems tags resolved, use keyword inference
+    if not seen_tag_ids:
+        for slug in sorted(infer_tags([session["name"]], tag_slug_to_id)):
+            tag_id = tag_slug_to_id.get(slug)
+            if tag_id:
+                cursor.execute(
+                    "INSERT IGNORE INTO program_tags "
+                    "(program_id, tag_id, is_primary, tag_role) "
+                    "VALUES (%s, %s, 0, 'activity')",
+                    (prog_id, tag_id)
+                )
+                inserted += cursor.rowcount
+
+    return inserted
+
+
 # ── Main sync logic ───────────────────────────────────────────────────────────
 
 def run(dump_path, dry_run, only, update_meta, deactivate=False, skip_ids=None,
@@ -675,11 +810,13 @@ def run(dump_path, dry_run, only, update_meta, deactivate=False, skip_ids=None,
     dump_info   = parse_general_info(content)
     dump_locs   = parse_extra_locations(content)
     dump_sdates = parse_session_dates(content)
+    sitems_to_slug = parse_sitems(content)
 
     print(f"  Parsed {len(dump_camps)} camps, {len(dump_addrs)} addresses, "
           f"{len(dump_info)} generalInfo rows, "
           f"{sum(len(v) for v in dump_locs.values())} extra_location rows, "
-          f"{len(dump_sdates)} session_date rows\n")
+          f"{len(dump_sdates)} session_date rows, "
+          f"{len(sitems_to_slug)} sitems→slug mappings\n")
 
     conn = get_connection()
     cursor = conn.cursor(dictionary=True)
@@ -850,13 +987,14 @@ def run(dump_path, dry_run, only, update_meta, deactivate=False, skip_ids=None,
                 )
                 prog_id = cursor.lastrowid
 
-                # Assign inferred tags
+                # Assign inferred tags (seed path has no per-session sitems data)
                 for slug in inferred:
                     tag_id = tag_slug_to_id.get(slug)
                     if tag_id:
                         cursor.execute(
-                            "INSERT IGNORE INTO program_tags (program_id, tag_id) "
-                            "VALUES (%s, %s)",
+                            "INSERT IGNORE INTO program_tags "
+                            "(program_id, tag_id, is_primary, tag_role) "
+                            "VALUES (%s, %s, 0, 'activity')",
                             (prog_id, tag_id)
                         )
 
@@ -952,14 +1090,8 @@ def run(dump_path, dry_run, only, update_meta, deactivate=False, skip_ids=None,
                         )
                     )
                     prog_id = cursor.lastrowid
-                    for slug in sorted(infer_tags([s["name"]], tag_slug_to_id)):
-                        tag_id = tag_slug_to_id.get(slug)
-                        if tag_id:
-                            cursor.execute(
-                                "INSERT IGNORE INTO program_tags (program_id, tag_id) "
-                                "VALUES (%s, %s)",
-                                (prog_id, tag_id)
-                            )
+                    insert_sitems_tags(cursor, prog_id, s,
+                                      sitems_to_slug, tag_slug_to_id)
 
                 refreshed += 1
                 if refreshed % 20 == 0:
@@ -1076,14 +1208,8 @@ def run(dump_path, dry_run, only, update_meta, deactivate=False, skip_ids=None,
                     )
                 )
                 prog_id = cursor.lastrowid
-                for slug in sorted(infer_tags([s["name"]], tag_slug_to_id)):
-                    tag_id = tag_slug_to_id.get(slug)
-                    if tag_id:
-                        cursor.execute(
-                            "INSERT IGNORE INTO program_tags (program_id, tag_id) "
-                            "VALUES (%s, %s)",
-                            (prog_id, tag_id)
-                        )
+                insert_sitems_tags(cursor, prog_id, s,
+                                   sitems_to_slug, tag_slug_to_id)
 
             imported += 1
             if imported % 25 == 0:

@@ -92,11 +92,13 @@ CREATE TABLE IF NOT EXISTS program_tags (
     program_id  INT UNSIGNED NOT NULL,
     tag_id      INT UNSIGNED NOT NULL,
     is_primary  TINYINT NOT NULL DEFAULT 1,
+    tag_role    ENUM('specialty','category','activity') NOT NULL DEFAULT 'activity',
     PRIMARY KEY (program_id, tag_id),
     FOREIGN KEY (program_id) REFERENCES programs(id) ON DELETE CASCADE,
     FOREIGN KEY (tag_id) REFERENCES activity_tags(id),
     INDEX idx_tag (tag_id),
-    INDEX idx_primary (is_primary)
+    INDEX idx_primary (is_primary),
+    INDEX idx_tag_role (tag_role)
 ) ENGINE=InnoDB DEFAULT CHARSET=utf8mb4 COLLATE=utf8mb4_unicode_ci;
 
 -- 5. CATEGORIES (SEO landing pages)

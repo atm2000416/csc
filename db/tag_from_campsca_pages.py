@@ -194,6 +194,30 @@ WEBITEMS_TO_SLUG: dict[str, str] = {
     "Yoga":                             "yoga",
     "Zip Line":                         "zip-line",
     "Zoology":                          "zoology",
+    # ── Specialty-level (sitems isact=0) — broad camp categories ──
+    "Health & Fitness":                     "health-fitness",
+    "Education":                            "education",
+    "Sports":                               "sports",
+    "Arts":                                 "arts",
+    "Adventure":                            "adventure",
+    "Computer (multi)":                     "computer-multi",
+    "Sport (multi)":                        "sport-multi",
+    "Arts (multi)":                         "arts-multi",
+    "Computers & Tech":                     "computers-tech",
+    "Traditional (multi activity)":         "traditional",
+    "Adventure (multi)":                    "adventure-multi",
+    "Immersion":                            "language-immersion",
+    "Health and Fitness (multi)":           "health-fitness-multi",
+    "Education (multi)":                    "education-multi",
+    "Bilingual":                            "language-instruction",
+    # ── Additional activities from sitems not in webitems ──
+    "Dodgeball":                            "dodgeball",
+    "Forensic Science":                     "forensic-science",
+    "Journalism":                           "journalism",
+    "Snowboarding":                         "snowboarding",
+    "Storytelling":                         "storytelling",
+    "Disc Golf":                            "disc-golf",
+    "Water Polo":                           "water-polo",
     # Special needs / medical — no activity tag mapping:
     # ADD/ADHD, Autism Spectrum Disorder, Cancer, Diabetes, Down Syndrome,
     # Dyslexia, Intellectual disability, Physical Disability, Vision loss,
@@ -744,10 +768,10 @@ def main():
             chunk_size = 500
             for i in range(0, len(pairs), chunk_size):
                 chunk = pairs[i : i + chunk_size]
-                placeholders = ",".join(["(%s,%s,0)"] * len(chunk))
+                placeholders = ",".join(["(%s,%s,0,'activity')"] * len(chunk))
                 flat = [v for pair in chunk for v in pair]
                 cur.execute(
-                    f"INSERT IGNORE INTO program_tags (program_id, tag_id, is_primary) "
+                    f"INSERT IGNORE INTO program_tags (program_id, tag_id, is_primary, tag_role) "
                     f"VALUES {placeholders}",
                     flat,
                 )

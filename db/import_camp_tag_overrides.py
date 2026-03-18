@@ -49,6 +49,14 @@ def main():
         if not prog_ids:
             continue
 
+        # Only insert program_tags for single-program camps.  Multi-program
+        # camps are covered by the camp_tag_overrides.json parallel lookup
+        # in CSSL (camp_id-level match).  Tagging all programs at
+        # multi-program camps creates false signals — e.g. a basketball
+        # session getting a hockey tag because the camp is on the hockey page.
+        if len(prog_ids) > 1:
+            continue
+
         tag_ids = [slug_to_id[s] for s in slugs if s in slug_to_id]
         if not tag_ids:
             continue

@@ -381,27 +381,83 @@ def process_results(results: list[dict], raw_query: str, intent_params: dict) ->
 
 
 @st.cache_data(ttl=300, show_spinner=False)
-def _fetch_all_camp_programs(camp_id: int, exclude_program_id: int, camp_name: str) -> list[dict]:
+def _fetch_all_camp_programs(camp_id: int, exclude_program_id: int, camp_name: str,
+                             search_params: dict | None = None) -> list[dict]:
     """
-    Return all active, non-expired programs for a camp, excluding the one
-    already shown as the primary card and the generic placeholder (name=camp name).
+    Return active, non-expired programs for a camp that match the current search
+    criteria, excluding the one already shown as the primary card and the generic
+    placeholder (name=camp name).
+
+    Applies tag, age, and type filters from search_params so only relevant
+    sessions appear in the expander.
     """
     try:
         from db.connection import get_connection
         conn   = get_connection()
         cursor = conn.cursor(dictionary=True)
+
+        conditions = [
+            "p.camp_id = %s", "p.status = 1", "p.id != %s",
+            "p.name != %s",
+            "(p.end_date IS NULL OR p.end_date >= CURDATE())"
+        ]
+        args: list = [camp_id, exclude_program_id, camp_name]
+        joins = ["JOIN camps c ON c.id = p.camp_id"]
+
+        if search_params:
+            # Tag filter — only show sessions tagged with the searched activity
+            from core.cssl import resolve_tag_ids, expand_via_categories
+            expanded = expand_via_categories(search_params.get("tags", []), cursor)
+            tag_ids = resolve_tag_ids(expanded, cursor)
+            if tag_ids:
+                ph = ", ".join(["%s"] * len(tag_ids))
+                conditions.append(
+                    f"EXISTS (SELECT 1 FROM program_tags WHERE program_id = p.id "
+                    f"AND tag_id IN ({ph}))"
+                )
+                args.extend(tag_ids)
+
+            # Age overlap filter
+            if (search_params.get("age_from") is not None
+                    and search_params.get("age_to") is not None):
+                conditions.append(
+                    "(p.age_from IS NULL OR p.age_from <= %s) AND "
+                    "(p.age_to IS NULL OR p.age_to >= %s)"
+                )
+                args.extend([search_params["age_to"], search_params["age_from"]])
+
+            # Type filter
+            _TYPE_MAP = {
+                "Day":       "p.type IN ('1','1,3','Day Camp')",
+                "Overnight": "p.type IN ('2','3','1,3')",
+                "Both":      "p.type IN ('3','1,3')",
+                "Virtual":   "p.type = '4'",
+            }
+            if search_params.get("type") and search_params["type"] in _TYPE_MAP:
+                conditions.append(_TYPE_MAP[search_params["type"]])
+
+            # Gender filter
+            _GENDER_MAP = {"Boys": 1, "Girls": 2}
+            if (search_params.get("gender")
+                    and search_params["gender"] in _GENDER_MAP):
+                gval = _GENDER_MAP[search_params["gender"]]
+                conditions.append(
+                    "(p.gender = %s OR p.gender IS NULL OR p.gender = 0)"
+                )
+                args.append(gval)
+
+        where = " AND ".join(conditions)
+        joins_str = " ".join(joins)
         cursor.execute(
-            "SELECT p.id, p.name, p.type, p.age_from, p.age_to, "
-            "       p.cost_from, p.cost_to, p.start_date, p.end_date, "
-            "       c.camp_name, c.tier, c.city, c.province, c.slug, c.prettyurl, c.website, "
-            "       p.camp_id "
-            "FROM programs p "
-            "JOIN camps c ON c.id = p.camp_id "
-            "WHERE p.camp_id = %s AND p.status = 1 AND p.id != %s "
-            "  AND p.name != %s "
-            "  AND (p.end_date IS NULL OR p.end_date >= CURDATE()) "
-            "ORDER BY p.name",
-            (camp_id, exclude_program_id, camp_name)
+            f"SELECT p.id, p.name, p.type, p.age_from, p.age_to, "
+            f"       p.cost_from, p.cost_to, p.start_date, p.end_date, "
+            f"       c.camp_name, c.tier, c.city, c.province, c.slug, c.prettyurl, c.website, "
+            f"       p.camp_id "
+            f"FROM programs p "
+            f"{joins_str} "
+            f"WHERE {where} "
+            f"ORDER BY p.name",
+            tuple(args)
         )
         rows = cursor.fetchall()
         cursor.close()
@@ -475,10 +531,14 @@ def _maybe_offer_more_camps(pool: list[dict], final: list[dict],
     )
 
 
-def display_results(results: list[dict]):
+def display_results(results: list[dict], search_params: dict | None = None):
     if not results:
         st.info("No camps found matching your search. Try adjusting your filters.")
         return
+
+    # Resolve search_params: explicit arg > session state > None (unfiltered)
+    if search_params is None:
+        search_params = st.session_state.get("_last_search_params")
 
     # Group by camp_id, preserving rank order (first occurrence = camp's rank)
     groups: dict[int, list[dict]] = {}
@@ -503,7 +563,8 @@ def display_results(results: list[dict]):
         camp_name = top.get("camp_name", "")
         shown_ids = {r.get("id") for r in camp_sessions}
 
-        db_extras = _fetch_all_camp_programs(camp_id, top.get("id", -1), camp_name)
+        db_extras = _fetch_all_camp_programs(camp_id, top.get("id", -1), camp_name,
+                                             search_params=search_params)
         # Merge: reranker extras first (they have blurbs), then DB extras not already shown
         reranker_extras = camp_sessions[1:]
         db_only = [r for r in db_extras if r.get("id") not in shown_ids]
@@ -741,8 +802,9 @@ def main():
             more_final = process_results(overflow_pool, overflow_query, overflow_params)
         n_shown = len({r.get("camp_id") for r in more_final})
         _speak(f"Here are {n_shown} more camp{'s' if n_shown != 1 else ''}:")
-        display_results(more_final)
+        display_results(more_final, search_params=overflow_params)
         st.session_state["_last_results"] = more_final
+        st.session_state["_last_search_params"] = overflow_params
         return
 
     # Affirmative suggestion check (geo-broaden)
@@ -877,8 +939,9 @@ def _run_search(merged_params: dict, raw_query: str, session: dict, sidebar_filt
         record("cache", {"hit": True, "result_count": len(cached["results"])})
         render_trace()
         _speak(cached.get("concierge_message", ""))
-        display_results(cached["results"])
+        display_results(cached["results"], search_params=merged_params)
         st.session_state["_last_results"] = cached["results"]
+        st.session_state["_last_search_params"] = merged_params
         return
 
     record("cache", {"hit": False})
@@ -948,10 +1011,11 @@ def _run_search(merged_params: dict, raw_query: str, session: dict, sidebar_filt
                           "concierge_msg": msg[:200]})
         render_trace()
         _speak(_virtual_note + msg)
-        display_results(final)
+        display_results(final, search_params=merged_params)
         _maybe_offer_more_camps(results, final, raw_query, merged_params,
                                 activity_overflow=_activity_overflow)
         st.session_state["_last_results"] = final
+        st.session_state["_last_search_params"] = merged_params
         set_cache(cache_key, {"results": final, "concierge_message": msg})
         store_results([r["id"] for r in final])
         if intent:
@@ -984,10 +1048,11 @@ def _run_search(merged_params: dict, raw_query: str, session: dict, sidebar_filt
                                "concierge_msg": msg[:200]})
             render_trace()
             _speak(_virtual_note + msg)
-            display_results(final)
+            display_results(final, search_params=merged_params)
             _maybe_offer_more_camps(all_results, final, raw_query, merged_params,
                                     activity_overflow=_activity_overflow)
             st.session_state["_last_results"] = final
+            st.session_state["_last_search_params"] = merged_params
             set_cache(cache_key, {"results": final, "concierge_message": msg})
             store_results([r["id"] for r in final])
             if intent:
@@ -1007,10 +1072,11 @@ def _run_search(merged_params: dict, raw_query: str, session: dict, sidebar_filt
                           "concierge_msg": msg[:200]})
         render_trace()
         _speak(_virtual_note + msg)
-        display_results(final)
+        display_results(final, search_params=merged_params)
         _maybe_offer_more_camps(results, final, raw_query, merged_params,
                                 activity_overflow=_activity_overflow)
         st.session_state["_last_results"] = final
+        st.session_state["_last_search_params"] = merged_params
         render_clarification(decision.clarification_dimensions)
         if intent:
             log_search(session, intent, rcs, len(final))
@@ -1034,8 +1100,9 @@ def _run_search(merged_params: dict, raw_query: str, session: dict, sidebar_filt
         render_trace()
         if results:
             _speak(_virtual_note + clarify_msg)
-            display_results(final)
+            display_results(final, search_params=merged_params)
             st.session_state["_last_results"] = final
+            st.session_state["_last_search_params"] = merged_params
             if intent:
                 log_search(session, intent, rcs, clarify_final_count)
         if decision.clarification_dimensions:

@@ -737,11 +737,20 @@ def main():
         )
         prog_rows = cur.fetchall()
 
-        # Tag ALL programs at camps listed on this category page.
-        # The 3-tier tag_role system (specialty > category > activity) handles
-        # relevance ranking — scraper-sourced tags get tag_role='activity',
-        # so OurKids-sourced specialty/category tags always rank higher.
-        prog_ids = [r["id"] for r in prog_rows]
+        # Only tag programs at SINGLE-program camps.  Multi-program camps
+        # are covered by the camp_tag_overrides.json parallel lookup in CSSL
+        # (camp_id-level match).  Tagging all programs at multi-program camps
+        # creates false program-level signals — e.g. a basketball session at
+        # a multi-sport camp getting a hockey tag because the camp appears on
+        # the hockey page.
+        from collections import defaultdict
+        by_camp: dict[int, list[int]] = defaultdict(list)
+        for r in prog_rows:
+            by_camp[r["camp_id"]].append(r["id"])
+        prog_ids = []
+        for cid, pids in by_camp.items():
+            if len(pids) == 1:
+                prog_ids.extend(pids)
 
         tag_ids = [slug_to_id[s] for s in tag_slugs if s in slug_to_id]
         pairs = [(pid, tid) for pid in prog_ids for tid in tag_ids]

@@ -4,26 +4,20 @@ Streamlit + Aiven MySQL + Claude AI. Auto-deploys to Streamlit Cloud on push to 
 
 ---
 
-## Current State (as of 2026-03-16)
+## Current State (as of 2026-03-17)
 
 - Production on Streamlit Cloud, all features working
 - LLM stack fully migrated to Claude (Haiku + Sonnet) — no Gemini references remain
-- 271 camps with full per-session programme records (36 synced in first live run)
-- Activity tags backfilled from camps.ca category pages: 728 camps, 10,724+ tags
+- 852 active camps, 4,605 active programs, 208,133 program_tags, 8,412 future program_dates
+- **Raw table import pipeline** — regex ETL replaced with `ok_*` staging tables + SQL materialization
+- Gender data now populated from OurKids sessions (2,138 coed + 185 boys + 74 girls)
+- 2,287 programs with mini_descriptions (previously lost in regex ETL)
 - `db/camp_tag_overrides.json` persists scraped tags through every automated sync cycle
 - QA suite: 48/48 intent parser tests passing (requires ANTHROPIC_API_KEY); 121/121 non-API tests passing (incl. 16 tag_role tests); 59/59 fuzzy tests
-- **3-tier tagging** — `program_tags.tag_role` (specialty/category/activity) imported from OurKids sitems. CSSL ranks specialty first. Run `db/migrate_tag_role.py` then re-sync.
+- **3-tier tagging** — `program_tags.tag_role` (specialty/category/activity) imported from OurKids sitems. CSSL ranks specialty first.
 - Parity suite (`tests/parity_suite.py`) measures search quality across 4 layers; fuzzy coverage ~95%+
 - Architecture docs: `docs/architecture.md` (full), `docs/database.md`, `docs/testing.md`
-- **Automated DB sync LIVE** — OurKids dumps to Google Drive; `sync.yml` downloads + syncs daily 02:00 UTC Mon–Fri
-
-### Pending one-time action (run locally before automation takes over)
-```bash
-python3 db/tag_from_campsca_pages.py        # scrape all 148 pages (~5-10 min)
-python3 db/export_camp_tag_overrides.py     # regenerate JSON
-git add db/camp_tag_overrides.json && git commit -m "refresh: full sitemap tag coverage"
-git push
-```
+- **Automated DB sync LIVE** — OurKids dumps to Google Drive; `sync.yml` loads raw tables + materializes daily 02:00 UTC Mon–Fri
 
 ---
 
@@ -33,7 +27,7 @@ git push
 |-------|-----------|
 | UI | Streamlit ≥ 1.35 |
 | Database | Aiven MySQL 8.0 (SSL via `ca.pem` or `DB_SSL_CA_CERT` secret) |
-| Data Sync | GitHub Actions (`sync.yml`) — daily 02:00 UTC Mon–Fri, downloads dump from Google Drive |
+| Data Sync | GitHub Actions (`sync.yml`) — daily 02:00 UTC Mon–Fri, raw table import + SQL materialization |
 | Intent Parser | Claude Haiku 4.5 (`claude-haiku-4-5-20251001`) |
 | Reranker | Claude Haiku 4.5 |
 | Concierge | Claude Sonnet 4.6 (`claude-sonnet-4-6`) |
@@ -113,8 +107,13 @@ core/
 
 db/
   connection.py                 MySQL connection pool (SSL; ca.pem or DB_SSL_CA_CERT secret)
-  sync_from_source.py           **Primary data sync** — queries OurKids MySQL directly (GitHub Actions)
-  sync_from_dump.py             **Emergency fallback** — manual sync from SQL dump file
+  load_raw_tables.py            **Step 1** — parse dump → DROP + CREATE ok_* staging tables in Aiven
+  materialize_from_raw.py       **Step 2** — SQL JOINs → populate CSC tables from ok_* staging
+  import_camp_tag_overrides.py  **Step 3** — re-apply camps.ca scraped tags after materialization
+  export_camp_tag_overrides.py  **Step 4** — export combined tags to JSON for parallel lookup
+  sync_from_dump.py             **Emergency fallback** — legacy regex-based sync from dump file
+  sync_from_source.py           Legacy direct-DB sync (superseded by raw table pipeline)
+  tag_from_campsca_pages.py     camps.ca category page scraper + WEBITEMS_TO_SLUG bridge
   migrate_tag_role.py           idempotent ALTER TABLE — adds tag_role ENUM to program_tags
   taxonomy_loader.py            load activity_tags from DB at startup; fallback to taxonomy_mapping
 
@@ -176,8 +175,9 @@ tests/
 
 ### UI
 - Results card: 4 lines — session name / camp name (tier-coloured) / detail pills / AI rationale
-- `render_extra_sessions()` expander always populated from `_fetch_all_camp_programs()` (full DB catalog)
-  — bypasses reranker top-N cutoff so no sessions are hidden
+- `render_extra_sessions()` expander populated from `_fetch_all_camp_programs(search_params=...)`
+  — applies same tag/age/type/gender filters as CSSL so only relevant sessions appear;
+  bypasses reranker top-N cutoff so matching sessions aren't hidden by the reranker limit
 - Tier colours: gold `#B8860B`, silver `#707070`, bronze `#8B4513`
 - Primary olive: `#8A9A5B`; background: `#F4F7F0`; text: `#2F4F4F`
 
@@ -233,12 +233,31 @@ python3 db/export_camp_tag_overrides.py
 **Parallel lookup in search** (`core/cssl.py`): `_SLUG_TO_CAMP_IDS` (loaded at module
 init from `camp_tag_overrides.json`) adds `OR p.camp_id IN (...)` to every tag query —
 guaranteeing camps.ca-listed camps appear even if `program_tags` has a gap.
+For multi-program override camps, one representative program (lowest ID) is included
+to avoid pool flooding.  Scraper/import scripts only write `program_tags` for
+single-program camps; multi-program camps rely solely on the override parallel lookup.
 
 ### OurKids programme sync — automated (GitHub Actions)
 
-`db/sync_from_dump.py` runs **daily 02:00 UTC Mon–Fri** via `.github/workflows/sync.yml`.
-Workflow: downloads the latest dump from Google Drive → runs sync → exports
-`camp_tag_overrides.json` → commits if changed.
+**Pipeline: Raw Table Import + SQL Materialization** (replaced regex ETL on 2026-03-17)
+
+`.github/workflows/sync.yml` runs **daily 02:00 UTC Mon–Fri**:
+1. `db/download_from_drive.py` — fetches latest dump from Google Drive
+2. `db/load_raw_tables.py --dump dump.sql` — imports 8 OurKids tables as `ok_*` staging
+3. `db/materialize_from_raw.py --deactivate --skip-ids 422,529,579,1647` — SQL JOINs populate CSC tables
+4. `db/import_camp_tag_overrides.py` — re-applies camps.ca scraped tags
+5. `db/export_camp_tag_overrides.py` — regenerates JSON, commits if changed
+
+**Staging tables loaded** (ephemeral, recreated each sync):
+`ok_camps`, `ok_sessions`, `ok_sitems`, `ok_session_date`, `ok_addresses`,
+`ok_generalInfo`, `ok_detailInfo`, `ok_extra_locations`
+
+**Key improvements over regex ETL:**
+- Gender data now imported (OurKids 1=Coed→CSC 0, 2=Boys→1, 3=Girls→2)
+- Mini descriptions captured from `ok_sessions.mini_description`
+- Sitems tags via SQL JOIN instead of regex field extraction
+- All OurKids columns available for inspection via `SELECT * FROM ok_sessions`
+- Old regex accidentally filtered by `gender` field (position 7), dropping all non-coed sessions
 
 **Why Google Drive (not direct DB):** OurKids DBA denied direct MySQL access from GitHub
 Actions — firewall is locked to known IPs. OurKids uploads a mysqldump to a shared Google
@@ -253,14 +272,24 @@ Manual trigger: GitHub → Actions → "Sync OurKids → Aiven" → Run workflow
 - Download script: `db/download_from_drive.py` — fetches most-recently-modified file in folder
 
 ```bash
-# Emergency manual run from a local dump file
-python3 db/sync_from_dump.py --dump /path/to/dump.sql --import-all-sessions --dry-run
+# Manual run from a local dump file
+python3 db/load_raw_tables.py --dump /path/to/dump.sql [--dry-run]
+python3 db/materialize_from_raw.py --deactivate --skip-ids 422,529,579,1647 [--dry-run]
+PYTHONPATH=. python3 db/import_camp_tag_overrides.py
+PYTHONPATH=. python3 db/export_camp_tag_overrides.py
+
+# Emergency fallback (legacy regex ETL — kept but no longer primary)
 python3 db/sync_from_dump.py --dump /path/to/dump.sql --import-all-sessions \
   --deactivate --skip-ids 422,529,579,1647
 ```
 
 `--skip-ids` protects manually promoted sub-locations:
 `422` Canlan Etobicoke · `529` Canlan Scarborough · `579` Canlan Oakville · `1647` Idea Labs Pickering
+
+**OurKids session schema (actual column names in ok_sessions):**
+`class_name` (not name), `start`/`end` (not date_from/date_to), `gender` at position 7
+(was misidentified as `status` in old regex — position 7 is gender, not status).
+No real status column — all sessions in the dump are active. `running` field is unrelated.
 
 ---
 
@@ -309,7 +338,11 @@ See `secrets.toml.example` for a template.
 - **Reranker JSON error**: `raw.find('{"ranked"')` + `raw_decode` is the extraction pattern — handles preamble text from Claude
 - **Session state after refactor**: `accumulated_params` is a mirror — if a bug shows stale values, the root cause is always a mutation that bypassed `QueryState` + `sync_mirror()`
 - **Stale filters between searches**: RC-4 in `session_manager.py` clears tags/traits/type/gender/age/dates on activity switch. Rule 2b clears stale tags when model is confident but finds zero tags AND zero other params (pure exploration query). Rule 3 fires on `clear_activity=True`.
+- **Scraper tags are camp-level, not program-level**: The scraper and import scripts only write `program_tags` for single-program camps. Multi-program camps rely on `camp_tag_overrides.json` parallel lookup in CSSL. This prevents false program-level signals (e.g. a basketball session getting a hockey tag because the camp appears on the hockey page).
 - **Duplicate programmes from sync**: Run `--dry-run` first; the import is idempotent only if the prior run fully completed
+- **OurKids session column names**: `ok_sessions` uses `class_name` (not `name`), `start`/`end` (not `date_from`/`date_to`). Position 7 in the dump is `gender`, not `status` — the old regex misidentified this, accidentally filtering out all non-coed sessions. No real status column; all sessions in the dump are active. `running` field is unrelated (only 186/12864 have `running=1`).
+- **OurKids gender mapping**: OurKids uses `0=unset, 1=Coed, 2=Boys, 3=Girls`; CSC uses `0=Coed, 1=Boys, 2=Girls`. The `_GENDER_MAP` in `materialize_from_raw.py` handles conversion.
+- **Staging table compatibility**: `ok_*` tables require `ENGINE=InnoDB` (Aiven doesn't support MyISAM) and `SET SESSION sql_mode = ''` (zero dates in legacy data). Both handled automatically by `load_raw_tables.py`.
 - **Activity tag scraping — URL corruption risk**: dash-format camps.ca URLs (e.g. `/gymnastics-camps.php`) redirect to homepage returning ALL 276 camps — will mass-tag every program incorrectly. Always use underscore `.php` format validated against `sitemap.xml`. `CAMP_PAGE_OVERRIDES` maps all known broken URLs to correct ones; `None` = skip page. After scraping, run `db/export_camp_tag_overrides.py` to regenerate `camp_tag_overrides.json`.
 - **Adding a new category page**: add to `PAGE_SLUG_OVERRIDES` in `tag_from_campsca_pages.py` (path → [slugs]), run the scraper + export, commit JSON. If it's a new main page, also add to `CANONICAL_PAGES`.
 - **Trait fuzzy aliases**: when adding a new trait word (e.g. "resilience"), add both the noun AND adjectival forms separately to `TRAIT_ALIASES` in `taxonomy_mapping.py`

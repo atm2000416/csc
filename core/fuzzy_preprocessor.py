@@ -58,10 +58,12 @@ def preprocess(raw_query: str) -> dict:
 
     # US scope — "American", "in the US", "United States" → flag for CSSL
     _US_PHRASES = [
-        "united states", "in the us", "in the usa", "american camps",
-        "american", "u.s.", "usa ",
+        "united states", "american camps", "american", "u.s.",
     ]
     if any(phrase in normalized for phrase in _US_PHRASES):
+        hints["us_scope"] = True
+    # Word-boundary match for short forms: "US", "USA"
+    elif re.search(r'(?<![a-z])us(?:a)?(?![a-z])', normalized):
         hints["us_scope"] = True
 
     def word_match(term: str, text: str) -> bool:

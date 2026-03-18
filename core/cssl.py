@@ -121,7 +121,8 @@ def query(params: dict, limit: int = 100) -> tuple[list[dict], float]:
         args["city"] = params["city"]
 
     if params.get("province"):
-        if params["province"] == "_US":
+        _US_MARKERS = {"_US", "US", "USA", "United States", "United States of America"}
+        if params["province"] in _US_MARKERS:
             # US scope: match all known US state values in the province field
             _US_PROVINCES = [
                 "California", "California(USA)", "FL", "Florida",

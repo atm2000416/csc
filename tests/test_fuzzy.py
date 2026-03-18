@@ -408,6 +408,20 @@ def test_us_scope_usa():
     result = preprocess("camps in the usa")
     assert result.get("us_scope") is True
 
+def test_us_scope_bare_us():
+    """Bare 'US' with word boundaries should trigger us_scope."""
+    result = preprocess("send me all US hockey camps")
+    assert result.get("us_scope") is True
+
+def test_us_scope_in_the_us():
+    result = preprocess("hockey camps in the US")
+    assert result.get("us_scope") is True
+
 def test_us_scope_not_canada():
     result = preprocess("hockey camps in Toronto")
+    assert not result.get("us_scope")
+
+def test_us_scope_not_bus():
+    """'us' inside words like 'bus' or 'focus' should NOT trigger."""
+    result = preprocess("bus camps for focus")
     assert not result.get("us_scope")

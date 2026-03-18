@@ -121,8 +121,20 @@ def query(params: dict, limit: int = 100) -> tuple[list[dict], float]:
         args["city"] = params["city"]
 
     if params.get("province"):
-        conditions.append("c.province = %(province)s")
-        args["province"] = params["province"]
+        if params["province"] == "_US":
+            # US scope: match all known US state values in the province field
+            _US_PROVINCES = [
+                "California", "California(USA)", "FL", "Florida",
+                "Illinois", "Massachusetts", "South Carolina",
+                "Texas", "Washington", "Washington(USA)",
+            ]
+            us_ph = ", ".join(f"%(us_{i})s" for i in range(len(_US_PROVINCES)))
+            conditions.append(f"c.province IN ({us_ph})")
+            for i, p in enumerate(_US_PROVINCES):
+                args[f"us_{i}"] = p
+        else:
+            conditions.append("c.province = %(province)s")
+            args["province"] = params["province"]
 
     # Age overlap — NULL age_from/age_to means the program accepts any age
     if params.get("age_from") is not None and params.get("age_to") is not None:

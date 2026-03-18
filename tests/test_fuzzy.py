@@ -392,3 +392,22 @@ def test_multi_sport_maps_to_sport_multi():
     result = preprocess("multi sport camp")
     hints = result.get("tag_hints", [])
     assert "sport-multi" in hints
+
+
+# ── US scope tests ────────────────────────────────────────────────────────────
+
+def test_us_scope_american():
+    result = preprocess("any american camps?")
+    assert result.get("us_scope") is True
+
+def test_us_scope_united_states():
+    result = preprocess("hockey camps in the united states")
+    assert result.get("us_scope") is True
+
+def test_us_scope_usa():
+    result = preprocess("camps in the usa")
+    assert result.get("us_scope") is True
+
+def test_us_scope_not_canada():
+    result = preprocess("hockey camps in Toronto")
+    assert not result.get("us_scope")

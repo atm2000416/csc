@@ -220,6 +220,12 @@ def parse_intent(
         for geo_key in ("city", "cities", "province", "lat", "lon", "radius_km"):
             parsed.pop(geo_key, None)
 
+    # US scope — strip geo filters and set province marker for CSSL
+    if fuzzy_hints and fuzzy_hints.get("us_scope"):
+        for geo_key in ("city", "cities", "lat", "lon", "radius_km"):
+            parsed.pop(geo_key, None)
+        parsed["province"] = "_US"
+
     parsed = _coerce_parsed(parsed)
 
     valid_fields = IntentResult.__dataclass_fields__

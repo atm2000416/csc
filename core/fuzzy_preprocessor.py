@@ -56,6 +56,14 @@ def preprocess(raw_query: str) -> dict:
     if any(phrase in normalized for phrase in _NATIONAL_PHRASES):
         hints["national_scope"] = True
 
+    # US scope — "American", "in the US", "United States" → flag for CSSL
+    _US_PHRASES = [
+        "united states", "in the us", "in the usa", "american camps",
+        "american", "u.s.", "usa ",
+    ]
+    if any(phrase in normalized for phrase in _US_PHRASES):
+        hints["us_scope"] = True
+
     def word_match(term: str, text: str) -> bool:
         """Match term as whole word(s) within text, tolerating trailing plural 's'."""
         pattern = r'(?<![a-z0-9])' + re.escape(term) + r's?(?![a-z0-9])'

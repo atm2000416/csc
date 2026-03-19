@@ -67,18 +67,25 @@ def query(params: dict, limit: int = 100) -> tuple[list[dict], float]:
         if override_camp_ids:
             # Parallel lookup: override camps are included even without a
             # program_tags row.  For multi-program camps, we include ONE
-            # representative program (lowest ID) to give the camp
-            # representation without flooding the pool.  Single-program
-            # camps are naturally covered by the same logic.
+            # representative program to give the camp representation without
+            # flooding the pool.  Pick the best representative in priority:
+            #   1. Program with a matching program_tag (closest to search intent)
+            #   2. Fallback: lowest active program ID
             # Programs with an actual program_tags match (from OurKids
             # sitems) are always included regardless of override status.
             camp_ph = ", ".join(str(cid) for cid in override_camp_ids)  # ints — safe
             conditions.append(
                 f"(EXISTS (SELECT 1 FROM program_tags WHERE program_id = p.id AND tag_id IN ({ph}))"
                 f" OR (p.camp_id IN ({camp_ph})"
-                f"     AND p.id = (SELECT MIN(p2.id) FROM programs p2"
-                f"                 WHERE p2.camp_id = p.camp_id AND p2.status = 1"
-                f"                 AND (p2.end_date IS NULL OR p2.end_date >= CURDATE()))))"
+                f"     AND p.id = COALESCE("
+                f"         (SELECT MIN(p3.id) FROM programs p3"
+                f"          JOIN program_tags pt3 ON pt3.program_id = p3.id"
+                f"          WHERE p3.camp_id = p.camp_id AND p3.status = 1"
+                f"          AND (p3.end_date IS NULL OR p3.end_date >= CURDATE())"
+                f"          AND pt3.tag_id IN ({ph})),"
+                f"         (SELECT MIN(p2.id) FROM programs p2"
+                f"          WHERE p2.camp_id = p.camp_id AND p2.status = 1"
+                f"          AND (p2.end_date IS NULL OR p2.end_date >= CURDATE())))))"
             )
         else:
             joins.append("JOIN program_tags pt ON p.id = pt.program_id")

@@ -126,9 +126,11 @@ tests/
 
 3. **Scraper tags are camp-level**: Scraper/import only write `program_tags` for single-program camps. Multi-program camps use `camp_tag_overrides.json` parallel lookup in CSSL. See `docs/data-sync.md`.
 
-4. **`ics = 0.3`** is the API-error fallback — do NOT clear stale state on this value.
+4. **`program_tags.source` column**: `ourkids` (OurKids sitems), `scraper` (camps.ca pages), `manual`. Any bulk cleanup of tags MUST filter by `source = 'scraper'` — never delete `ourkids` rows. Safety gate in `materialize_from_raw.py` aborts if tag count drops below 20K.
 
-5. **`ok_*` staging tables** must never be queried by the app at runtime.
+5. **`ics = 0.3`** is the API-error fallback — do NOT clear stale state on this value.
+
+6. **`ok_*` staging tables** must never be queried by the app at runtime.
 
 ---
 

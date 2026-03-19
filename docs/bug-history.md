@@ -1,6 +1,6 @@
 # CSC Bug Fix History & Recurring Trends
 
-61 fix commits across the project history. Categorized below by area, with recurring patterns highlighted.
+65+ fix commits across the project history. Categorized below by area, with recurring patterns highlighted.
 
 ---
 
@@ -13,6 +13,9 @@
 | `71c978e` | **Sync activation criterion** — `sync_from_dump` used `showAnalytics` instead of `status` to determine active camps. |
 | `222e35b` | **Gender data** — `programs.gender` not populated from `detailInfo`; 11 girls-only camps had NULL gender. |
 | `c717de2` | **Program types** — legacy session data had wrong type mappings; corrected via `fix_program_types.py`. |
+| `66dbbd7` | **Broad-page redirect pollution** — `/fashion-camps.php` → `/arts_camps.php` caused 205 arts camps to get `fashion-design` tag. Same for filmmaking (205) and cycling (197). Set broad redirects to `None`; cleaned 606 polluted entries from override JSON. |
+| `3534bff` | **Cleanup script mass-deletion** — `cleanup_scraper_tags.py` deleted 30,472 legitimate OurKids activity tags. Script couldn't distinguish scraper from OurKids tags (both `tag_role='activity', is_primary=0`). Restored all tags from `ok_sessions` sitems. |
+| `ed9b927` | **Tag provenance** — added `source` column (ourkids/scraper/manual) to `program_tags` + 20K-floor safety gate in `materialize_from_raw.py` to prevent future mass-deletion. |
 
 ## Search Relevance (12 fixes) — recurring pattern: stale state bleeding across turns
 
@@ -30,6 +33,7 @@
 | `8559579` | Exact gender/type match ranked same as soft-match coed results. |
 | `32b91ce` | Type + gender search returning 0 results — three separate SQL bugs. |
 | `1fe108a` | Gender filter not strict enough — NULL programs included in all-girls/all-boys searches. |
+| `3534bff` | **Override representative program** — CSSL override path used `MIN(id)` which surfaced wrong session (e.g. "Budding Architects" for AI search). Changed to `COALESCE` preferring a program with a matching `program_tag`. |
 
 ## Session / State Management (6 fixes) — recurring pattern: mutations bypassing QueryState
 
@@ -93,3 +97,5 @@
 3. **LLM output parsing** (3 fixes): Claude returns JSON with preamble text, varying formats. **Mitigation:** `find('{"ranked"')` + `raw_decode` pattern; never assume clean JSON from LLM.
 
 4. **camps.ca URL format** (3 fixes): Format is `/{prettyurl}/{camp_id}` — prettyurl alone 404s, slug != prettyurl. **Mitigation:** Single source of truth `_camps_url()` in `ui/results_card.py`.
+
+5. **Scraper tag pollution** (4 fixes): Scraper tagged programs/camps too broadly — broad-page redirects, mass-tagging multi-program camps, then a cleanup script that couldn't distinguish scraper from OurKids tags destroyed 30K legitimate rows. **Mitigation:** `source` column on `program_tags` (ourkids/scraper/manual), single-program gate on scraper writes, broad-page redirects set to `None`, 20K-floor safety gate in materialization pipeline.

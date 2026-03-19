@@ -119,8 +119,9 @@ python3 db/export_camp_tag_overrides.py
 
 `core/cssl.py` loads `_SLUG_TO_CAMP_IDS` from `camp_tag_overrides.json` at module init.
 Adds `OR p.camp_id IN (...)` to every tag query — guaranteeing camps.ca-listed camps
-appear even if `program_tags` has a gap. For multi-program override camps, one
-representative program (lowest ID) is included to avoid pool flooding.
+appear even if `program_tags` has a gap. For multi-program override camps, the
+representative program uses `COALESCE`: prefers a program with a matching `program_tag`,
+falls back to lowest ID if none match.
 
 ### Scraper Tags: Camp-Level, Not Program-Level
 
@@ -128,6 +129,24 @@ The scraper and import scripts only write `program_tags` for single-program camp
 Multi-program camps rely solely on the `camp_tag_overrides.json` parallel lookup in CSSL.
 This prevents false program-level signals (e.g. a basketball session getting a hockey tag
 because the camp appears on the hockey page).
+
+### Tag Provenance (`program_tags.source`)
+
+The `source` column tracks where each tag originated:
+- **ourkids** — imported from OurKids sitems data (specialty/category/activities fields)
+- **scraper** — inserted by `tag_from_campsca_pages.py` or `import_camp_tag_overrides.py`
+- **manual** — hand-corrected entries
+
+Any bulk tag cleanup **MUST** filter by `source = 'scraper'`. Never delete `ourkids` rows.
+`materialize_from_raw.py` has a safety gate: if `program_tags` count drops below 20K,
+the transaction is rolled back and the sync aborts.
+
+### CAMP_PAGE_OVERRIDES: No Broad Redirects
+
+`CAMP_PAGE_OVERRIDES` maps broken URLs to working equivalents. **Never redirect a specific
+category page to a broad parent page** (e.g. `/fashion-camps.php` → `/arts_camps.php`).
+This causes all camps on the parent page to receive the child category's tags. If no
+specific page exists, set the value to `None` to skip the URL entirely.
 
 ### Adding a New Category Page
 

@@ -34,6 +34,8 @@ because the camp appears on the hockey page).
 - `program_tags.tag_role` — ENUM `'specialty'`/`'category'`/`'activity'` (default `'activity'`).
   Imported from OurKids sitems 3-tier model. CSSL ranks specialty > category > activity via `_role_match`.
   Migration: `python3 db/migrate_tag_role.py`. Scraper always inserts as `'activity'`.
+- `program_tags.source` — ENUM `'ourkids'`/`'scraper'`/`'manual'` (default `'ourkids'`).
+  Any bulk tag cleanup MUST filter `source = 'scraper'`. Never delete `ourkids` rows.
 - `ok_*` staging tables must never be queried by the app at runtime
 
 ---

@@ -1,0 +1,56 @@
+name: QA Review Agent
+
+on:
+  workflow_dispatch:
+    inputs:
+      item:
+        description: 'Specific item ID to review (blank = all unreviewed)'
+        required: false
+        default: ''
+      dry_run:
+        description: 'Dry run (validate only, no sheet writes)'
+        required: false
+        type: boolean
+        default: false
+      force:
+        description: 'Re-review all items (ignore existing comments)'
+        required: false
+        type: boolean
+        default: false
+
+jobs:
+  review:
+    runs-on: ubuntu-latest
+
+    steps:
+      - uses: actions/checkout@v4
+
+      - uses: actions/setup-python@v5
+        with:
+          python-version: '3.11'
+
+      - name: Install dependencies
+        run: pip install mysql-connector-python google-api-python-client google-auth gspread anthropic
+
+      - name: Run QA Review Agent
+        run: |
+          ARGS=""
+          if [ -n "${{ github.event.inputs.item }}" ]; then
+            ARGS="$ARGS --item ${{ github.event.inputs.item }}"
+          fi
+          if [ "${{ github.event.inputs.dry_run }}" = "true" ]; then
+            ARGS="$ARGS --dry-run"
+          fi
+          if [ "${{ github.event.inputs.force }}" = "true" ]; then
+            ARGS="$ARGS --force"
+          fi
+          PYTHONPATH=. python -m qa.review_agent $ARGS
+        env:
+          GDRIVE_SERVICE_ACCOUNT_JSON: ${{ secrets.GDRIVE_SERVICE_ACCOUNT_JSON }}
+          ANTHROPIC_API_KEY:           ${{ secrets.ANTHROPIC_API_KEY }}
+          DB_HOST:                     ${{ secrets.DB_HOST }}
+          DB_PORT:                     ${{ secrets.DB_PORT }}
+          DB_NAME:                     ${{ secrets.DB_NAME }}
+          DB_USER:                     ${{ secrets.DB_USER }}
+          DB_PASSWORD:                 ${{ secrets.DB_PASSWORD }}
+          DB_SSL_CA_CERT:              ${{ secrets.DB_SSL_CA_CERT }}

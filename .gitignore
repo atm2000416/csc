@@ -1,5 +1,6 @@
 .env
 ca.pem
+service_account.json
 collaterals/ca.pem
 .streamlit/secrets.toml
 __pycache__/

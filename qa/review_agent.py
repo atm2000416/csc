@@ -18,7 +18,7 @@ import sys
 sys.path.insert(0, os.path.join(os.path.dirname(__file__), ".."))
 
 from qa.config import QA_SHEET_ID, QA_TAB_NAME
-from qa.sheets import get_worksheet, get_all_items, get_unreviewed_items, write_comment
+from qa.sheets import get_worksheet, get_all_items, get_unreviewed_items, write_comment, get_contact_email
 from qa.validator import validate_finding
 from qa.responder import generate_response
 from qa.emailer import send_notification
@@ -61,6 +61,11 @@ def run(
         if not items:
             logger.warning("Item %s not found or has no search term", item_filter)
             return []
+
+    # Read contact email from tab
+    contact_email = get_contact_email(ws)
+    if contact_email:
+        logger.info("Contact email: %s", contact_email)
 
     logger.info("Found %d item(s) to review", len(items))
     processed = []
@@ -108,7 +113,7 @@ def run(
             logger.info("  [DRY RUN] Would write to row %d, column E", item["row"])
 
         # Email notification
-        email = test_email  # override for testing
+        email = test_email or contact_email
         if not dry_run and email:
             send_notification(email, item_id, response)
 

@@ -80,17 +80,43 @@ def _extract_campsca_slug(text: str) -> str | None:
 
 
 def _get_camps_for_slug(slug: str) -> dict[int, str]:
-    """Return {camp_id: camp_name} for camps tagged with this slug (DB + overrides)."""
+    """Return {camp_id: camp_name} for camps tagged with this slug (DB + overrides).
+
+    If exact slug match finds nothing, tries prefix match (e.g. 'acro' -> 'acro-dance').
+    """
     camps: dict[int, str] = {}
 
     # From override index
     for cid in _SLUG_TO_CAMP_IDS.get(slug, []):
         camps[cid] = ""  # name filled from DB below
 
+    # Also check override index with prefix match
+    if not camps:
+        for override_slug, cids in _SLUG_TO_CAMP_IDS.items():
+            if override_slug.startswith(slug + "-") or override_slug.startswith(slug):
+                if override_slug == slug or override_slug.startswith(slug + "-"):
+                    for cid in cids:
+                        camps[cid] = ""
+
     # From program_tags
     conn = get_connection()
     cursor = conn.cursor(dictionary=True)
     try:
+        # Try exact match first, then prefix match
+        actual_slug = slug
+        cursor.execute(
+            "SELECT slug FROM activity_tags WHERE slug = %s AND is_active = 1", (slug,)
+        )
+        if not cursor.fetchone():
+            # Try prefix match
+            cursor.execute(
+                "SELECT slug FROM activity_tags WHERE slug LIKE %s AND is_active = 1 LIMIT 1",
+                (slug + "%",),
+            )
+            row = cursor.fetchone()
+            if row:
+                actual_slug = row["slug"]
+
         cursor.execute(
             "SELECT DISTINCT c.id, c.camp_name "
             "FROM camps c "
@@ -98,7 +124,7 @@ def _get_camps_for_slug(slug: str) -> dict[int, str]:
             "JOIN program_tags pt ON pt.program_id = p.id "
             "JOIN activity_tags at ON at.id = pt.tag_id "
             "WHERE at.slug = %s AND c.status = 1 AND p.status = 1",
-            (slug,),
+            (actual_slug,),
         )
         for row in cursor.fetchall():
             camps[row["id"]] = row["camp_name"]
@@ -143,17 +169,26 @@ def _check_fuzzy_alias(term: str) -> str | None:
 
 
 def _is_ui_ux_feedback(entry: dict) -> bool:
-    """Detect if an entry is UI/UX feedback rather than a search issue."""
-    indicators = [
-        "button", "click", "display", "font", "layout", "scroll", "navigation",
+    """Detect if an entry is UI/UX feedback rather than a search issue.
+
+    Only classifies as UI/UX when the SEARCH TERM itself is UI feedback
+    (e.g. starts with "UI:", mentions links/accordion/layout).
+    Tester complaints about "should display X" are NOT UI/UX — they're search quality.
+    """
+    search = entry.get("search_term", "").lower().strip()
+
+    # Explicit UI prefix
+    if search.startswith("ui:") or search.startswith("ui "):
+        return True
+
+    # Search term is a UI/UX description, not a camp search query
+    ui_indicators = [
+        "button", "click", "font", "layout", "scroll", "navigation",
         "popup", "modal", "sidebar", "dropdown", "checkbox", "radio",
-        "interface", "design", "colour", "color", "size", "position",
-        "avatar", "icon", "image", "logo", "banner",
+        "accordion", "birdie", "profile link", "program link",
+        "session name", "camp name", "icons by type",
     ]
-    text = (entry.get("why_incorrect", "") + " " + entry.get("search_term", "")).lower()
-    return any(ind in text for ind in indicators) and not any(
-        w in text for w in ["search", "result", "find", "show", "return", "missing"]
-    )
+    return any(ind in search for ind in ui_indicators)
 
 
 def validate_finding(entry: dict) -> ValidationResult:
@@ -169,6 +204,10 @@ def validate_finding(entry: dict) -> ValidationResult:
     item_id = entry["item_id"]
     search_term = entry["search_term"]
     why_incorrect = entry.get("why_incorrect", "")
+
+    # Strip common prefixes testers add (e.g. "SEARCH: ...")
+    import re as _re
+    search_term = _re.sub(r"^(?:SEARCH|search)\s*:\s*", "", search_term).strip()
 
     # UI/UX feedback — can't validate via pipeline
     if _is_ui_ux_feedback(entry):
@@ -363,7 +402,9 @@ def validate_finding(entry: dict) -> ValidationResult:
         # But check the tester's complaint — maybe they expected more/different results
         if why_incorrect and any(
             w in why_incorrect.lower()
-            for w in ["missing", "not shown", "didn't show", "should show", "expected"]
+            for w in ["missing", "not shown", "didn't show", "should show", "should display",
+                      "expected", "results are off", "results are wrong", "incorrect",
+                      "not displaying", "aren't showing"]
         ):
             result.issue_type = "SEARCH_QUALITY"
             result.is_valid_issue = True

@@ -16,16 +16,30 @@ from qa.config import SHEETS_SCOPES, QA_SHEET_ID, QA_TAB_NAME
 
 
 def _get_credentials() -> service_account.Credentials:
-    """Build credentials from GDRIVE_SERVICE_ACCOUNT_JSON secret."""
+    """Build credentials from GDRIVE_SERVICE_ACCOUNT_JSON secret or local file."""
+    # 1. Try env var / Streamlit secret (JSON string)
     sa_json = get_secret("GDRIVE_SERVICE_ACCOUNT_JSON")
-    if not sa_json:
-        raise RuntimeError(
-            "GDRIVE_SERVICE_ACCOUNT_JSON not set. "
-            "Set it in .streamlit/secrets.toml or as an env var."
+    if sa_json:
+        info = json.loads(sa_json)
+        return service_account.Credentials.from_service_account_info(
+            info, scopes=SHEETS_SCOPES
         )
-    info = json.loads(sa_json)
-    return service_account.Credentials.from_service_account_info(
-        info, scopes=SHEETS_SCOPES
+
+    # 2. Try local file (gitignored)
+    base = os.path.dirname(os.path.dirname(__file__))
+    for candidate in [
+        os.path.join(base, "service_account.json"),
+        os.path.join(base, "collaterals", "service_account.json"),
+    ]:
+        if os.path.exists(candidate):
+            return service_account.Credentials.from_service_account_file(
+                candidate, scopes=SHEETS_SCOPES
+            )
+
+    raise RuntimeError(
+        "Google service account not found. Either:\n"
+        "  - Set GDRIVE_SERVICE_ACCOUNT_JSON env var (JSON string), or\n"
+        "  - Place service_account.json in project root (gitignored)"
     )
 
 
@@ -65,6 +79,10 @@ def get_all_items(ws: gspread.Worksheet) -> list[dict]:
         if not search_term:
             continue  # skip pre-numbered but empty rows
 
+        # Skip duplicate header rows (e.g. "Enter Search Term")
+        if search_term.lower() == "enter search term" or item_id.lower() == "item":
+            continue
+
         items.append({
             "row": row_num,
             "item_id": item_id,
@@ -86,17 +104,20 @@ def write_comment(ws: gspread.Worksheet, row_num: int, comment: str) -> None:
     ws.update_cell(row_num, 5, comment)
 
 
-def get_tester_email(sheet_id: str, tab_name: str) -> str | None:
+def get_contact_email(ws: gspread.Worksheet) -> str | None:
     """
-    Read tester email from row 1 of a per-tester tab.
-    Returns None if tab doesn't exist or row 1 is empty.
+    Read contact email from row 1 of the worksheet.
+    Checks column B (row 1 is "Contact:" in A, email in B).
+    Falls back to checking column A if B is empty.
     """
     try:
-        creds = _get_credentials()
-        gc = gspread.authorize(creds)
-        spreadsheet = gc.open_by_key(sheet_id)
-        ws = spreadsheet.worksheet(tab_name)
-        val = ws.cell(1, 1).value
-        return val.strip() if val else None
+        row1 = ws.row_values(1)
+        # Check column B first (typical: "Contact:" in A, email in B)
+        if len(row1) >= 2 and row1[1] and "@" in row1[1]:
+            return row1[1].strip()
+        # Fallback: check column A
+        if row1 and "@" in row1[0]:
+            return row1[0].strip()
+        return None
     except Exception:
         return None

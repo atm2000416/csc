@@ -70,10 +70,10 @@ def main():
         chunk_size = 500
         for i in range(0, len(pairs), chunk_size):
             chunk = pairs[i : i + chunk_size]
-            placeholders = ",".join(["(%s,%s,0,'activity')"] * len(chunk))
+            placeholders = ",".join(["(%s,%s,0,'activity','scraper')"] * len(chunk))
             flat = [v for pair in chunk for v in pair]
             cur.execute(
-                f"INSERT IGNORE INTO program_tags (program_id, tag_id, is_primary, tag_role) "
+                f"INSERT IGNORE INTO program_tags (program_id, tag_id, is_primary, tag_role, source) "
                 f"VALUES {placeholders}",
                 flat,
             )

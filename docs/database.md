@@ -52,7 +52,14 @@ conn.close()
 | `level` | 1=Domain, 2=Category, 3=Sub-activity |
 
 ### `program_tags`
-Junction: `program_id` + `tag_id` + `is_primary`
+Junction: `program_id` + `tag_id` + `is_primary` + `tag_role` (ENUM: specialty/category/activity) + `source` (ENUM: ourkids/scraper/manual)
+
+The `source` column distinguishes tag origin:
+- **ourkids** — imported from OurKids sitems data via `materialize_from_raw.py` (default)
+- **scraper** — inserted by `tag_from_campsca_pages.py` or `import_camp_tag_overrides.py`
+- **manual** — manually inserted corrections
+
+Any bulk cleanup must filter by `source = 'scraper'` to avoid deleting OurKids-sourced tags.
 
 ### `traits`
 12 character traits: resilience, curiosity, courage, independence, responsibility,
@@ -93,11 +100,14 @@ was not migrated. Gender data is therefore sparse and unreliable for filtering.
 **Tier field**: `eListingType` is authoritative (more current than `weight`).
 **Agate camps**: status=0 — free listings on ourkids.net, not camps.ca. Correctly excluded by our filter.
 
-### `sessions` table (→ our `programs`)
-- `gender` tinyint NOT NULL DEFAULT=0 — legacy default is 0 (coed), not NULL
-- `running` tinyint DEFAULT=0 — program active/running flag (not currently filtered by sync)
+### `sessions` table (→ our `programs`, accessible as `ok_sessions`)
+- **`class_name`** varchar — session display name (NOT `name`; column is `class_name` in the dump)
+- **`start`/`end`** — date columns (NOT `date_from`/`date_to`)
+- **`gender`** tinyint NOT NULL DEFAULT=0 — OurKids encoding: 0=unset, 1=Coed, 2=Boys, 3=Girls. Mapped to CSC: 0=Coed, 1=Boys, 2=Girls via `_GENDER_MAP`. **Critical discovery:** the old regex ETL misidentified position 7 as `status`, accidentally filtering out all non-coed sessions.
+- **`running`** tinyint DEFAULT=0 — only 186/12864 sessions have `running=1`. NOT a status field — do not filter by this.
 - `mini_description` varchar(500) — migrated as-is
 - `type` varchar(45) — "1"=Day, "2"=Overnight (same as our programs.type)
+- `specialty` smallint → sitems.id (99% populated), `category` tinyint → sitems.id (71%), `activities` text (`[id]priority,...`)
 
 ### `extra_locations` table
 - `Lat`/`Lon` stored as `double` (unlike camps table which uses varchar)
@@ -121,42 +131,45 @@ Example hierarchy: "Hip Hop" → h3(Dance multi) → h2(Arts multi) → h1(Arts)
 
 ## Data Sync
 
-### Normal operation — automated sync (`db/sync_from_source.py`)
+### Normal operation — Raw Table Import + SQL Materialization (daily, automated)
 
-Runs every 2 hours via GitHub Actions. Queries OurKids MySQL directly as the read-only
-`csc_reader` user. Only processes camps whose session set has actually changed — unchanged
-camps are skipped entirely.
+Runs daily 02:00 UTC Mon–Fri via GitHub Actions (`.github/workflows/sync.yml`).
+Downloads a mysqldump from Google Drive, imports raw OurKids tables as `ok_*` staging
+tables, then materializes CSC tables via SQL JOINs.
 
 ```bash
-# Dry-run (always safe — reads source, writes nothing)
-python3 db/sync_from_source.py --dry-run
+# Step 1: Import raw tables (replay CREATE TABLE + INSERT INTO as ok_*)
+python3 db/load_raw_tables.py --dump dump.sql [--dry-run]
 
-# Live sync with deactivations (what GitHub Actions runs)
-python3 db/sync_from_source.py --deactivate --skip-ids 422,529,579,1647
+# Step 2: Materialize CSC tables from staging (SQL JOINs)
+python3 db/materialize_from_raw.py --deactivate --skip-ids 422,529,579,1647 [--dry-run]
+
+# Step 3: Re-apply scraped tags + export JSON
+python3 db/import_camp_tag_overrides.py
+python3 db/export_camp_tag_overrides.py
 ```
 
-Requires environment variables (or Streamlit secrets):
-`SOURCE_DB_HOST`, `SOURCE_DB_PORT`, `SOURCE_DB_NAME`, `SOURCE_DB_USER`, `SOURCE_DB_PASSWORD`
-plus the usual `DB_*` Aiven connection variables.
+**Staging tables** (ephemeral, DROP + recreated each sync):
+`ok_camps`, `ok_sessions`, `ok_sitems`, `ok_session_date`, `ok_addresses`,
+`ok_generalInfo`, `ok_detailInfo`, `ok_extra_locations`
 
-Manual trigger: GitHub repo → Actions → "Sync OurKids → Aiven" → Run workflow.
+**Key design decisions:**
+- `ok_*` tables use `ENGINE=InnoDB` (Aiven doesn't support MyISAM) — converted automatically
+- `SET SESSION sql_mode = ''` before loading (legacy data has zero dates `0000-00-00`)
+- `ok_sessions` uses `class_name` (not `name`), `start`/`end` (not `date_from`/`date_to`)
+- All sessions imported — no `running` or `status` filter (old regex accidentally filtered by gender field)
+- Gender mapping: OurKids `1=Coed, 2=Boys, 3=Girls` → CSC `0=Coed, 1=Boys, 2=Girls`
 
-### Emergency fallback — dump file sync (`db/sync_from_dump.py`)
+### Emergency fallback — legacy regex sync (`db/sync_from_dump.py`)
 
-Used when the OurKids source DB is unreachable or a schema change needs investigation.
-Parses a `.sql` dump file instead of querying live.
+Used only when the raw table import approach has issues. Parses individual fields from
+dump SQL via regex — less reliable but requires no staging tables.
 
 ```bash
-# Standard emergency re-sync
 python3 db/sync_from_dump.py --dump /path/to/dump.sql --import-all-sessions --dry-run
-python3 db/sync_from_dump.py --dump /path/to/dump.sql --import-all-sessions
-
-# Full sync with deactivations + metadata
-python3 db/sync_from_dump.py --dump /path/to/dump.sql --deactivate --update-meta \
-  --skip-ids 422,529,579,1647
+python3 db/sync_from_dump.py --dump /path/to/dump.sql --import-all-sessions \
+  --deactivate --skip-ids 422,529,579,1647
 ```
-
-Default dump path: `/Users/181lp/Documents/CLAUDE_code/csc_migration/camp_directory_dump20260311.sql`
 
 ### Protected skip-ids (manually promoted sub-locations — never deactivate)
 | ID | Camp |
@@ -172,5 +185,5 @@ Default dump path: `/Users/181lp/Documents/CLAUDE_code/csc_migration/camp_direct
 
 ### What sync does NOT touch
 - `activity_tags` — curated manually in Aiven DB
-- Camps with IDs not present in the source (manually created location branches)
-- Programs for camps whose session set is unchanged (automated sync skips them)
+- Camps with IDs not present in the dump (manually created location branches)
+- `ok_*` staging tables are ephemeral — only used during sync, never queried by app at runtime

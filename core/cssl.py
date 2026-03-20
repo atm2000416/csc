@@ -49,9 +49,16 @@ def query(params: dict, limit: int = 100) -> tuple[list[dict], float]:
     expanded_tags = expand_via_categories(params.get("tags", []), cursor)
     tag_ids = resolve_tag_ids(expanded_tags, cursor)
     if tag_ids:
+        # Resolve category family for affinity checking.
+        # Finds the narrowest multi-category parent (e.g., water-sports-multi
+        # for swimming) and collects all sibling tag IDs.  Used to verify that
+        # matched programs genuinely belong to the searched category, not just
+        # carry a stray tag from noisy data.
+        family_ids, has_multi_parent = resolve_category_family(
+            expanded_tags, cursor
+        )
+
         # Parallel lookup: collect override camp_ids for all expanded slugs.
-        # These are camps that camps.ca itself listed on a category page —
-        # guaranteed to be relevant even if program_tags is missing a row.
         override_camp_ids: list[int] = []
         seen_override: set[int] = set()
         for slug in expanded_tags:
@@ -64,32 +71,53 @@ def query(params: dict, limit: int = 100) -> tuple[list[dict], float]:
         for i, tid in enumerate(tag_ids):
             args[f"tag_{i}"] = tid
 
+        # Build category-family affinity SQL gate.
+        # Two modes based on whether a multi-category parent was found:
+        #   - Multi-parent (e.g., swimming → water-sports-multi): accept if
+        #     tag_role is specialty/category OR program has ≥2 family tags.
+        #   - Leaf tag (e.g., fashion-design, no parent): accept only if
+        #     tag_role is specialty/category — activity-level tags are noise.
+        if has_multi_parent and family_ids:
+            fam_ph = ", ".join(f"%(fam_{i})s" for i in range(len(family_ids)))
+            for i, fid in enumerate(family_ids):
+                args[f"fam_{i}"] = fid
+
+            def _affinity_sql(role_col: str, prog_ref: str) -> str:
+                return (
+                    f"({role_col} IN ('specialty', 'category')"
+                    f" OR (SELECT COUNT(DISTINCT pt_f.tag_id)"
+                    f"     FROM program_tags pt_f"
+                    f"     WHERE pt_f.program_id = {prog_ref}"
+                    f"     AND pt_f.tag_id IN ({fam_ph})) >= 2)"
+                )
+        else:
+            def _affinity_sql(role_col: str, prog_ref: str) -> str:
+                return f"({role_col} IN ('specialty', 'category'))"
+
         if override_camp_ids:
-            # Parallel lookup: override camps are included even without a
-            # program_tags row.  For multi-program camps, we include ONE
-            # representative program to give the camp representation without
-            # flooding the pool.  Pick the best representative in priority:
-            #   1. Program with a matching program_tag (closest to search intent)
-            #   2. Fallback: lowest active program ID
-            # Programs with an actual program_tags match (from OurKids
-            # sitems) are always included regardless of override status.
+            # Override camps: include only if they have an active program
+            # with a matching tag AND the tag passes the affinity gate.
+            # No fallback to arbitrary active programs — if the camp's
+            # tagged program is expired, the camp is excluded.
             camp_ph = ", ".join(str(cid) for cid in override_camp_ids)  # ints — safe
             conditions.append(
-                f"(EXISTS (SELECT 1 FROM program_tags WHERE program_id = p.id AND tag_id IN ({ph}))"
+                # Path 1: direct program_tags match with affinity gate
+                f"(EXISTS (SELECT 1 FROM program_tags pt_m"
+                f"  WHERE pt_m.program_id = p.id AND pt_m.tag_id IN ({ph})"
+                f"  AND {_affinity_sql('pt_m.tag_role', 'p.id')})"
+                # Path 2: override camp with active matching program (no fallback)
                 f" OR (p.camp_id IN ({camp_ph})"
-                f"     AND p.id = COALESCE("
-                f"         (SELECT MIN(p3.id) FROM programs p3"
+                f"     AND p.id = (SELECT MIN(p3.id) FROM programs p3"
                 f"          JOIN program_tags pt3 ON pt3.program_id = p3.id"
                 f"          WHERE p3.camp_id = p.camp_id AND p3.status = 1"
                 f"          AND (p3.end_date IS NULL OR p3.end_date >= CURDATE())"
-                f"          AND pt3.tag_id IN ({ph})),"
-                f"         (SELECT MIN(p2.id) FROM programs p2"
-                f"          WHERE p2.camp_id = p.camp_id AND p2.status = 1"
-                f"          AND (p2.end_date IS NULL OR p2.end_date >= CURDATE())))))"
+                f"          AND pt3.tag_id IN ({ph})"
+                f"          AND {_affinity_sql('pt3.tag_role', 'p3.id')})))"
             )
         else:
             joins.append("JOIN program_tags pt ON p.id = pt.program_id")
             conditions.append(f"pt.tag_id IN ({ph})")
+            conditions.append(_affinity_sql("pt.tag_role", "p.id"))
 
     # Exclude tags
     exclude_ids = resolve_tag_ids(params.get("exclude_tags", []), cursor)
@@ -446,3 +474,67 @@ def resolve_trait_ids(slugs: list[str], cursor) -> list[int]:
         tuple(slugs),
     )
     return [row["id"] for row in cursor.fetchall()]
+
+
+def resolve_category_family(
+    slugs: list[str], cursor, max_family_size: int = 30
+) -> tuple[list[int], bool]:
+    """
+    Find the narrowest multi-category parent for each slug and return
+    all sibling tag IDs from that category grouping.
+
+    Example: 'ballet' → finds 'dance-multi' parent (12 tags) → returns IDs
+    for [dance-multi, acro-dance, ballet, jazz, hip-hop, ...].
+
+    For leaf L2 tags with no multi-parent (e.g., 'fashion-design'),
+    returns just the tag's own ID.
+
+    Args:
+        slugs: Tag slugs to find families for.
+        cursor: DB cursor.
+        max_family_size: Max tags in a parent category to consider.
+            Filters out L1 domain categories (60+ tags) which are too
+            broad for affinity checking.
+
+    Returns:
+        (family_tag_ids, has_multi_parent): IDs of all family members,
+        and whether a multi-category parent was found for any slug.
+    """
+    if not slugs:
+        return [], False
+
+    cursor.execute(
+        "SELECT slug, filter_activity_tags FROM categories WHERE is_active = 1"
+    )
+    all_cats = cursor.fetchall()
+
+    family_slugs: set[str] = set()
+    has_multi_parent = False
+
+    for slug in slugs:
+        best_tags: list[str] | None = None
+        best_size = float('inf')
+
+        for cat in all_cats:
+            cat_tags = [
+                t.strip()
+                for t in (cat["filter_activity_tags"] or "").split(",")
+            ]
+            # Skip self-only categories and L1 domains (too broad)
+            if (
+                slug in cat_tags
+                and len(cat_tags) > 1
+                and len(cat_tags) <= max_family_size
+            ):
+                if len(cat_tags) < best_size:
+                    best_tags = cat_tags
+                    best_size = len(cat_tags)
+
+        if best_tags:
+            family_slugs.update(best_tags)
+            has_multi_parent = True
+        else:
+            family_slugs.add(slug)
+
+    family_ids = resolve_tag_ids(list(family_slugs), cursor)
+    return family_ids, has_multi_parent

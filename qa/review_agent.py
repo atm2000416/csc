@@ -18,7 +18,7 @@ import sys
 sys.path.insert(0, os.path.join(os.path.dirname(__file__), ".."))
 
 from qa.config import QA_SHEET_ID, QA_TAB_NAME
-from qa.sheets import get_worksheet, get_all_items, get_unreviewed_items, write_comment, get_contact_email
+from qa.sheets import get_worksheet, get_all_items, get_unreviewed_items, append_comment, write_comment, get_contact_email
 from qa.validator import validate_finding
 from qa.responder import generate_response
 from qa.emailer import send_notification
@@ -35,6 +35,7 @@ def run(
     dry_run: bool = False,
     force: bool = False,
     test_email: str | None = None,
+    tab: str | None = None,
 ) -> list[dict]:
     """
     Main review loop.
@@ -44,12 +45,14 @@ def run(
         dry_run: If True, validate but don't write to sheet
         force: If True, re-review items that already have comments
         test_email: Override email for testing
+        tab: Specific tab name (default: Beta1)
 
     Returns:
         List of {item_id, issue_type, response} dicts for processed items
     """
-    logger.info("Connecting to Google Sheets...")
-    ws = get_worksheet(QA_SHEET_ID, QA_TAB_NAME)
+    tab_name = tab or QA_TAB_NAME
+    logger.info("Connecting to Google Sheets (tab: %s)...", tab_name)
+    ws = get_worksheet(QA_SHEET_ID, tab_name)
 
     if force:
         items = get_all_items(ws)
@@ -73,7 +76,13 @@ def run(
     for item in items:
         item_id = item["item_id"]
         search_term = item["search_term"]
-        logger.info("--- Item %s: '%s' ---", item_id, search_term)
+        is_followup = item.get("is_followup", False)
+        existing_comment = item.get("comment", "")
+
+        if is_followup:
+            logger.info("--- Item %s: '%s' [FOLLOW-UP] ---", item_id, search_term)
+        else:
+            logger.info("--- Item %s: '%s' ---", item_id, search_term)
 
         # Validate
         try:
@@ -93,19 +102,23 @@ def run(
         if validation.root_cause:
             logger.info("  Root cause: %s", validation.root_cause)
 
-        # Generate response
+        # Generate response (pass conversation history for follow-ups)
         try:
-            response = generate_response(item, validation)
+            response = generate_response(
+                item,
+                validation,
+                conversation_history=existing_comment if is_followup else "",
+            )
         except Exception as e:
             logger.error("Response generation failed for item %s: %s", item_id, e)
             continue
 
         logger.info("  Response: %s", response[:120] + "..." if len(response) > 120 else response)
 
-        # Write to sheet
+        # Write to sheet — append for threaded conversation
         if not dry_run:
             try:
-                write_comment(ws, item["row"], response)
+                append_comment(ws, item["row"], response, existing=existing_comment)
                 logger.info("  Written to row %d, column E", item["row"])
             except Exception as e:
                 logger.error("Failed to write comment for item %s: %s", item_id, e)
@@ -121,6 +134,7 @@ def run(
             "item_id": item_id,
             "issue_type": validation.issue_type,
             "is_valid_issue": validation.is_valid_issue,
+            "is_followup": is_followup,
             "response": response,
         })
 
@@ -146,6 +160,12 @@ def main():
         help="Re-review all items (ignore existing comments)",
     )
     parser.add_argument(
+        "--tab",
+        type=str,
+        default=None,
+        help="Tab name to process (default: Beta1). Use --tab ALL for all tester tabs.",
+    )
+    parser.add_argument(
         "--test-email",
         type=str,
         default=None,
@@ -153,12 +173,26 @@ def main():
     )
     args = parser.parse_args()
 
-    results = run(
-        item_filter=args.item,
-        dry_run=args.dry_run,
-        force=args.force,
-        test_email=args.test_email,
-    )
+    # Process single tab or all tester tabs
+    ALL_TABS = ["Beta1", "JIM", "DEBBIE", "ANJELICA", "MICHAEL"]
+
+    if args.tab and args.tab.upper() == "ALL":
+        tabs_to_run = ALL_TABS
+    else:
+        tabs_to_run = [args.tab] if args.tab else [QA_TAB_NAME]
+
+    results = []
+    for tab in tabs_to_run:
+        tab_results = run(
+            item_filter=args.item,
+            dry_run=args.dry_run,
+            force=args.force,
+            test_email=args.test_email,
+            tab=tab,
+        )
+        for r in tab_results:
+            r["tab"] = tab
+        results.extend(tab_results)
 
     # Summary
     if results:
@@ -167,7 +201,9 @@ def main():
         print(f"{'='*60}")
         for r in results:
             status = "VALID" if r["is_valid_issue"] else "OK"
-            print(f"  Item {r['item_id']}: [{status}] {r['issue_type']}")
+            followup = " (follow-up)" if r.get("is_followup") else ""
+            tab_label = f"[{r.get('tab', '')}] " if r.get("tab") else ""
+            print(f"  {tab_label}Item {r['item_id']}: [{status}] {r['issue_type']}{followup}")
         print()
 
 

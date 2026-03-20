@@ -94,13 +94,53 @@ def get_all_items(ws: gspread.Worksheet) -> list[dict]:
     return items
 
 
+def _last_entry_is_agent(comment: str) -> bool:
+    """Check if the last entry in a threaded comment was written by the agent."""
+    # Agent entries start with a timestamp like [2026-03-19 19:10 UTC]
+    lines = comment.strip().split("\n")
+    # Walk backwards to find the last non-empty line
+    for line in reversed(lines):
+        line = line.strip()
+        if line:
+            return line.startswith("[20")  # agent timestamp prefix
+    return False
+
+
 def get_unreviewed_items(ws: gspread.Worksheet) -> list[dict]:
-    """Return only items where column E (comment) is empty."""
-    return [item for item in get_all_items(ws) if not item["comment"]]
+    """Return items that need agent attention.
+
+    An item needs attention if:
+    - Column E is empty (never reviewed), OR
+    - Column E has content but the last entry is NOT from the agent
+      (tester added a reply → agent should respond)
+    """
+    items = []
+    for item in get_all_items(ws):
+        if not item["comment"]:
+            # Never reviewed
+            item["is_followup"] = False
+            items.append(item)
+        elif not _last_entry_is_agent(item["comment"]):
+            # Tester replied after agent's last response
+            item["is_followup"] = True
+            items.append(item)
+    return items
+
+
+def append_comment(ws: gspread.Worksheet, row_num: int, new_entry: str, existing: str = "") -> None:
+    """Append a new entry to the threaded comment in column E.
+
+    If existing content is present, adds a separator line before the new entry.
+    """
+    if existing:
+        combined = existing.rstrip() + "\n\n" + new_entry
+    else:
+        combined = new_entry
+    ws.update_cell(row_num, 5, combined)
 
 
 def write_comment(ws: gspread.Worksheet, row_num: int, comment: str) -> None:
-    """Write a comment to column E of the given row."""
+    """Write a comment to column E of the given row (overwrites)."""
     ws.update_cell(row_num, 5, comment)
 
 

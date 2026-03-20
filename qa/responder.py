@@ -62,14 +62,23 @@ def _template_response(entry: dict, validation: ValidationResult) -> str:
     return " ".join(parts)
 
 
-def generate_response(entry: dict, validation: ValidationResult) -> str:
+def generate_response(
+    entry: dict,
+    validation: ValidationResult,
+    conversation_history: str = "",
+) -> str:
     """
     Generate a COMMENTS response for a QA finding.
+
+    Args:
+        entry: The tester's original finding
+        validation: Pipeline validation results
+        conversation_history: Existing threaded conversation in column E (for follow-ups)
 
     Tries Claude Haiku for a polished response; falls back to template.
     """
     # For simple cases, use templates directly (saves API calls)
-    if validation.issue_type in ("UI_UX", "LINK_ISSUE"):
+    if validation.issue_type in ("UI_UX", "LINK_ISSUE") and not conversation_history:
         return _template_response(entry, validation)
 
     # Try LLM for richer responses
@@ -78,6 +87,17 @@ def generate_response(entry: dict, validation: ValidationResult) -> str:
 
         client = get_client()
 
+        # Build conversation context for follow-ups
+        history_block = ""
+        if conversation_history:
+            history_block = f"""
+CONVERSATION SO FAR (in column E):
+{conversation_history}
+
+This is a FOLLOW-UP. The tester has replied to a previous agent response.
+Address their specific reply directly. Do not repeat information already covered.
+"""
+
         prompt = f"""You are a QA response bot for a camp search engine (camps.ca).
 A tester submitted a finding. Generate a concise, professional response for the COMMENTS column.
 
@@ -85,7 +105,7 @@ TESTER FINDING:
 - Search term: {entry.get('search_term', '')}
 - What they saw: {entry.get('chat_response', '')}
 - Why incorrect: {entry.get('why_incorrect', '')}
-
+{history_block}
 VALIDATION RESULTS:
 - Issue type: {validation.issue_type}
 - Valid issue: {validation.is_valid_issue}

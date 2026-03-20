@@ -17,6 +17,10 @@ on:
         required: false
         type: boolean
         default: false
+      tab:
+        description: 'Tab to process (Beta1, JIM, DEBBIE, ANJELICA, MICHAEL, or ALL)'
+        required: false
+        default: 'ALL'
 
 jobs:
   review:
@@ -43,6 +47,9 @@ jobs:
           fi
           if [ "${{ github.event.inputs.force }}" = "true" ]; then
             ARGS="$ARGS --force"
+          fi
+          if [ -n "${{ github.event.inputs.tab }}" ]; then
+            ARGS="$ARGS --tab ${{ github.event.inputs.tab }}"
           fi
           PYTHONPATH=. python -m qa.review_agent $ARGS
         env:

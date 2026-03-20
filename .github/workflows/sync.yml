@@ -29,13 +29,21 @@ jobs:
           GDRIVE_SERVICE_ACCOUNT_JSON: ${{ secrets.GDRIVE_SERVICE_ACCOUNT_JSON }}
           GDRIVE_FOLDER_ID:            ${{ secrets.GDRIVE_FOLDER_ID }}
 
-      - name: Run sync from dump
+      - name: Load raw OurKids tables
+        run: PYTHONPATH=. python db/load_raw_tables.py --dump dump.sql
+        env:
+          DB_HOST:        ${{ secrets.DB_HOST }}
+          DB_PORT:        ${{ secrets.DB_PORT }}
+          DB_NAME:        ${{ secrets.DB_NAME }}
+          DB_USER:        ${{ secrets.DB_USER }}
+          DB_PASSWORD:    ${{ secrets.DB_PASSWORD }}
+          DB_SSL_CA_CERT: ${{ secrets.DB_SSL_CA_CERT }}
+
+      - name: Materialize CSC tables from raw
         run: >
-          python db/sync_from_dump.py
-          --dump dump.sql
-          --import-all-sessions
-          --deactivate
+          PYTHONPATH=. python db/materialize_from_raw.py
           --skip-ids 422,529,579,1647
+          --deactivate
         env:
           DB_HOST:        ${{ secrets.DB_HOST }}
           DB_PORT:        ${{ secrets.DB_PORT }}

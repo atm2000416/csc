@@ -444,14 +444,19 @@ def materialize_programs(cursor, conn, dry_run, dump_cids, force=False):
                         tags.append((tag_id, 0, 'category'))
                         seen_tag_ids.add(tag_id)
 
+            # Parse activities with focus level: [sitem_id]level
+            # Level 1=recreational, 2=instructional, 3=intense
+            # Map to tag_role: 3→specialty, 2→category, 1→activity
+            _LEVEL_TO_ROLE = {'3': 'specialty', '2': 'category', '1': 'activity'}
             activities_raw = s.get("activities") or ""
-            activity_ids = [int(m) for m in re.findall(r'\[(\d+)\]', str(activities_raw))]
-            for act_id in activity_ids:
+            for act_id_str, level_str in re.findall(r'\[(\d+)\](\d+)', str(activities_raw)):
+                act_id = int(act_id_str)
                 slug = sitems_to_slug.get(act_id)
                 if slug:
                     tag_id = tag_slug_to_id.get(slug)
+                    role = _LEVEL_TO_ROLE.get(level_str, 'activity')
                     if tag_id and tag_id not in seen_tag_ids:
-                        tags.append((tag_id, 0, 'activity'))
+                        tags.append((tag_id, 0, role))
                         seen_tag_ids.add(tag_id)
 
             if not seen_tag_ids:

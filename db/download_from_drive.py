@@ -36,61 +36,40 @@ def main():
     )
     service = build("drive", "v3", credentials=creds, cache_discovery=False)
 
-    # Debug: check what the service account can see
-    print(f"Folder ID: {folder_id}")
-
-    # 1. Try listing files in the specified folder
-    print("Listing contents of folder...")
+    # List files in the specified folder
     results = service.files().list(
-        q=f"'{folder_id}' in parents and trashed=false",
-        pageSize=20,
+        q=f"'{folder_id}' in parents and trashed=false"
+            " and mimeType != 'application/vnd.google-apps.folder'",
+        orderBy="modifiedTime desc",
+        pageSize=5,
         fields="files(id, name, size, mimeType, modifiedTime)",
     ).execute()
-    items = results.get("files", [])
-    print(f"  Found {len(items)} items in folder:")
-    for item in items:
-        print(f"    {item['name']}  ({item['mimeType']})  modified={item.get('modifiedTime','?')}")
+    files = results.get("files", [])
 
-    # 2. If empty, try listing ALL files visible to the service account
-    if not items:
-        print("\nFolder appears empty. Listing ALL files visible to service account...")
-        all_results = service.files().list(
-            pageSize=20,
-            fields="files(id, name, mimeType, parents, modifiedTime)",
-            orderBy="modifiedTime desc",
+    # If no files, check subfolders
+    if not files:
+        sub_results = service.files().list(
+            q=f"'{folder_id}' in parents and trashed=false"
+                " and mimeType = 'application/vnd.google-apps.folder'",
+            pageSize=10,
+            fields="files(id, name)",
         ).execute()
-        all_files = all_results.get("files", [])
-        print(f"  Service account can see {len(all_files)} files total:")
-        for af in all_files:
-            print(f"    {af['name']}  parents={af.get('parents',[])}  ({af['mimeType']})")
+        for sub in sub_results.get("files", []):
+            print(f"  Searching subfolder: {sub['name']}")
+            sub_files = service.files().list(
+                q=f"'{sub['id']}' in parents and trashed=false"
+                    " and mimeType != 'application/vnd.google-apps.folder'",
+                orderBy="modifiedTime desc",
+                pageSize=5,
+                fields="files(id, name, size, mimeType, modifiedTime)",
+            ).execute()
+            files = sub_files.get("files", [])
+            if files:
+                break
 
-        if not all_files:
-            print("\n  Service account cannot see ANY files — likely a sharing/permission issue.")
-        print()
+    if not files:
         print("ERROR: No files found in Drive folder")
         sys.exit(1)
-
-    # Pick the most recent non-folder file
-    files = [f for f in items if f["mimeType"] != "application/vnd.google-apps.folder"]
-    if not files:
-        # Only subfolders — recurse
-        for item in items:
-            if item["mimeType"] == "application/vnd.google-apps.folder":
-                print(f"\n  Searching subfolder: {item['name']} ({item['id']})")
-                sub = service.files().list(
-                    q=f"'{item['id']}' in parents and trashed=false",
-                    orderBy="modifiedTime desc",
-                    pageSize=5,
-                    fields="files(id, name, size, mimeType)",
-                ).execute()
-                files = [f for f in sub.get("files", []) if f["mimeType"] != "application/vnd.google-apps.folder"]
-                if files:
-                    break
-    if not files:
-        print("ERROR: No downloadable files found")
-        sys.exit(1)
-
-    files.sort(key=lambda x: x.get("modifiedTime", ""), reverse=True)
 
     f = files[0]
     print(f"Found: {f['name']} ({int(f.get('size', 0)) // 1024:,} KB)")

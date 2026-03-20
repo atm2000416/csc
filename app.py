@@ -1005,7 +1005,7 @@ def _run_search(merged_params: dict, raw_query: str, session: dict, sidebar_filt
     if decision.route == Route.SHOW_RESULTS:
         with st.spinner("Finding the best matches…"):
             final = process_results(results, raw_query, merged_params)
-            msg = generate_concierge_response(final, raw_query, merged_params, "SHOW_RESULTS")
+            msg = generate_concierge_response(final, raw_query, merged_params, "SHOW_RESULTS", ics=ics, needs_clarification=getattr(intent, "needs_clarification", []) if intent else [])
         record("output", {"route": "SHOW_RESULTS", "final_count": len(final),
                           "top_camps": [r.get("camp_name") for r in final],
                           "concierge_msg": msg[:200]})
@@ -1042,7 +1042,7 @@ def _run_search(merged_params: dict, raw_query: str, session: dict, sidebar_filt
                     render_trace()
                     _show_zero_results(diag)
                     return
-                msg = generate_concierge_response(final, raw_query, merged_params, "BROADEN_SEARCH")
+                msg = generate_concierge_response(final, raw_query, merged_params, "BROADEN_SEARCH", ics=ics, needs_clarification=getattr(intent, "needs_clarification", []) if intent else [])
             record("output", {"route": "BROADEN_SEARCH", "final_count": len(final),
                                "top_camps": [r.get("camp_name") for r in final],
                                "concierge_msg": msg[:200]})
@@ -1066,7 +1066,7 @@ def _run_search(merged_params: dict, raw_query: str, session: dict, sidebar_filt
     elif decision.route == Route.SHOW_CLARIFY:
         with st.spinner("Finding the best matches…"):
             final = process_results(results, raw_query, merged_params)
-            msg = generate_concierge_response(final, raw_query, merged_params, "SHOW_CLARIFY")
+            msg = generate_concierge_response(final, raw_query, merged_params, "SHOW_CLARIFY", ics=ics, needs_clarification=getattr(intent, "needs_clarification", []) if intent else [])
         record("output", {"route": "SHOW_CLARIFY", "final_count": len(final),
                           "clarification_dims": decision.clarification_dimensions,
                           "concierge_msg": msg[:200]})
@@ -1089,7 +1089,7 @@ def _run_search(merged_params: dict, raw_query: str, session: dict, sidebar_filt
             with st.spinner("Finding the best matches…"):
                 final = process_results(results, raw_query, merged_params)
                 clarify_final_count = len(final)
-                clarify_msg = generate_concierge_response(final, raw_query, merged_params, "SHOW_CLARIFY")
+                clarify_msg = generate_concierge_response(final, raw_query, merged_params, "SHOW_CLARIFY", ics=ics, needs_clarification=getattr(intent, "needs_clarification", []) if intent else [])
         elif not decision.clarification_dimensions:
             # No results and no clarification dims — pre-diagnose before render_trace
             zero_diag = _diagnose_zero_results(merged_params)

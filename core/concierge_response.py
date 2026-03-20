@@ -37,6 +37,16 @@ Tone rules:
 - LANGUAGE: Detect the language of the user's query and respond in that same language. \
   Camp names stay in English but everything else should be in the user's language.
 
+Confidence calibration:
+- If "confidence: low" is noted, the system wasn't fully sure what the user meant. \
+  Be HONEST about this — acknowledge what you DID match on and what you're unsure about. \
+  Example: "I matched on sports camps, but I'm not sure what you mean by 'international' — \
+  did you mean camps with a travel component, or a specific camp name?"
+- If "unmatched_terms" are listed, those are words the system couldn't map to any tag. \
+  Mention them naturally: "I wasn't able to match 'international' to a specific camp type."
+- NEVER present results with high confidence when the system is uncertain — that \
+  misleads the parent. Low confidence = honest about limitations.
+
 Return ONLY the response text. No JSON. No markdown headers. No bullet points.
 """
 
@@ -103,6 +113,8 @@ def generate(
     raw_query: str,
     params: dict,
     route: str = "SHOW_RESULTS",
+    ics: float = 1.0,
+    needs_clarification: list[str] | None = None,
 ) -> str:
     """
     Generate a concierge narrative for the current result set.
@@ -152,11 +164,37 @@ def generate(
                 "as without the filter. Acknowledge this briefly and naturally."
             )
 
+    # Confidence context — help concierge calibrate its tone
+    confidence = "high" if ics >= 0.70 else "low"
+    clarify = needs_clarification or []
+
+    # Detect unmatched terms — words in the query that didn't map to any tag
+    matched_words = set()
+    for tag in (params.get("tags") or []):
+        matched_words.update(tag.replace("-", " ").split())
+    for city in (params.get("cities") or []):
+        matched_words.add(city.lower())
+    if params.get("city"):
+        matched_words.add(params["city"].lower())
+    if params.get("province"):
+        matched_words.add(params["province"].lower())
+    if params.get("type"):
+        matched_words.add(params["type"].lower())
+
+    stop_words = {"camp", "camps", "for", "in", "the", "a", "an", "and", "or",
+                  "with", "my", "near", "around", "at", "to", "of", "on", "is"}
+    query_words = [w for w in raw_query.lower().split()
+                   if w not in stop_words and len(w) > 2]
+    unmatched = [w for w in query_words if w not in matched_words]
+
     user_message = (
         f"User query: {raw_query}\n"
         f"Active filters: {json.dumps(active_filters, ensure_ascii=False)}\n"
         f"Total results shown: {len(results)}\n"
         f"Route: {route}\n"
+        f"Confidence: {confidence} (score: {ics:.2f})\n"
+        + (f"Unmatched terms: {', '.join(unmatched)}\n" if unmatched else "")
+        + (f"Needs clarification on: {', '.join(clarify)}\n" if clarify else "")
         + (f"Notes: {' '.join(notes)}\n" if notes else "")
         + f"Top results:\n{json.dumps(top_summary, ensure_ascii=False, indent=2)}"
     )

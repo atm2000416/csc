@@ -250,12 +250,10 @@ def materialize_camps(cursor, dry_run, skip_ids, deactivate):
     return dump_cids
 
 
-def materialize_programs(cursor, conn, dry_run, dump_cids, force=False):
+def materialize_programs(cursor, conn, dry_run, dump_cids):
     """Replace programs for all active camps using ok_sessions.
 
-    Args:
-        force: If True, skip change-detection and re-sync all camps
-               (rebuilds tags from sitems data even if session names haven't changed).
+    Returns sitems_to_slug mapping and tag_slug_to_id for use by tag step.
     """
     stats = {"camps_synced": 0, "camps_skipped": 0, "camps_unchanged": 0,
              "programs_inserted": 0, "tags_inserted": 0}
@@ -351,7 +349,7 @@ def materialize_programs(cursor, conn, dry_run, dump_cids, force=False):
         new_names = dump_name_set - db_name_set
         gone_names = db_name_set - dump_name_set
 
-        if not new_names and not gone_names and not force:
+        if not new_names and not gone_names:
             stats["camps_unchanged"] += 1
             continue
 
@@ -758,154 +756,9 @@ def materialize_locations(cursor, conn, dry_run, dump_cids):
     return stats
 
 
-def backfill_branch_tags(cursor, conn, dry_run):
-    """Backfill tags for location-branch programs that have zero tags.
-
-    Location branches are camps created by materialize_locations() with
-    auto-increment IDs (not in ok_camps).  Their programs are copies of the
-    parent camp's programs, but if the parent had no tags at copy time, the
-    branches ended up tagless — invisible to search.
-
-    This step finds each tagless branch program, matches it to the parent
-    camp's program by name, and copies the parent's program_tags.
-    """
-    stats = {"branches_fixed": 0, "tags_copied": 0}
-
-    print("=== Branch tag backfill ===")
-
-    # Find location-branch camps with tagless programs.
-    # Branch camps have names like "Camp X - City" and IDs not in ok_camps.
-    cursor.execute("""
-        SELECT c.id as branch_id, c.camp_name
-        FROM camps c
-        WHERE c.status = 1
-        AND c.id NOT IN (SELECT cid FROM ok_camps)
-        AND EXISTS (
-            SELECT 1 FROM programs p
-            WHERE p.camp_id = c.id AND p.status = 1
-            AND NOT EXISTS (SELECT 1 FROM program_tags pt WHERE pt.program_id = p.id)
-        )
-    """)
-    branches = cursor.fetchall()
-
-    if not branches:
-        print("  No tagless branches found.")
-        print()
-        return stats
-
-    print(f"  Found {len(branches)} branches with tagless programs")
-
-    # Build parent lookup: branch camp_name = "Parent Name - City"
-    # → find parent by matching the name prefix
-    cursor.execute("SELECT id, camp_name FROM camps WHERE status = 1")
-    all_camps = {r["id"]: r["camp_name"] for r in cursor.fetchall()}
-
-    # Also build a name → id index for parent matching
-    name_to_ids = {}
-    for cid, cname in all_camps.items():
-        name_to_ids.setdefault(cname.strip().lower(), []).append(cid)
-
-    for branch in branches:
-        branch_id = branch["branch_id"]
-        branch_name = branch["camp_name"]
-
-        # Extract parent name: "Camp X - City" → "Camp X"
-        # Try splitting on " - " from the right (city is the last segment)
-        parts = branch_name.rsplit(" - ", 1)
-        if len(parts) < 2:
-            continue
-        parent_name = parts[0].strip()
-
-        # Find parent camp
-        parent_ids = name_to_ids.get(parent_name.lower(), [])
-        if not parent_ids:
-            continue
-        parent_id = parent_ids[0]  # primary parent
-
-        # Get tagless programs in this branch
-        cursor.execute("""
-            SELECT p.id, p.name FROM programs p
-            WHERE p.camp_id = %s AND p.status = 1
-            AND NOT EXISTS (SELECT 1 FROM program_tags pt WHERE pt.program_id = p.id)
-        """, (branch_id,))
-        tagless_progs = cursor.fetchall()
-
-        if not tagless_progs:
-            continue
-
-        # Get parent's programs with tags, indexed by name
-        cursor.execute("""
-            SELECT p.id, p.name FROM programs p
-            WHERE p.camp_id = %s AND p.status = 1
-            AND EXISTS (SELECT 1 FROM program_tags pt WHERE pt.program_id = p.id)
-        """, (parent_id,))
-        parent_progs = {r["name"].strip().lower(): r["id"] for r in cursor.fetchall()}
-
-        if not parent_progs:
-            continue
-
-        copied_for_branch = 0
-        for prog in tagless_progs:
-            # Match by exact name
-            parent_prog_id = parent_progs.get(prog["name"].strip().lower())
-
-            # Fallback: match by name prefix (branch prog might have city suffix)
-            if not parent_prog_id:
-                prog_name_lower = prog["name"].strip().lower()
-                for pname, pid in parent_progs.items():
-                    if pname.startswith(prog_name_lower) or prog_name_lower.startswith(pname):
-                        parent_prog_id = pid
-                        break
-
-            # Last resort: if branch has exactly 1 program and parent has programs,
-            # copy tags from the parent's first program
-            if not parent_prog_id and len(tagless_progs) == 1 and parent_progs:
-                parent_prog_id = next(iter(parent_progs.values()))
-
-            if not parent_prog_id:
-                continue
-
-            # Copy tags from parent program to branch program
-            cursor.execute(
-                "SELECT tag_id, is_primary, tag_role, source "
-                "FROM program_tags WHERE program_id = %s",
-                (parent_prog_id,)
-            )
-            tags = cursor.fetchall()
-            if not tags:
-                continue
-
-            if not dry_run:
-                for t in tags:
-                    cursor.execute(
-                        "INSERT IGNORE INTO program_tags "
-                        "(program_id, tag_id, is_primary, tag_role, source) "
-                        "VALUES (%s, %s, %s, %s, %s)",
-                        (prog["id"], t["tag_id"], t["is_primary"],
-                         t["tag_role"], t.get("source", "ourkids"))
-                    )
-                    stats["tags_copied"] += cursor.rowcount
-
-            copied_for_branch += len(tags)
-
-        if copied_for_branch > 0:
-            stats["branches_fixed"] += 1
-            print(f"  {'[DRY] ' if dry_run else ''}"
-                  f"BACKFILL id={branch_id}: {branch_name!r} "
-                  f"(+{copied_for_branch} tags from parent {parent_id})")
-
-    if not dry_run and stats["tags_copied"]:
-        conn.commit()
-
-    print(f"\n  Branches fixed: {stats['branches_fixed']}, "
-          f"Tags copied: {stats['tags_copied']}")
-    print()
-    return stats
-
-
 # ── Main ──────────────────────────────────────────────────────────────────────
 
-def run(dry_run, skip_ids, deactivate, force=False):
+def run(dry_run, skip_ids, deactivate):
     conn = get_connection()
     cursor = conn.cursor(dictionary=True)
 
@@ -929,16 +782,13 @@ def run(dry_run, skip_ids, deactivate, force=False):
     dump_cids = materialize_camps(cursor, dry_run, skip_ids, deactivate)
 
     # Step 2: Programs + tags
-    prog_stats = materialize_programs(cursor, conn, dry_run, dump_cids, force=force)
+    prog_stats = materialize_programs(cursor, conn, dry_run, dump_cids)
 
     # Step 3: Dates
     date_stats = materialize_dates(cursor, conn, dry_run)
 
     # Step 4: Extra locations
     loc_stats = materialize_locations(cursor, conn, dry_run, dump_cids)
-
-    # Step 5: Backfill tags for existing location branches
-    branch_stats = backfill_branch_tags(cursor, conn, dry_run)
 
     if not dry_run:
         # Safety gate: verify tag count hasn't dropped catastrophically.
@@ -963,11 +813,10 @@ def run(dry_run, skip_ids, deactivate, force=False):
 
     print("=" * 60)
     print(f"{prefix}Materialization complete")
-    print(f"  Programs inserted:  {prog_stats['programs_inserted']}")
-    print(f"  Tags inserted:      {prog_stats['tags_inserted']}")
-    print(f"  Dates inserted:     {date_stats['inserted']}")
-    print(f"  Locations added:    {loc_stats['added']}")
-    print(f"  Branch tags copied: {branch_stats['tags_copied']}")
+    print(f"  Programs inserted: {prog_stats['programs_inserted']}")
+    print(f"  Tags inserted:     {prog_stats['tags_inserted']}")
+    print(f"  Dates inserted:    {date_stats['inserted']}")
+    print(f"  Locations added:   {loc_stats['added']}")
     print("=" * 60)
 
 
@@ -982,9 +831,6 @@ if __name__ == "__main__":
     parser.add_argument("--skip-ids",
                         help="Comma-separated camp IDs to skip during deactivation "
                              "(e.g. 422,529,579,1647)")
-    parser.add_argument("--force", action="store_true",
-                        help="Force re-sync all camps (skip change-detection, "
-                             "rebuild tags from sitems data)")
     args = parser.parse_args()
     skip_ids = set(int(x) for x in args.skip_ids.split(",")) if args.skip_ids else set()
-    run(args.dry_run, skip_ids, args.deactivate, force=args.force)
+    run(args.dry_run, skip_ids, args.deactivate)

@@ -208,8 +208,9 @@ def query(params: dict, limit: int = 100) -> tuple[list[dict], float]:
     # Type — DB stores legacy numeric codes, not strings
     # '1'='Day Camp', '2'='Overnight', '3'='Day+Overnight', '4'='Virtual'
     # 'Day Camp' also appears as a string from the migration
+    # NULL type = unset — most camps are day camps, so Day includes NULL
     _TYPE_MAP = {
-        "Day":       ("p.type IN ('1','1,3','Day Camp')", {}),
+        "Day":       ("(p.type IN ('1','1,3','Day Camp') OR p.type IS NULL)", {}),
         "Overnight": ("p.type IN ('2','3','1,3')", {}),
         "Both":      ("p.type IN ('3','1,3')", {}),
         "Virtual":   ("p.type = '4'", {}),

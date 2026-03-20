@@ -36,6 +36,19 @@ def main():
     )
     service = build("drive", "v3", credentials=creds, cache_discovery=False)
 
+    print(f"Folder ID: {folder_id}")
+
+    # Verify folder exists and is accessible
+    try:
+        folder_meta = service.files().get(
+            fileId=folder_id, fields="id, name, mimeType"
+        ).execute()
+        print(f"Folder name: {folder_meta.get('name')} (type: {folder_meta.get('mimeType')})")
+    except Exception as e:
+        print(f"ERROR: Cannot access folder '{folder_id}': {e}")
+        print("Make sure the folder is shared with the service account email.")
+        sys.exit(1)
+
     # List files in the specified folder
     results = service.files().list(
         q=f"'{folder_id}' in parents and trashed=false"

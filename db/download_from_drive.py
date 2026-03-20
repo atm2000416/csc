@@ -36,17 +36,32 @@ def main():
     )
     service = build("drive", "v3", credentials=creds, cache_discovery=False)
 
-    # Find the most recently modified file in the folder
-    results = service.files().list(
-        q=f"'{folder_id}' in parents and trashed=false",
-        orderBy="modifiedTime desc",
-        pageSize=1,
-        fields="files(id, name, size)",
-    ).execute()
+    # Find the most recently modified SQL dump file in the folder (or subfolders)
+    def find_dump(fid):
+        """Search folder for .sql/.gz files; recurse into subfolders."""
+        res = service.files().list(
+            q=f"'{fid}' in parents and trashed=false",
+            orderBy="modifiedTime desc",
+            pageSize=20,
+            fields="files(id, name, size, mimeType)",
+        ).execute()
+        items = res.get("files", [])
+        # Collect dump files
+        dumps = [f for f in items if not f["mimeType"].startswith("application/vnd.google-apps.folder")]
+        if dumps:
+            return dumps
+        # No files found — recurse into subfolders
+        for item in items:
+            if item["mimeType"] == "application/vnd.google-apps.folder":
+                print(f"  Searching subfolder: {item['name']}")
+                found = find_dump(item["id"])
+                if found:
+                    return found
+        return []
 
-    files = results.get("files", [])
+    files = find_dump(folder_id)
     if not files:
-        print("ERROR: No files found in Drive folder")
+        print("ERROR: No files found in Drive folder (searched subfolders too)")
         sys.exit(1)
 
     f = files[0]

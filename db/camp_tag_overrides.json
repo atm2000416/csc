@@ -3255,7 +3255,10 @@
   ],
   "977": [
     "baseball-softball",
-    "skilled-trades-activities"
+    "skilled-trades-activities",
+    "steam",
+    "stem",
+    "technology"
   ],
   "984": [
     "arts-crafts",
@@ -4453,8 +4456,7 @@
     "yoga"
   ],
   "1496": [
-    "soccer",
-    "sports-instructional-training"
+    "soccer"
   ],
   "1500": [
     "adventure-multi",
@@ -4508,7 +4510,9 @@
     "musical-theatre",
     "nature-environment",
     "painting",
+    "podcasting",
     "safari",
+    "science-multi",
     "soccer",
     "songwriting",
     "space",
@@ -6591,7 +6595,6 @@
     "vocal-training-singing"
   ],
   "2053": [
-    "breakdancing",
     "dance-multi",
     "filmmaking",
     "hip-hop",
@@ -7346,6 +7349,1696 @@
     "web-design",
     "web-development"
   ],
+  "2121": [
+    "theatre-arts"
+  ],
+  "2122": [
+    "theatre-arts"
+  ],
+  "2123": [
+    "theatre-arts"
+  ],
+  "2124": [
+    "theatre-arts"
+  ],
+  "2125": [
+    "cit-lit-program",
+    "debate",
+    "empowerment",
+    "leadership-training",
+    "public-speaking",
+    "social-justice"
+  ],
+  "2126": [
+    "cit-lit-program",
+    "debate",
+    "empowerment",
+    "leadership-training",
+    "public-speaking",
+    "social-justice"
+  ],
+  "2127": [
+    "soccer"
+  ],
+  "2128": [
+    "soccer"
+  ],
+  "2129": [
+    "archery",
+    "arts-crafts",
+    "basketball",
+    "canoeing",
+    "cheer",
+    "drawing",
+    "fishing",
+    "football",
+    "gaga",
+    "guitar",
+    "hiking",
+    "hockey",
+    "jam-camp",
+    "kayaking-sea-kayaking",
+    "painting",
+    "ropes-course",
+    "soccer",
+    "swimming",
+    "theatre-arts",
+    "ultimate-frisbee",
+    "volleyball",
+    "wilderness-out-tripping",
+    "wilderness-skills",
+    "yoga"
+  ],
+  "2130": [
+    "adventure-multi"
+  ],
+  "2131": [
+    "arts-crafts",
+    "cit-lit-program",
+    "drawing",
+    "language-instruction",
+    "lego"
+  ],
+  "2132": [
+    "sport-multi"
+  ],
+  "2133": [
+    "sport-multi"
+  ],
+  "2134": [
+    "lego"
+  ],
+  "2135": [
+    "adventure-multi",
+    "soccer"
+  ],
+  "2136": [
+    "adventure-multi",
+    "soccer"
+  ],
+  "2137": [
+    "adventure-multi",
+    "soccer"
+  ],
+  "2138": [
+    "adventure-multi",
+    "soccer"
+  ],
+  "2139": [
+    "adventure-multi",
+    "soccer"
+  ],
+  "2140": [
+    "adventure-multi",
+    "soccer"
+  ],
+  "2141": [
+    "adventure-multi",
+    "soccer"
+  ],
+  "2142": [
+    "adventure-multi",
+    "soccer"
+  ],
+  "2143": [
+    "adventure-multi",
+    "soccer"
+  ],
+  "2144": [
+    "adventure-multi",
+    "soccer"
+  ],
+  "2145": [
+    "adventure-multi",
+    "soccer"
+  ],
+  "2146": [
+    "adventure-multi",
+    "soccer"
+  ],
+  "2147": [
+    "adventure-multi",
+    "soccer"
+  ],
+  "2148": [
+    "adventure-multi",
+    "soccer"
+  ],
+  "2149": [
+    "adventure-multi",
+    "soccer"
+  ],
+  "2150": [
+    "adventure-multi",
+    "soccer"
+  ],
+  "2151": [
+    "adventure-multi",
+    "soccer"
+  ],
+  "2152": [
+    "adventure-multi",
+    "soccer"
+  ],
+  "2153": [
+    "adventure-multi",
+    "soccer"
+  ],
+  "2154": [
+    "visual-arts-multi",
+    "vocal-training-singing",
+    "volleyball",
+    "water-sports-multi",
+    "waterskiing-wakeboarding",
+    "weight-loss-program",
+    "wilderness-out-tripping",
+    "wilderness-skills",
+    "writing",
+    "yoga"
+  ],
+  "2155": [
+    "visual-arts-multi",
+    "vocal-training-singing",
+    "volleyball",
+    "water-sports-multi",
+    "waterskiing-wakeboarding",
+    "weight-loss-program",
+    "wilderness-out-tripping",
+    "wilderness-skills",
+    "writing",
+    "yoga"
+  ],
+  "2156": [
+    "archery",
+    "arts",
+    "arts-crafts",
+    "board-sailing",
+    "canoeing",
+    "cit-lit-program",
+    "cooking",
+    "disc-golf",
+    "drawing",
+    "first-aid-lifesaving",
+    "fishing",
+    "guitar",
+    "jam-camp",
+    "kayaking-sea-kayaking",
+    "leadership-training",
+    "painting",
+    "piano",
+    "rock-climbing",
+    "ropes-course",
+    "sailing-marine-skills",
+    "swimming",
+    "water-polo",
+    "wilderness-out-tripping",
+    "wilderness-skills",
+    "zip-line"
+  ],
+  "2157": [
+    "archery",
+    "arts-crafts",
+    "baseball-softball",
+    "basketball",
+    "board-sailing",
+    "bronze-cross",
+    "canoeing",
+    "ceramics",
+    "cit-lit-program",
+    "cycling",
+    "diving",
+    "dodgeball",
+    "first-aid-lifesaving",
+    "flag-football",
+    "football",
+    "gaga",
+    "guitar",
+    "jam-camp",
+    "kayaking-sea-kayaking",
+    "leadership-training",
+    "mountain-biking",
+    "painting",
+    "pickleball",
+    "ping-pong",
+    "pottery",
+    "rock-climbing",
+    "ropes-course",
+    "soccer",
+    "swimming",
+    "tennis",
+    "theatre-arts",
+    "volleyball",
+    "wilderness-out-tripping",
+    "wilderness-skills",
+    "woodworking"
+  ],
+  "2158": [
+    "archery",
+    "arts",
+    "arts-crafts",
+    "canoeing",
+    "hiking",
+    "jam-camp",
+    "kayaking-sea-kayaking",
+    "nature-environment",
+    "rock-climbing",
+    "ropes-course",
+    "sailing-marine-skills",
+    "swimming",
+    "theatre-arts"
+  ],
+  "2159": [
+    "soccer"
+  ],
+  "2160": [
+    "arts-crafts",
+    "badminton",
+    "baking-decorating",
+    "basketball",
+    "cooking",
+    "drawing",
+    "football",
+    "gymnastics",
+    "hip-hop",
+    "jazz",
+    "karate",
+    "lego",
+    "martial-arts",
+    "mindfulness-training",
+    "nature-environment",
+    "painting",
+    "reading",
+    "soccer",
+    "sports-instructional-training",
+    "stem",
+    "strength-and-conditioning",
+    "taekwondo",
+    "technology",
+    "tennis",
+    "writing",
+    "yoga"
+  ],
+  "2161": [
+    "visual-arts-multi",
+    "vocal-training-singing",
+    "volleyball",
+    "water-sports-multi",
+    "waterskiing-wakeboarding",
+    "weight-loss-program",
+    "wilderness-out-tripping",
+    "wilderness-skills",
+    "writing",
+    "yoga"
+  ],
+  "2162": [
+    "basketball"
+  ],
+  "2163": [
+    "basketball"
+  ],
+  "2164": [
+    "basketball"
+  ],
+  "2165": [
+    "theatre-arts"
+  ],
+  "2166": [
+    "theatre-arts"
+  ],
+  "2167": [
+    "debate"
+  ],
+  "2168": [
+    "archery",
+    "arts-crafts",
+    "badminton",
+    "baking-decorating",
+    "baseball-softball",
+    "canoeing",
+    "cit-lit-program",
+    "cooking",
+    "cricket",
+    "cycling",
+    "drawing",
+    "first-aid-lifesaving",
+    "fishing",
+    "gaga",
+    "gymnastics",
+    "hiking",
+    "kayaking-sea-kayaking",
+    "leadership-training",
+    "mindfulness-training",
+    "mountain-biking",
+    "nature-environment",
+    "painting",
+    "rock-climbing",
+    "ropes-course",
+    "soccer",
+    "sports-instructional-training",
+    "strength-and-conditioning",
+    "swimming",
+    "track-and-field",
+    "volleyball",
+    "whitewater-rafting",
+    "wilderness-out-tripping",
+    "wilderness-skills"
+  ],
+  "2169": [
+    "archery",
+    "arts-crafts",
+    "baseball-softball",
+    "basketball",
+    "bmx-motocross",
+    "canoeing",
+    "cit-lit-program",
+    "comedy",
+    "fishing",
+    "gaga",
+    "guitar",
+    "hiking",
+    "kayaking-sea-kayaking",
+    "leadership-training",
+    "mindfulness-training",
+    "nature-environment",
+    "painting",
+    "pottery",
+    "rock-climbing",
+    "sailing-marine-skills",
+    "soccer",
+    "songwriting",
+    "stem",
+    "storytelling",
+    "survival-skills",
+    "swimming",
+    "theatre-arts",
+    "vocal-training-singing",
+    "wilderness-skills",
+    "yoga"
+  ],
+  "2170": [
+    "archery",
+    "arts-crafts",
+    "baseball-softball",
+    "basketball",
+    "bmx-motocross",
+    "canoeing",
+    "cit-lit-program",
+    "comedy",
+    "fishing",
+    "gaga",
+    "guitar",
+    "hiking",
+    "kayaking-sea-kayaking",
+    "leadership-training",
+    "mindfulness-training",
+    "nature-environment",
+    "painting",
+    "pottery",
+    "rock-climbing",
+    "sailing-marine-skills",
+    "soccer",
+    "songwriting",
+    "stem",
+    "storytelling",
+    "survival-skills",
+    "swimming",
+    "theatre-arts",
+    "vocal-training-singing",
+    "wilderness-skills",
+    "yoga"
+  ],
+  "2171": [
+    "archery",
+    "arts-crafts",
+    "baseball-softball",
+    "basketball",
+    "bmx-motocross",
+    "canoeing",
+    "cit-lit-program",
+    "comedy",
+    "fishing",
+    "gaga",
+    "guitar",
+    "hiking",
+    "kayaking-sea-kayaking",
+    "leadership-training",
+    "mindfulness-training",
+    "nature-environment",
+    "painting",
+    "pottery",
+    "rock-climbing",
+    "sailing-marine-skills",
+    "soccer",
+    "songwriting",
+    "stem",
+    "storytelling",
+    "survival-skills",
+    "swimming",
+    "theatre-arts",
+    "vocal-training-singing",
+    "wilderness-skills",
+    "yoga"
+  ],
+  "2172": [
+    "adventure-multi",
+    "archery",
+    "swimming"
+  ],
+  "2173": [
+    "archery",
+    "arts-crafts",
+    "baking-decorating",
+    "canoeing",
+    "cit-lit-program",
+    "cooking",
+    "empowerment",
+    "fishing",
+    "hiking",
+    "kayaking-sea-kayaking",
+    "leadership-training",
+    "nature-environment",
+    "rock-climbing",
+    "ropes-course",
+    "stem",
+    "survival-skills",
+    "swimming",
+    "wilderness-out-tripping",
+    "wilderness-skills"
+  ],
+  "2174": [
+    "archery",
+    "arts-crafts",
+    "baking-decorating",
+    "canoeing",
+    "cit-lit-program",
+    "cooking",
+    "empowerment",
+    "fishing",
+    "hiking",
+    "kayaking-sea-kayaking",
+    "leadership-training",
+    "nature-environment",
+    "rock-climbing",
+    "ropes-course",
+    "stem",
+    "survival-skills",
+    "swimming",
+    "wilderness-out-tripping",
+    "wilderness-skills"
+  ],
+  "2175": [
+    "archery",
+    "arts-crafts",
+    "baking-decorating",
+    "canoeing",
+    "cit-lit-program",
+    "cooking",
+    "empowerment",
+    "fishing",
+    "hiking",
+    "kayaking-sea-kayaking",
+    "leadership-training",
+    "nature-environment",
+    "rock-climbing",
+    "ropes-course",
+    "stem",
+    "survival-skills",
+    "swimming",
+    "wilderness-out-tripping",
+    "wilderness-skills"
+  ],
+  "2176": [
+    "archery",
+    "arts-crafts",
+    "baking-decorating",
+    "canoeing",
+    "cit-lit-program",
+    "cooking",
+    "empowerment",
+    "fishing",
+    "hiking",
+    "kayaking-sea-kayaking",
+    "leadership-training",
+    "nature-environment",
+    "rock-climbing",
+    "ropes-course",
+    "stem",
+    "survival-skills",
+    "swimming",
+    "wilderness-out-tripping",
+    "wilderness-skills"
+  ],
+  "2177": [
+    "archery",
+    "arts-crafts",
+    "baking-decorating",
+    "canoeing",
+    "cit-lit-program",
+    "cooking",
+    "empowerment",
+    "fishing",
+    "hiking",
+    "kayaking-sea-kayaking",
+    "leadership-training",
+    "nature-environment",
+    "rock-climbing",
+    "ropes-course",
+    "stem",
+    "survival-skills",
+    "swimming",
+    "wilderness-out-tripping",
+    "wilderness-skills"
+  ],
+  "2178": [
+    "archery",
+    "arts-crafts",
+    "baking-decorating",
+    "canoeing",
+    "cit-lit-program",
+    "cooking",
+    "empowerment",
+    "fishing",
+    "hiking",
+    "kayaking-sea-kayaking",
+    "leadership-training",
+    "nature-environment",
+    "rock-climbing",
+    "ropes-course",
+    "stem",
+    "survival-skills",
+    "swimming",
+    "wilderness-out-tripping",
+    "wilderness-skills"
+  ],
+  "2179": [
+    "archery",
+    "arts-crafts",
+    "baking-decorating",
+    "canoeing",
+    "cit-lit-program",
+    "cooking",
+    "empowerment",
+    "fishing",
+    "hiking",
+    "kayaking-sea-kayaking",
+    "leadership-training",
+    "nature-environment",
+    "rock-climbing",
+    "ropes-course",
+    "stem",
+    "survival-skills",
+    "swimming",
+    "wilderness-out-tripping",
+    "wilderness-skills"
+  ],
+  "2180": [
+    "archery",
+    "arts-crafts",
+    "baking-decorating",
+    "canoeing",
+    "cit-lit-program",
+    "cooking",
+    "empowerment",
+    "fishing",
+    "hiking",
+    "kayaking-sea-kayaking",
+    "leadership-training",
+    "nature-environment",
+    "rock-climbing",
+    "ropes-course",
+    "stem",
+    "survival-skills",
+    "swimming",
+    "wilderness-out-tripping",
+    "wilderness-skills"
+  ],
+  "2181": [
+    "adventure-multi"
+  ],
+  "2182": [
+    "arts-crafts",
+    "cit-lit-program",
+    "drawing",
+    "language-instruction",
+    "lego"
+  ],
+  "2183": [
+    "arts-crafts",
+    "cit-lit-program",
+    "drawing",
+    "language-instruction",
+    "lego"
+  ],
+  "2184": [
+    "arts-crafts",
+    "cit-lit-program",
+    "drawing",
+    "language-instruction",
+    "lego"
+  ],
+  "2185": [
+    "arts-crafts",
+    "cit-lit-program",
+    "drawing",
+    "language-instruction",
+    "lego"
+  ],
+  "2186": [
+    "arts-crafts",
+    "cit-lit-program",
+    "drawing",
+    "language-instruction",
+    "lego"
+  ],
+  "2187": [
+    "cycling"
+  ],
+  "2188": [
+    "cycling"
+  ],
+  "2189": [
+    "cycling"
+  ],
+  "2190": [
+    "cycling"
+  ],
+  "2191": [
+    "cycling"
+  ],
+  "2192": [
+    "cycling"
+  ],
+  "2193": [
+    "cycling"
+  ],
+  "2194": [
+    "cycling"
+  ],
+  "2195": [
+    "cycling"
+  ],
+  "2196": [
+    "cycling"
+  ],
+  "2197": [
+    "cycling"
+  ],
+  "2198": [
+    "cycling"
+  ],
+  "2199": [
+    "cycling"
+  ],
+  "2200": [
+    "cycling"
+  ],
+  "2201": [
+    "cycling"
+  ],
+  "2202": [
+    "cycling"
+  ],
+  "2203": [
+    "cycling"
+  ],
+  "2204": [
+    "cycling"
+  ],
+  "2205": [
+    "cycling"
+  ],
+  "2206": [
+    "cycling"
+  ],
+  "2207": [
+    "cycling"
+  ],
+  "2208": [
+    "cycling"
+  ],
+  "2209": [
+    "cycling"
+  ],
+  "2210": [
+    "cycling"
+  ],
+  "2211": [
+    "cycling"
+  ],
+  "2212": [
+    "cycling"
+  ],
+  "2213": [
+    "cycling"
+  ],
+  "2214": [
+    "cycling"
+  ],
+  "2215": [
+    "cycling"
+  ],
+  "2216": [
+    "cycling"
+  ],
+  "2217": [
+    "cycling"
+  ],
+  "2218": [
+    "cycling"
+  ],
+  "2219": [
+    "cycling"
+  ],
+  "2220": [
+    "cycling"
+  ],
+  "2221": [
+    "cycling"
+  ],
+  "2222": [
+    "cycling"
+  ],
+  "2223": [
+    "cycling"
+  ],
+  "2224": [
+    "cycling"
+  ],
+  "2225": [
+    "cycling"
+  ],
+  "2226": [
+    "cycling"
+  ],
+  "2227": [
+    "cycling"
+  ],
+  "2228": [
+    "cycling"
+  ],
+  "2229": [
+    "cycling"
+  ],
+  "2230": [
+    "cycling"
+  ],
+  "2231": [
+    "writing",
+    "yoga"
+  ],
+  "2232": [
+    "sailing-marine-skills"
+  ],
+  "2233": [
+    "sailing-marine-skills"
+  ],
+  "2234": [
+    "sailing-marine-skills"
+  ],
+  "2235": [
+    "archery",
+    "arts-crafts",
+    "baking-decorating",
+    "basketball",
+    "canoeing",
+    "chess",
+    "disc-golf",
+    "dodgeball",
+    "drawing",
+    "empowerment",
+    "flag-football",
+    "gaga",
+    "guitar",
+    "kayaking-sea-kayaking",
+    "leadership-training",
+    "meditation",
+    "mindfulness-training",
+    "nature-environment",
+    "painting",
+    "percussion",
+    "pickleball",
+    "rock-climbing",
+    "ropes-course",
+    "sailing-marine-skills",
+    "soccer",
+    "social-justice",
+    "storytelling",
+    "survival-skills",
+    "swimming",
+    "vocal-training-singing",
+    "volleyball",
+    "water-polo",
+    "wilderness-skills"
+  ],
+  "2236": [
+    "archery",
+    "arts-crafts",
+    "baking-decorating",
+    "basketball",
+    "canoeing",
+    "chess",
+    "disc-golf",
+    "dodgeball",
+    "drawing",
+    "empowerment",
+    "flag-football",
+    "gaga",
+    "guitar",
+    "kayaking-sea-kayaking",
+    "leadership-training",
+    "meditation",
+    "mindfulness-training",
+    "nature-environment",
+    "painting",
+    "percussion",
+    "pickleball",
+    "rock-climbing",
+    "ropes-course",
+    "sailing-marine-skills",
+    "soccer",
+    "social-justice",
+    "storytelling",
+    "survival-skills",
+    "swimming",
+    "vocal-training-singing",
+    "volleyball",
+    "water-polo",
+    "wilderness-skills"
+  ],
+  "2237": [
+    "stem"
+  ],
+  "2238": [
+    "sport-multi"
+  ],
+  "2239": [
+    "archery",
+    "arts",
+    "arts-crafts",
+    "baseball-softball",
+    "basketball",
+    "canoeing",
+    "drawing",
+    "golf",
+    "hiking",
+    "hockey",
+    "nature-environment",
+    "painting",
+    "rock-climbing",
+    "ropes-course",
+    "soccer",
+    "swimming",
+    "tennis",
+    "theatre-arts",
+    "track-and-field",
+    "travel",
+    "volleyball"
+  ],
+  "2240": [
+    "volleyball"
+  ],
+  "2241": [
+    "stem"
+  ],
+  "2242": [
+    "stem"
+  ],
+  "2243": [
+    "stem"
+  ],
+  "2244": [
+    "stem"
+  ],
+  "2245": [
+    "stem"
+  ],
+  "2246": [
+    "stem"
+  ],
+  "2247": [
+    "stem"
+  ],
+  "2248": [
+    "stem"
+  ],
+  "2249": [
+    "stem"
+  ],
+  "2250": [
+    "stem"
+  ],
+  "2251": [
+    "stem"
+  ],
+  "2252": [
+    "stem"
+  ],
+  "2253": [
+    "stem"
+  ],
+  "2254": [
+    "stem"
+  ],
+  "2255": [
+    "stem"
+  ],
+  "2256": [
+    "stem"
+  ],
+  "2257": [
+    "stem"
+  ],
+  "2258": [
+    "stem"
+  ],
+  "2259": [
+    "stem"
+  ],
+  "2260": [
+    "stem"
+  ],
+  "2261": [
+    "stem"
+  ],
+  "2262": [
+    "stem"
+  ],
+  "2263": [
+    "stem"
+  ],
+  "2264": [
+    "stem"
+  ],
+  "2265": [
+    "stem"
+  ],
+  "2266": [
+    "stem"
+  ],
+  "2267": [
+    "sport-multi"
+  ],
+  "2268": [
+    "sport-multi"
+  ],
+  "2269": [
+    "sport-multi"
+  ],
+  "2270": [
+    "steam"
+  ],
+  "2271": [
+    "steam"
+  ],
+  "2272": [
+    "swimming",
+    "tennis"
+  ],
+  "2273": [
+    "writing",
+    "yoga",
+    "zoology"
+  ],
+  "2274": [
+    "writing",
+    "yoga",
+    "zoology"
+  ],
+  "2275": [
+    "writing",
+    "yoga",
+    "zoology"
+  ],
+  "2276": [
+    "writing",
+    "yoga",
+    "zoology"
+  ],
+  "2277": [
+    "writing",
+    "yoga",
+    "zoology"
+  ],
+  "2278": [
+    "writing",
+    "yoga",
+    "zoology"
+  ],
+  "2279": [
+    "writing",
+    "yoga",
+    "zoology"
+  ],
+  "2280": [
+    "writing",
+    "yoga",
+    "zoology"
+  ],
+  "2281": [
+    "writing",
+    "yoga",
+    "zoology"
+  ],
+  "2283": [
+    "writing",
+    "yoga",
+    "zoology"
+  ],
+  "2284": [
+    "writing",
+    "yoga",
+    "zoology"
+  ],
+  "2285": [
+    "writing",
+    "yoga",
+    "zoology"
+  ],
+  "2286": [
+    "writing",
+    "yoga",
+    "zoology"
+  ],
+  "2287": [
+    "writing",
+    "yoga",
+    "zoology"
+  ],
+  "2288": [
+    "writing",
+    "yoga",
+    "zoology"
+  ],
+  "2289": [
+    "writing",
+    "yoga",
+    "zoology"
+  ],
+  "2290": [
+    "writing",
+    "yoga",
+    "zoology"
+  ],
+  "2291": [
+    "baseball-softball"
+  ],
+  "2292": [
+    "baseball-softball"
+  ],
+  "2293": [
+    "baseball-softball"
+  ],
+  "2294": [
+    "baseball-softball"
+  ],
+  "2295": [
+    "steam"
+  ],
+  "2296": [
+    "basketball"
+  ],
+  "2297": [
+    "basketball"
+  ],
+  "2298": [
+    "basketball"
+  ],
+  "2299": [
+    "basketball"
+  ],
+  "2300": [
+    "basketball"
+  ],
+  "2301": [
+    "basketball"
+  ],
+  "2302": [
+    "credit-courses",
+    "instructor-led-group",
+    "test-preparation"
+  ],
+  "2303": [
+    "credit-courses",
+    "instructor-led-group",
+    "test-preparation"
+  ],
+  "2304": [
+    "arts-crafts",
+    "badminton",
+    "baseball-softball",
+    "basketball",
+    "cit-lit-program",
+    "dodgeball",
+    "flag-football",
+    "gaga",
+    "hip-hop",
+    "hockey",
+    "lacrosse",
+    "leadership-training",
+    "painting",
+    "robotics",
+    "rugby",
+    "soccer",
+    "sport-multi",
+    "volleyball"
+  ],
+  "2305": [
+    "archery",
+    "arts-crafts",
+    "basketball",
+    "canoeing",
+    "drawing",
+    "empowerment",
+    "gaga",
+    "hiking",
+    "kayaking-sea-kayaking",
+    "mindfulness-training",
+    "nature-environment",
+    "painting",
+    "rock-climbing",
+    "ropes-course",
+    "soccer",
+    "survival-skills",
+    "swimming",
+    "wilderness-skills"
+  ],
+  "2306": [
+    "education-multi"
+  ],
+  "2307": [
+    "education-multi"
+  ],
+  "2308": [
+    "instructor-led-group"
+  ],
+  "2309": [
+    "instructor-led-group"
+  ],
+  "2310": [
+    "instructor-led-group"
+  ],
+  "2311": [
+    "basketball",
+    "leadership-training",
+    "meditation",
+    "mindfulness-training",
+    "sports-instructional-training",
+    "strength-and-conditioning",
+    "yoga"
+  ],
+  "2312": [
+    "medical-science"
+  ],
+  "2313": [
+    "medical-science"
+  ],
+  "2314": [
+    "medical-science"
+  ],
+  "2315": [
+    "medical-science"
+  ],
+  "2316": [
+    "arts-crafts",
+    "baseball-softball",
+    "dodgeball",
+    "hiking",
+    "lego",
+    "makerspace",
+    "nature-environment",
+    "soccer",
+    "storytelling",
+    "swimming",
+    "theatre-arts",
+    "vocal-training-singing",
+    "yoga"
+  ],
+  "2317": [
+    "safari"
+  ],
+  "2318": [
+    "archery",
+    "hiking",
+    "swimming",
+    "tennis"
+  ],
+  "2319": [
+    "archery",
+    "hiking",
+    "swimming",
+    "tennis"
+  ],
+  "2320": [
+    "archery",
+    "hiking",
+    "swimming",
+    "tennis"
+  ],
+  "2321": [
+    "swimming"
+  ],
+  "2322": [
+    "adventure-multi",
+    "soccer"
+  ],
+  "2323": [
+    "adventure-multi",
+    "soccer"
+  ],
+  "2324": [
+    "adventure-multi",
+    "soccer"
+  ],
+  "2325": [
+    "adventure-multi",
+    "soccer"
+  ],
+  "2326": [
+    "adventure-multi",
+    "soccer"
+  ],
+  "2327": [
+    "adventure-multi",
+    "soccer"
+  ],
+  "2328": [
+    "adventure-multi",
+    "soccer"
+  ],
+  "2329": [
+    "adventure-multi",
+    "soccer"
+  ],
+  "2330": [
+    "visual-arts-multi",
+    "vocal-training-singing",
+    "volleyball",
+    "water-sports-multi",
+    "wilderness-out-tripping",
+    "wilderness-skills",
+    "writing",
+    "yoga"
+  ],
+  "2331": [
+    "visual-arts-multi",
+    "vocal-training-singing",
+    "volleyball",
+    "water-sports-multi",
+    "wilderness-out-tripping",
+    "wilderness-skills",
+    "writing",
+    "yoga"
+  ],
+  "2332": [
+    "education-multi"
+  ],
+  "2333": [
+    "stem"
+  ],
+  "2334": [
+    "hockey"
+  ],
+  "2335": [
+    "academic-tutoring-multi",
+    "instructor-led-group",
+    "steam",
+    "stem",
+    "technology",
+    "test-preparation",
+    "writing"
+  ],
+  "2336": [
+    "archery",
+    "arts-crafts",
+    "board-sailing",
+    "canoeing",
+    "kayaking-sea-kayaking",
+    "ping-pong",
+    "ropes-course",
+    "sailing-marine-skills",
+    "survival-skills",
+    "swimming",
+    "travel",
+    "volleyball",
+    "wilderness-out-tripping",
+    "wilderness-skills"
+  ],
+  "2337": [
+    "archery",
+    "arts-crafts",
+    "board-sailing",
+    "canoeing",
+    "kayaking-sea-kayaking",
+    "ping-pong",
+    "ropes-course",
+    "sailing-marine-skills",
+    "survival-skills",
+    "swimming",
+    "travel",
+    "volleyball",
+    "wilderness-out-tripping",
+    "wilderness-skills"
+  ],
+  "2338": [
+    "math"
+  ],
+  "2339": [
+    "adventure-multi",
+    "canoeing",
+    "ropes-course",
+    "swimming"
+  ],
+  "2340": [
+    "adventure-multi",
+    "canoeing",
+    "ropes-course",
+    "swimming"
+  ],
+  "2341": [
+    "adventure-multi",
+    "canoeing",
+    "ropes-course",
+    "swimming"
+  ],
+  "2342": [
+    "arts-crafts",
+    "cit-lit-program",
+    "drawing",
+    "empowerment",
+    "engineering",
+    "financial-literacy",
+    "instructor-led-group",
+    "instructor-led-one-on-one",
+    "leadership-training",
+    "medical-science",
+    "mindfulness-training",
+    "nature-environment",
+    "public-speaking",
+    "reading",
+    "social-justice",
+    "stem",
+    "strength-and-conditioning",
+    "super-camp"
+  ],
+  "2343": [
+    "steam"
+  ],
+  "2344": [
+    "steam"
+  ],
+  "2345": [
+    "steam"
+  ],
+  "2346": [
+    "steam"
+  ],
+  "2347": [
+    "steam"
+  ],
+  "2348": [
+    "steam"
+  ],
+  "2349": [
+    "steam"
+  ],
+  "2350": [
+    "steam"
+  ],
+  "2351": [
+    "steam"
+  ],
+  "2352": [
+    "steam"
+  ],
+  "2353": [
+    "steam"
+  ],
+  "2354": [
+    "steam"
+  ],
+  "2355": [
+    "steam"
+  ],
+  "2356": [
+    "steam"
+  ],
+  "2357": [
+    "steam"
+  ],
+  "2358": [
+    "steam"
+  ],
+  "2360": [
+    "steam"
+  ],
+  "2361": [
+    "steam"
+  ],
+  "2362": [
+    "steam"
+  ],
+  "2363": [
+    "steam"
+  ],
+  "2364": [
+    "steam"
+  ],
+  "2366": [
+    "computer-multi"
+  ],
+  "2367": [
+    "computer-multi"
+  ],
+  "2368": [
+    "computer-multi"
+  ],
+  "2369": [
+    "computer-multi"
+  ],
+  "2370": [
+    "leadership-multi"
+  ],
+  "2371": [
+    "arts-crafts",
+    "basketball",
+    "instructor-led-group",
+    "lego",
+    "math",
+    "mindfulness-training",
+    "nature-environment",
+    "painting",
+    "reading",
+    "soccer",
+    "steam",
+    "stem",
+    "storytelling",
+    "writing"
+  ],
+  "2372": [
+    "photography"
+  ],
+  "2373": [
+    "photography"
+  ],
+  "2374": [
+    "photography"
+  ],
+  "2375": [
+    "photography"
+  ],
+  "2376": [
+    "arts-crafts",
+    "badminton",
+    "baseball-softball",
+    "basketball",
+    "cricket",
+    "disc-golf",
+    "dodgeball",
+    "flag-football",
+    "gaga",
+    "hockey",
+    "lacrosse",
+    "pickleball",
+    "soccer",
+    "volleyball"
+  ],
+  "2377": [
+    "arts-crafts",
+    "badminton",
+    "baseball-softball",
+    "basketball",
+    "cricket",
+    "disc-golf",
+    "dodgeball",
+    "flag-football",
+    "gaga",
+    "hockey",
+    "lacrosse",
+    "pickleball",
+    "soccer",
+    "volleyball"
+  ],
+  "2378": [
+    "health-fitness-multi"
+  ],
+  "2379": [
+    "health-fitness-multi"
+  ],
+  "2380": [
+    "health-fitness-multi"
+  ],
+  "2381": [
+    "archery",
+    "arts-crafts",
+    "badminton",
+    "cooking",
+    "drawing",
+    "gaga",
+    "hiking",
+    "leadership-training",
+    "mountain-biking",
+    "painting",
+    "ropes-course",
+    "wilderness-skills"
+  ],
+  "2382": [
+    "archery",
+    "arts-crafts",
+    "badminton",
+    "cooking",
+    "drawing",
+    "gaga",
+    "hiking",
+    "leadership-training",
+    "mountain-biking",
+    "painting",
+    "ropes-course",
+    "wilderness-skills"
+  ],
+  "2383": [
+    "baking-decorating",
+    "cooking"
+  ],
+  "2384": [
+    "baking-decorating",
+    "cooking"
+  ],
+  "2385": [
+    "cit-lit-program",
+    "swimming"
+  ],
+  "2386": [
+    "zoology"
+  ],
+  "2387": [
+    "zoology"
+  ],
+  "2388": [
+    "public-speaking"
+  ],
+  "2391": [
+    "stem"
+  ],
+  "2392": [
+    "cartooning",
+    "creative-writing",
+    "instructor-led-group",
+    "language-instruction",
+    "math",
+    "reading",
+    "storytelling"
+  ],
+  "2393": [
+    "instructor-led-group"
+  ],
+  "2394": [
+    "instructor-led-group"
+  ],
+  "2461": [
+    "stem"
+  ],
+  "2462": [
+    "stem"
+  ],
+  "2463": [
+    "stem"
+  ],
+  "2464": [
+    "stem"
+  ],
+  "2465": [
+    "stem"
+  ],
+  "2524": [
+    "horseback-riding-equestrian"
+  ],
+  "2685": [
+    "baseball-softball",
+    "skilled-trades-activities"
+  ],
+  "2686": [
+    "arts-crafts",
+    "baseball-softball",
+    "dodgeball",
+    "hiking",
+    "lego",
+    "makerspace",
+    "nature-environment",
+    "soccer",
+    "storytelling",
+    "swimming",
+    "theatre-arts",
+    "vocal-training-singing",
+    "yoga"
+  ],
+  "2687": [
+    "steam"
+  ],
+  "2688": [
+    "steam"
+  ],
+  "2689": [
+    "adventure-multi",
+    "soccer"
+  ],
+  "2690": [
+    "steam"
+  ],
+  "2691": [
+    "steam"
+  ],
+  "2692": [
+    "nature-environment"
+  ],
+  "2693": [
+    "cit-lit-program",
+    "empowerment",
+    "leadership-training",
+    "ropes-course",
+    "wilderness-out-tripping",
+    "wilderness-skills"
+  ],
+  "2694": [
+    "leadership-multi"
+  ],
+  "2697": [
+    "steam"
+  ],
+  "2698": [
+    "steam"
+  ],
+  "2699": [
+    "steam"
+  ],
+  "2700": [
+    "steam"
+  ],
+  "2701": [
+    "steam"
+  ],
+  "2702": [
+    "steam"
+  ],
   "2712": [
     "hockey",
     "ice-skating"
@@ -7618,5 +9311,32 @@
     "steam",
     "stem",
     "technology"
+  ],
+  "2728": [
+    "arts-crafts",
+    "circus",
+    "drawing",
+    "jazz",
+    "musical-theatre",
+    "storytelling",
+    "theatre-arts",
+    "vocal-training-singing"
+  ],
+  "2729": [
+    "baseball-softball",
+    "skilled-trades-activities",
+    "steam",
+    "stem",
+    "technology"
+  ],
+  "2730": [
+    "baseball-softball",
+    "skilled-trades-activities",
+    "steam",
+    "stem",
+    "technology"
+  ],
+  "2731": [
+    "travel"
   ]
 }

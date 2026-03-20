@@ -261,12 +261,14 @@ def query(params: dict, limit: int = 100) -> tuple[list[dict], float]:
         args["date_from"] = params["date_from"]
         args["date_to"]   = params["date_to"]
 
-    # Traits
+    # Traits — used as a ranking boost, NOT a hard filter.
+    # Traits like "shy" or "creative" describe the child's personality;
+    # filtering by them eliminates too many relevant camps. Instead, we
+    # boost programs that match via ORDER BY and pass traits to the
+    # reranker/concierge for narrative context.
     trait_ids = resolve_trait_ids(params.get("traits", []), cursor)
     if trait_ids:
-        joins.append("JOIN program_traits ptrait ON p.id = ptrait.program_id")
-        ph = ", ".join(f"%(trait_{i})s" for i in range(len(trait_ids)))
-        conditions.append(f"ptrait.trait_id IN ({ph})")
+        ph_tr = ", ".join(f"%(trait_{i})s" for i in range(len(trait_ids)))
         for i, tid in enumerate(trait_ids):
             args[f"trait_{i}"] = tid
 
@@ -329,6 +331,19 @@ def query(params: dict, limit: int = 100) -> tuple[list[dict], float]:
         specialty_select = ""
         specialty_boost = ""
 
+    # Trait boost — soft ranking signal, not a filter.
+    # Programs with matching traits rank higher but unmatched programs still appear.
+    if trait_ids:
+        trait_select = (
+            f"(SELECT COUNT(*) FROM program_traits pt_tr"
+            f" WHERE pt_tr.program_id = p.id"
+            f" AND pt_tr.trait_id IN ({ph_tr})) AS _trait_match,"
+        )
+        trait_boost = "_trait_match DESC,"
+    else:
+        trait_select = ""
+        trait_boost = ""
+
     sql = f"""
         SELECT DISTINCT
             p.id, p.camp_id, p.name, p.type,
@@ -341,6 +356,7 @@ def query(params: dict, limit: int = 100) -> tuple[list[dict], float]:
             {gender_select}
             {type_select}
             {specialty_select}
+            {trait_select}
             FIELD(c.tier, 'gold', 'silver', 'bronze') AS _tier_score
         FROM programs p
         {joins_str}
@@ -349,6 +365,7 @@ def query(params: dict, limit: int = 100) -> tuple[list[dict], float]:
             {gender_boost}
             {type_boost}
             {specialty_boost}
+            {trait_boost}
             _tier_score ASC,
             c.review_avg DESC
         LIMIT %(limit)s

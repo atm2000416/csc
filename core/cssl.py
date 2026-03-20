@@ -77,13 +77,18 @@ def query(params: dict, limit: int = 100) -> tuple[list[dict], float]:
         # 1. Tag has specialty/category assignments somewhere in the DB:
         #    a) Multi-parent (swimming → water-sports-multi): accept if
         #       tag_role is specialty/category OR program has ≥2 family tags.
-        #    b) Leaf tag (fashion-design, no parent): accept only if
-        #       tag_role is specialty/category — activity-level tags are noise.
+        #    b) Leaf tag (fashion-design, no parent): accept if tag_role is
+        #       specialty/category OR the program is specialized (≤10 tags).
+        #       A ballet camp offering a financial-literacy session (5 tags,
+        #       activity role) passes; a 71-tag generalist camp doesn't.
         #
         # 2. Tag has ONLY activity-role assignments globally (e.g., hiking,
         #    badminton, ping-pong): skip the gate entirely — we can't
         #    distinguish noise from legitimate since the tag never gets
         #    specialty/category role from OurKids sitems data.
+        _MAX_TAGS_FOR_ACTIVITY = 10  # activity-role tags on programs with
+        #                              ≤ this many tags are trusted
+
         has_strong_roles = _has_strong_role_assignments(tag_ids, cursor)
 
         if not has_strong_roles:
@@ -106,7 +111,12 @@ def query(params: dict, limit: int = 100) -> tuple[list[dict], float]:
                 )
         else:
             def _affinity_sql(role_col: str, prog_ref: str) -> str:
-                return f"({role_col} IN ('specialty', 'category'))"
+                return (
+                    f"({role_col} IN ('specialty', 'category')"
+                    f" OR (SELECT COUNT(*) FROM program_tags"
+                    f"     WHERE program_id = {prog_ref})"
+                    f"    <= {_MAX_TAGS_FOR_ACTIVITY})"
+                )
 
         if override_camp_ids:
             # Override camps: include only if they have an active program

@@ -374,7 +374,11 @@ def materialize_programs(cursor, conn, dry_run, dump_cids):
             cursor.execute(f"DELETE FROM program_dates WHERE program_id IN ({id_list})")
             cursor.execute(f"DELETE FROM programs      WHERE id          IN ({id_list})")
 
-        # Insert fresh programs from staging
+        # Prepare all programs and their tags in memory first, then batch insert
+        program_rows = []
+        # Each entry: (session_data, tag_tuples)  where tag_tuples = [(tag_id, is_primary, tag_role), ...]
+        session_tags = []
+
         for s in sessions:
             name = s["_name"]
             session_type = s.get("type") or None
@@ -393,7 +397,6 @@ def materialize_programs(cursor, conn, dry_run, dump_cids):
                 gender = 0
             mini_desc = (str(s.get("mini_description") or ""))[:500]
 
-            # Boolean flags
             is_special_needs = 1 if str(s.get("isspecialneeds", "")).strip() == "1" else 0
             is_virtual = 1 if s.get("isvirtual") in (1, "1") else 0
 
@@ -402,27 +405,19 @@ def materialize_programs(cursor, conn, dry_run, dump_cids):
             cost_from = s.get("cost_from")
             cost_to = s.get("cost_to")
 
-            cursor.execute(
-                """INSERT INTO programs
-                   (camp_id, name, type, age_from, age_to,
-                    cost_from, cost_to, start_date, end_date,
-                    gender, mini_description,
-                    is_special_needs, is_virtual, status)
-                   VALUES (%s, %s, %s, %s, %s, %s, %s, %s, %s, %s, %s, %s, %s, 1)""",
-                (camp_id, name, session_type,
-                 age_from or None, age_to or None,
-                 cost_from or None, cost_to or None,
-                 date_from, date_to,
-                 gender, mini_desc,
-                 is_special_needs, is_virtual)
-            )
-            prog_id = cursor.lastrowid
-            stats["programs_inserted"] += 1
+            program_rows.append((
+                camp_id, name, session_type,
+                age_from or None, age_to or None,
+                cost_from or None, cost_to or None,
+                date_from, date_to,
+                gender, mini_desc,
+                is_special_needs, is_virtual
+            ))
 
-            # Insert tags from sitems data
+            # Resolve tags for this session
+            tags = []
             seen_tag_ids = set()
 
-            # Specialty
             spec_id = s.get("specialty")
             if spec_id:
                 try:
@@ -432,16 +427,9 @@ def materialize_programs(cursor, conn, dry_run, dump_cids):
                 if slug:
                     tag_id = tag_slug_to_id.get(slug)
                     if tag_id and tag_id not in seen_tag_ids:
-                        cursor.execute(
-                            "INSERT IGNORE INTO program_tags "
-                            "(program_id, tag_id, is_primary, tag_role) "
-                            "VALUES (%s, %s, 1, 'specialty')",
-                            (prog_id, tag_id)
-                        )
+                        tags.append((tag_id, 1, 'specialty'))
                         seen_tag_ids.add(tag_id)
-                        stats["tags_inserted"] += cursor.rowcount
 
-            # Category (skip if same as specialty)
             cat_id = s.get("category")
             if cat_id:
                 try:
@@ -451,16 +439,9 @@ def materialize_programs(cursor, conn, dry_run, dump_cids):
                 if slug:
                     tag_id = tag_slug_to_id.get(slug)
                     if tag_id and tag_id not in seen_tag_ids:
-                        cursor.execute(
-                            "INSERT IGNORE INTO program_tags "
-                            "(program_id, tag_id, is_primary, tag_role) "
-                            "VALUES (%s, %s, 0, 'category')",
-                            (prog_id, tag_id)
-                        )
+                        tags.append((tag_id, 0, 'category'))
                         seen_tag_ids.add(tag_id)
-                        stats["tags_inserted"] += cursor.rowcount
 
-            # Activities field: "[133]2,[81]3,[154]1" → sitems IDs
             activities_raw = s.get("activities") or ""
             activity_ids = [int(m) for m in re.findall(r'\[(\d+)\]', str(activities_raw))]
             for act_id in activity_ids:
@@ -468,27 +449,46 @@ def materialize_programs(cursor, conn, dry_run, dump_cids):
                 if slug:
                     tag_id = tag_slug_to_id.get(slug)
                     if tag_id and tag_id not in seen_tag_ids:
-                        cursor.execute(
-                            "INSERT IGNORE INTO program_tags "
-                            "(program_id, tag_id, is_primary, tag_role) "
-                            "VALUES (%s, %s, 0, 'activity')",
-                            (prog_id, tag_id)
-                        )
+                        tags.append((tag_id, 0, 'activity'))
                         seen_tag_ids.add(tag_id)
-                        stats["tags_inserted"] += cursor.rowcount
 
-            # Fallback: keyword inference if no sitems tags resolved
             if not seen_tag_ids:
                 for slug in sorted(infer_tags([name], tag_slug_to_id)):
                     tag_id = tag_slug_to_id.get(slug)
                     if tag_id:
-                        cursor.execute(
-                            "INSERT IGNORE INTO program_tags "
-                            "(program_id, tag_id, is_primary, tag_role) "
-                            "VALUES (%s, %s, 0, 'activity')",
-                            (prog_id, tag_id)
-                        )
-                        stats["tags_inserted"] += cursor.rowcount
+                        tags.append((tag_id, 0, 'activity'))
+
+            session_tags.append(tags)
+
+        # Batch insert programs
+        cursor.executemany(
+            """INSERT INTO programs
+               (camp_id, name, type, age_from, age_to,
+                cost_from, cost_to, start_date, end_date,
+                gender, mini_description,
+                is_special_needs, is_virtual, status)
+               VALUES (%s, %s, %s, %s, %s, %s, %s, %s, %s, %s, %s, %s, %s, 1)""",
+            program_rows
+        )
+        # Get the auto-increment IDs for the batch
+        first_id = cursor.lastrowid
+        prog_ids = list(range(first_id, first_id + len(program_rows)))
+        stats["programs_inserted"] += len(program_rows)
+
+        # Batch insert tags
+        tag_rows = []
+        for prog_id, tags in zip(prog_ids, session_tags):
+            for tag_id, is_primary, tag_role in tags:
+                tag_rows.append((prog_id, tag_id, is_primary, tag_role))
+
+        if tag_rows:
+            cursor.executemany(
+                "INSERT IGNORE INTO program_tags "
+                "(program_id, tag_id, is_primary, tag_role) "
+                "VALUES (%s, %s, %s, %s)",
+                tag_rows
+            )
+            stats["tags_inserted"] += cursor.rowcount
 
         stats["camps_synced"] += 1
         if stats["camps_synced"] % 25 == 0:

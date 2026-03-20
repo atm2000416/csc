@@ -24,19 +24,21 @@ SCOPES = ["https://www.googleapis.com/auth/drive.readonly"]
 
 
 def main():
-    folder_id = os.environ.get("GDRIVE_FOLDER_ID")
+    folder_id = os.environ.get("GDRIVE_FOLDER_ID", "").strip()
     sa_json = os.environ.get("GDRIVE_SERVICE_ACCOUNT_JSON")
 
     if not folder_id or not sa_json:
         print("ERROR: GDRIVE_FOLDER_ID and GDRIVE_SERVICE_ACCOUNT_JSON must be set")
         sys.exit(1)
 
+    sa_info = json.loads(sa_json)
+    print(f"Service account: {sa_info.get('client_email')}")
+    print(f"Folder ID: {folder_id!r} (len={len(folder_id)})")
+
     creds = service_account.Credentials.from_service_account_info(
-        json.loads(sa_json), scopes=SCOPES
+        sa_info, scopes=SCOPES
     )
     service = build("drive", "v3", credentials=creds, cache_discovery=False)
-
-    print(f"Folder ID: {folder_id}")
 
     # Verify folder exists and is accessible
     try:
@@ -45,7 +47,24 @@ def main():
         ).execute()
         print(f"Folder name: {folder_meta.get('name')} (type: {folder_meta.get('mimeType')})")
     except Exception as e:
-        print(f"ERROR: Cannot access folder '{folder_id}': {e}")
+        print(f"ERROR: Cannot access folder: {e}")
+        print("Trying list query as fallback...")
+        # Try listing with supportsAllDrives in case it's a shared drive
+        try:
+            results = service.files().list(
+                q=f"'{folder_id}' in parents and trashed=false",
+                pageSize=5,
+                supportsAllDrives=True,
+                includeItemsFromAllDrives=True,
+                fields="files(id, name, size, mimeType, modifiedTime)",
+            ).execute()
+            fallback_files = results.get("files", [])
+            print(f"Fallback list found {len(fallback_files)} files")
+            for ff in fallback_files:
+                print(f"  - {ff['name']}")
+        except Exception as e2:
+            print(f"Fallback also failed: {e2}")
+        print()
         print("Make sure the folder is shared with the service account email.")
         sys.exit(1)
 

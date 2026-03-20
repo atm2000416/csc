@@ -72,12 +72,26 @@ def query(params: dict, limit: int = 100) -> tuple[list[dict], float]:
             args[f"tag_{i}"] = tid
 
         # Build category-family affinity SQL gate.
-        # Two modes based on whether a multi-category parent was found:
-        #   - Multi-parent (e.g., swimming → water-sports-multi): accept if
-        #     tag_role is specialty/category OR program has ≥2 family tags.
-        #   - Leaf tag (e.g., fashion-design, no parent): accept only if
-        #     tag_role is specialty/category — activity-level tags are noise.
-        if has_multi_parent and family_ids:
+        # The gate filters out stray tags on unrelated programs.  Three modes:
+        #
+        # 1. Tag has specialty/category assignments somewhere in the DB:
+        #    a) Multi-parent (swimming → water-sports-multi): accept if
+        #       tag_role is specialty/category OR program has ≥2 family tags.
+        #    b) Leaf tag (fashion-design, no parent): accept only if
+        #       tag_role is specialty/category — activity-level tags are noise.
+        #
+        # 2. Tag has ONLY activity-role assignments globally (e.g., hiking,
+        #    badminton, ping-pong): skip the gate entirely — we can't
+        #    distinguish noise from legitimate since the tag never gets
+        #    specialty/category role from OurKids sitems data.
+        has_strong_roles = _has_strong_role_assignments(tag_ids, cursor)
+
+        if not has_strong_roles:
+            # No specialty/category assignments exist for these tags.
+            # Can't distinguish noise — skip affinity gate, keep Fix 1.
+            def _affinity_sql(role_col: str, prog_ref: str) -> str:
+                return "1=1"
+        elif has_multi_parent and family_ids:
             fam_ph = ", ".join(f"%(fam_{i})s" for i in range(len(family_ids)))
             for i, fid in enumerate(family_ids):
                 args[f"fam_{i}"] = fid
@@ -474,6 +488,25 @@ def resolve_trait_ids(slugs: list[str], cursor) -> list[int]:
         tuple(slugs),
     )
     return [row["id"] for row in cursor.fetchall()]
+
+
+def _has_strong_role_assignments(tag_ids: list[int], cursor) -> bool:
+    """
+    Check if any of the given tags have at least one specialty or category
+    assignment in program_tags.  Tags that only ever appear as 'activity'
+    (e.g., hiking, badminton) return False — the affinity gate cannot
+    usefully filter those.
+    """
+    if not tag_ids:
+        return False
+    ph = ", ".join(["%s"] * len(tag_ids))
+    cursor.execute(
+        f"SELECT 1 FROM program_tags "
+        f"WHERE tag_id IN ({ph}) AND tag_role IN ('specialty', 'category') "
+        f"LIMIT 1",
+        tuple(tag_ids),
+    )
+    return cursor.fetchone() is not None
 
 
 def resolve_category_family(

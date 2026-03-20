@@ -17,10 +17,13 @@
 | `3534bff` | **Cleanup script mass-deletion** — `cleanup_scraper_tags.py` deleted 30,472 legitimate OurKids activity tags. Script couldn't distinguish scraper from OurKids tags (both `tag_role='activity', is_primary=0`). Restored all tags from `ok_sessions` sitems. |
 | `ed9b927` | **Tag provenance** — added `source` column (ourkids/scraper/manual) to `program_tags` + 20K-floor safety gate in `materialize_from_raw.py` to prevent future mass-deletion. |
 
-## Search Relevance (12 fixes) — recurring pattern: stale state bleeding across turns
+## Search Relevance (15 fixes) — recurring pattern: stale state bleeding across turns
 
 | Commit | Fix |
 |--------|-----|
+| `e3acf5a` | **Override fallback noise** — `COALESCE` fallback in override path surfaced random active programs when the tagged program was expired (e.g., coding camp for fashion search). Removed fallback; override camps now require active program with matching tag. |
+| `e3acf5a` | **Stray tag noise** — programs with many tags had irrelevant activity-level tags passing through. Added affinity gate: tag_role must be specialty/category, OR program ≤10 tags, OR ≥2 tags from same category family. Gate skips tags with no specialty/category assignments globally. |
+| `e5ee56e` | **Focus level ignored** — `ok_sessions.activities` format `[sitem_id]level` had the focus level (1=recreational, 2=instructional, 3=intense) completely discarded. All activities assigned `tag_role='activity'`. Fixed to map level→role during materialization. 2,163 tags upgraded; camps like Branksome now correctly show for fashion searches. |
 | `873a1e4` | `sports` mapped to `sport-multi` (L2 child) instead of `sports` (L1 parent). |
 | `e6f1c64` | Zero-results advisor age filter wrong + `financial-literacy` tag not backfilled. |
 | `395c329` | "Across Canada" treated as geo filter instead of national scope. |

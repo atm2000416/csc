@@ -128,9 +128,11 @@ tests/
 
 4. **`program_tags.source` column**: `ourkids` (OurKids sitems), `scraper` (camps.ca pages), `manual`. Any bulk cleanup of tags MUST filter by `source = 'scraper'` — never delete `ourkids` rows. Safety gate in `materialize_from_raw.py` aborts if tag count drops below 20K.
 
-5. **`ics = 0.3`** is the API-error fallback — do NOT clear stale state on this value.
+5. **`program_tags.tag_role` from OurKids focus levels**: `ok_sessions.activities` format is `[sitem_id]level` where level is the camp's own declaration: `3=intense→specialty`, `2=instructional→category`, `1=recreational→activity`. These are set by the camps themselves, not OurKids. The CSSL affinity gate uses tag_role to filter noise — see docs/architecture.md.
 
-6. **`ok_*` staging tables** must never be queried by the app at runtime.
+6. **`ics = 0.3`** is the API-error fallback — do NOT clear stale state on this value.
+
+7. **`ok_*` staging tables** must never be queried by the app at runtime.
 
 ---
 
@@ -146,7 +148,7 @@ Thresholds: `ICS_HIGH_THRESHOLD` / `RCS_HIGH_THRESHOLD` secrets (default 0.70 ea
 
 ## Ranking Order (4 stages)
 
-1. **SQL ORDER BY** — gender match -> type match -> tag_role (specialty > category > activity) -> tag count ASC -> tier (gold first) -> review_avg DESC
+1. **SQL ORDER BY** — gender match -> type match -> tag_role (specialty > category > activity) -> tag count ASC -> tier (gold first) -> review_avg DESC. **Affinity gate** filters before ranking: tag must be specialty/category, OR program has ≤10 tags, OR ≥2 tags from the same category family. Tags without any specialty/category assignments globally (e.g., hiking) skip the gate.
 2. **Diversity filter** — cap at 2 programs per camp
 3. **Claude reranker** — semantic score 0-1; gold boost x1.05 if score >= 0.70; top 10
 4. **Display grouping** — group by camp_id; top session = full card; rest = filtered expander

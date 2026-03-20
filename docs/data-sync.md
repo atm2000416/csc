@@ -57,8 +57,27 @@ Actual column names in `ok_sessions`:
 - `class_name` (not `name`)
 - `start`/`end` (not `date_from`/`date_to`)
 - `gender` at position 7 (was misidentified as `status` in old regex)
+- `activities` — format `[sitem_id]focus_level,[sitem_id]focus_level,...` (see Focus Level Mapping below)
 - No real status column — all sessions in the dump are active
 - `running` field is unrelated (only 186/12864 have `running=1`)
+
+### Focus Level Mapping (ok_sessions.activities)
+
+The `activities` field uses bracket format: `[71]2,[154]1,[258]1,...` where:
+- **Number in brackets** = `camp_directory.sitems.id` (the activity)
+- **Number after bracket** = focus level, set by the camp itself:
+
+| Level | Meaning | → tag_role |
+|:---:|---|---|
+| 3 | Intense | `specialty` |
+| 2 | Instructional | `category` |
+| 1 | Recreational | `activity` |
+
+`materialize_from_raw.py` parses both the sitem ID and focus level via `re.findall(r'\[(\d+)\](\d+)', ...)`. The focus level directly determines the `tag_role` in `program_tags`.
+
+**Key architectural decision:** These focus levels are the camp's own declaration of how seriously they offer each activity — not a judgement from OurKids. A camp listing Fashion Design at level 2 (instructional) is saying "we teach fashion design." This signal drives the CSSL affinity gate: `specialty` and `category` tags pass unconditionally; `activity` tags are filtered on programs with many tags to reduce noise.
+
+**Note:** `ok_generalInfo.activities` is a separate camp-level field (comma-separated IDs, no focus levels) but is NULL for most camps (454/1,802). The session-level `ok_sessions.activities` with focus levels is the authoritative source.
 
 ### Gender Mapping
 
@@ -120,8 +139,10 @@ python3 db/export_camp_tag_overrides.py
 `core/cssl.py` loads `_SLUG_TO_CAMP_IDS` from `camp_tag_overrides.json` at module init.
 Adds `OR p.camp_id IN (...)` to every tag query — guaranteeing camps.ca-listed camps
 appear even if `program_tags` has a gap. For multi-program override camps, the
-representative program uses `COALESCE`: prefers a program with a matching `program_tag`,
-falls back to lowest ID if none match.
+representative program must have an active program with a matching tag that passes the
+affinity gate. **No fallback** — if the camp's tagged program is expired or the tag fails
+the affinity gate, the camp is excluded. (Previously used `COALESCE` to fall back to any
+active program, which surfaced irrelevant results like coding camps for fashion searches.)
 
 ### Scraper Tags: Camp-Level, Not Program-Level
 

@@ -263,6 +263,18 @@ User types query
 **Tag resolution pipeline:**
 1. Raw slug list → `expand_via_categories()` — traverses category hierarchy to include child tags (e.g. `"dance-multi"` expands to all dance sub-styles)
 2. Expanded slugs → `resolve_tag_ids()` — converts slugs to integer IDs for the SQL `IN (…)` clause
+3. Expanded slugs → `resolve_category_family()` — finds the narrowest multi-category parent (e.g., `swimming` → `water-sports-multi` family of 15 tags) for affinity checking
+4. Tag IDs → `_has_strong_role_assignments()` — checks if any searched tag has specialty/category assignments globally. Determines whether the affinity gate activates.
+
+**Affinity gate** (filters stray tags on unrelated programs):
+
+| Tag type | Gate logic |
+|----------|-----------|
+| Has specialty/category roles + multi-parent family | Accept if `tag_role` is specialty/category OR program has ≥2 tags from the same category family |
+| Has specialty/category roles + leaf tag (no parent) | Accept if `tag_role` is specialty/category OR program has ≤10 total tags |
+| No specialty/category roles globally (e.g., hiking) | Gate skipped — all matches pass |
+
+The `tag_role` values come from OurKids focus levels set by the camps themselves: `3=intense→specialty`, `2=instructional→category`, `1=recreational→activity`. See data-sync.md for the mapping.
 
 **Dynamic WHERE clause — filters applied:**
 
@@ -270,7 +282,7 @@ User types query
 |--------|-----------|
 | Active only | `p.status = 1 AND c.status = 1` |
 | Not expired | `p.end_date IS NULL OR p.end_date >= CURDATE()` |
-| Activity tags | `program_tags.tag_id IN (…)` |
+| Activity tags | `program_tags.tag_id IN (…)` + affinity gate (see above) |
 | Excluded tags | `p.id NOT IN (SELECT … WHERE tag_id IN (…))` |
 | Geo (GPS) | Haversine formula ≤ `radius_km` |
 | Geo (city list) | `c.city IN (…)` |
@@ -451,7 +463,7 @@ Programs that pass the gate are sorted by five keys in strict priority order:
 |----------|--------|-------------|--------|
 | 1 | Gender exact match | User requested gender-specific camp | Exact gender programs first; coed and null follow |
 | 2 | Type exact match | User specified Day or Overnight | Pure type beats combined type (e.g. "Day only" beats "Day & Overnight" for a Day search) |
-| 3a | `is_primary` tag | Tag search active | Program where the searched tag is marked `is_primary=1` sorts above programs where it is incidental |
+| 3a | `tag_role` match | Tag search active | specialty (0) > category (1) > activity (2). Roles derived from OurKids focus levels: 3=intense→specialty, 2=instructional→category, 1=recreational→activity |
 | 3b | Tag count (ASC) | Tag search active | Fewer total tags = more specialised = sorted higher. A dedicated soccer camp beats a multi-sport camp for a soccer search |
 | 4 | Tier (gold > silver > bronze) | Always | Within any tied group from rules 1–3 |
 | 5 | Review average (DESC) | Always | Final tiebreaker |
@@ -478,7 +490,7 @@ The 10 reranked programs are grouped by `camp_id` for display, preserving rank o
 |--------|-------|--------|
 | Gender exact match | SQL | Hard priority — slot 1 |
 | Type exact match | SQL | Hard priority — slot 2 |
-| `is_primary` tag flag | SQL | Specialist boost — slot 3a |
+| `tag_role` (specialty > category > activity) | SQL | Specialist boost — slot 3a |
 | Tag count (fewer = better) | SQL | Specialist boost — slot 3b |
 | Tier (gold/silver/bronze) | SQL + reranker | SQL slot 4 + 5% post-rerank boost |
 | Review average | SQL | Tiebreaker — slot 5 |
@@ -554,12 +566,12 @@ Operations performed on every run:
 | Load raw tables | DROP + CREATE `ok_*` staging tables from dump SQL (MyISAM→InnoDB, zero-date mode) |
 | Upsert active camps | INSERT new, UPDATE tier/meta/prettyurl for existing from `ok_camps` |
 | Sync programs | DELETE + reinsert all programs from `ok_sessions` (all sessions imported, no status filter) |
-| Sync program_tags | 3-tier tagging from sitems: specialty → category → activities, with keyword fallback |
+| Sync program_tags | 3-tier tagging from sitems: specialty → category → activities with **focus level mapping** (`[ID]level` → tag_role), keyword fallback |
 | Sync program_dates | Refresh future date rows from `ok_session_date` |
 | Sync locations | Multi-location camps via `ok_extra_locations` |
 | Deactivate departed | `--deactivate` flag: status=0 for camps in Aiven but not in dump |
 
-**Tag resolution pipeline:** `ok_sessions.specialty/category/activities` → `ok_sitems.item` → `WEBITEMS_TO_SLUG` bridge → `activity_tags.slug` → `program_tags` with `tag_role` (specialty/category/activity). Keyword inference (`infer_tags()`) as fallback for sessions with no sitems data.
+**Tag resolution pipeline:** `ok_sessions.specialty/category/activities` → `ok_sitems.item` → `WEBITEMS_TO_SLUG` bridge → `activity_tags.slug` → `program_tags` with `tag_role`. The `activities` field uses format `[sitem_id]focus_level` where the focus level maps to tag_role: **3** (intense) → `specialty`, **2** (instructional) → `category`, **1** (recreational) → `activity`. These levels are set by the camps themselves during their OurKids listing setup. Keyword inference (`infer_tags()`) as fallback for sessions with no sitems data.
 
 **Gender mapping:** OurKids `0=unset, 1=Coed, 2=Boys, 3=Girls` → CSC `0=Coed, 1=Boys, 2=Girls` via `_GENDER_MAP`. The old regex ETL accidentally filtered by the gender field (position 7), dropping all non-coed sessions.
 

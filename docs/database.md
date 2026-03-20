@@ -54,7 +54,17 @@ conn.close()
 ### `program_tags`
 Junction: `program_id` + `tag_id` + `is_primary` + `tag_role` (ENUM: specialty/category/activity) + `source` (ENUM: ourkids/scraper/manual)
 
-The `source` column distinguishes tag origin:
+**`tag_role`** — derived from OurKids focus levels during materialization:
+
+| OurKids focus level | Meaning | tag_role | Set by |
+|:---:|---|---|---|
+| 3 | Intense | `specialty` | The camp itself |
+| 2 | Instructional | `category` | The camp itself |
+| 1 | Recreational | `activity` | The camp itself |
+
+The `ok_sessions.activities` field format is `[sitem_id]focus_level`. The focus level is the camp's own declaration of how seriously they offer each activity. The CSSL affinity gate uses `tag_role` to filter noise: `specialty`/`category` tags always pass; `activity` tags are gated by program tag count or category family membership.
+
+**`source`** — distinguishes tag origin:
 - **ourkids** — imported from OurKids sitems data via `materialize_from_raw.py` (default)
 - **scraper** — inserted by `tag_from_campsca_pages.py` or `import_camp_tag_overrides.py`
 - **manual** — manually inserted corrections

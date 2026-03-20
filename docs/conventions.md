@@ -32,8 +32,11 @@ because the camp appears on the hockey page).
 - `programs.start_date` / `programs.end_date` — correct column names (NOT `date_from`/`date_to`)
 - `camps.status = 1` = active; `camps.status = 0` = inactive/agate (free listing, not on camps.ca)
 - `program_tags.tag_role` — ENUM `'specialty'`/`'category'`/`'activity'` (default `'activity'`).
-  Imported from OurKids sitems 3-tier model. CSSL ranks specialty > category > activity via `_role_match`.
-  Migration: `python3 db/migrate_tag_role.py`. Scraper always inserts as `'activity'`.
+  Derived from OurKids focus levels: `[sitem_id]level` in `ok_sessions.activities` where
+  **3** (intense) → `specialty`, **2** (instructional) → `category`, **1** (recreational) → `activity`.
+  These levels are set by the camps themselves. CSSL affinity gate: specialty/category pass
+  unconditionally; activity is gated by tag count (≤10) or category family (≥2 sibling tags).
+  Scraper always inserts as `'activity'`.
 - `program_tags.source` — ENUM `'ourkids'`/`'scraper'`/`'manual'` (default `'ourkids'`).
   Any bulk tag cleanup MUST filter `source = 'scraper'`. Never delete `ourkids` rows.
 - `ok_*` staging tables must never be queried by the app at runtime

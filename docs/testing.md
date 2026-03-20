@@ -2,15 +2,21 @@
 
 ## QA Suite
 ```bash
-# Run full 40-query intent parser QA — must pass 40/40 before any push
+# Run full 48-query intent parser QA — must pass 48/48 before any push
 pytest tests/test_intent_parser.py -v
 
-# Unit tests (reranker, session manager)
-pytest tests/test_reranker.py tests/test_session_manager.py -v
+# All non-API tests (121+ tests) — must be green before pushing
+pytest tests/ --ignore=tests/test_intent_parser.py -v
+
+# Fuzzy preprocessor tests (59 tests)
+pytest tests/test_fuzzy.py -v
+
+# Unit tests (reranker, session manager, tag_role, query_state, cssl)
+pytest tests/test_reranker.py tests/test_session_manager.py tests/test_tag_role.py -v
 ```
 
 The QA suite in `tests/test_intent_parser.py` calls Claude live — requires
-`ANTHROPIC_API_KEY` set in environment.
+`ANTHROPIC_API_KEY` set in environment. All other tests run without API keys.
 
 ---
 

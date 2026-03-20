@@ -3,7 +3,7 @@
 **Product:** camps.ca AI Powered Camp Finder
 **Version:** 1.0
 **Status:** Production
-**Last Updated:** 2026-03-13
+**Last Updated:** 2026-03-17
 
 ---
 
@@ -517,28 +517,51 @@ A static Python module (no DB dependency) providing all alias lookups used by th
 
 ### 7.3 Data Sync
 
-Programme data is sourced directly from the OurKids MySQL database via an automated pipeline.
+Programme data is sourced from OurKids via a mysqldump file on Google Drive, imported as raw staging tables, then materialized into CSC tables via SQL JOINs.
 
-#### Automated sync (`db/sync_from_source.py` + `.github/workflows/sync.yml`)
+#### Automated sync (`.github/workflows/sync.yml`)
 
-A GitHub Actions workflow runs every 2 hours and on demand. It connects to OurKids MySQL as a read-only `csc_reader` user, detects changes, and writes updates to the Aiven destination DB.
+A GitHub Actions workflow runs **daily 02:00 UTC Mon–Fri** and on demand. The pipeline has five steps:
 
 ```
-OurKids MySQL (read-only)   →   GitHub Actions (every 2h)   →   Aiven MySQL (CSC)
-  csc_reader user                db/sync_from_source.py           programs, program_tags
-                                 .github/workflows/sync.yml        program_dates, camps
+Google Drive dump.sql
+  │
+  ▼
+db/download_from_drive.py       fetch latest dump from Google Drive
+  │
+  ▼
+db/load_raw_tables.py           replay CREATE TABLE + INSERT → ok_* staging tables
+  │
+  ▼
+ok_camps, ok_sessions,          raw OurKids tables (ephemeral, recreated each sync)
+ok_sitems, ok_session_date,
+ok_addresses, ok_generalInfo,
+ok_detailInfo, ok_extra_locations
+  │
+  ▼
+db/materialize_from_raw.py      SQL JOINs → populate CSC tables (camps, programs,
+  │                             program_tags with tag_role, program_dates)
+  ▼
+db/import_camp_tag_overrides.py → db/export_camp_tag_overrides.py → commit if changed
 ```
+
+**Why Google Drive (not direct DB):** OurKids DBA denied direct MySQL access from GitHub Actions — firewall locked to known IPs. OurKids uploads a mysqldump to a shared Google Drive folder; we pull it via a service account.
 
 Operations performed on every run:
 
 | Operation | Effect |
 |-----------|--------|
-| Upsert active camps | INSERT new, UPDATE tier/meta/prettyurl for existing |
-| Sync programs | For camps whose session set has changed: delete existing programmes, reinsert from source + infer activity tags |
-| Sync program_dates | Refresh future date rows from `session_date` source table |
-| Deactivate departed | `--deactivate` flag: status=0 for camps no longer in source |
+| Load raw tables | DROP + CREATE `ok_*` staging tables from dump SQL (MyISAM→InnoDB, zero-date mode) |
+| Upsert active camps | INSERT new, UPDATE tier/meta/prettyurl for existing from `ok_camps` |
+| Sync programs | DELETE + reinsert all programs from `ok_sessions` (all sessions imported, no status filter) |
+| Sync program_tags | 3-tier tagging from sitems: specialty → category → activities, with keyword fallback |
+| Sync program_dates | Refresh future date rows from `ok_session_date` |
+| Sync locations | Multi-location camps via `ok_extra_locations` |
+| Deactivate departed | `--deactivate` flag: status=0 for camps in Aiven but not in dump |
 
-Activity tags are inferred from session names via a keyword map (`infer_tags()`), e.g. "Lil Chefs Camp" → `cooking`, "Zoology & Nature Camp" → `nature-environment, zoology`. The `_KEYWORD_TO_TAGS` map is maintained identically in both sync scripts.
+**Tag resolution pipeline:** `ok_sessions.specialty/category/activities` → `ok_sitems.item` → `WEBITEMS_TO_SLUG` bridge → `activity_tags.slug` → `program_tags` with `tag_role` (specialty/category/activity). Keyword inference (`infer_tags()`) as fallback for sessions with no sitems data.
+
+**Gender mapping:** OurKids `0=unset, 1=Coed, 2=Boys, 3=Girls` → CSC `0=Coed, 1=Boys, 2=Girls` via `_GENDER_MAP`. The old regex ETL accidentally filtered by the gender field (position 7), dropping all non-coed sessions.
 
 **Protected IDs** (never deactivated): `422` Canlan Etobicoke · `529` Canlan Scarborough · `579` Canlan Oakville · `1647` Idea Labs Pickering.
 
@@ -546,11 +569,12 @@ Manual trigger: GitHub repo → Actions tab → "Sync OurKids → Aiven" → Run
 
 #### Emergency fallback (`db/sync_from_dump.py`)
 
-The original dump-file sync script is kept for emergency use (e.g. OurKids DB unreachable, source schema change requiring investigation). It is not part of the normal sync cadence.
+The legacy regex-based sync script is kept for emergency use. It parses individual fields from dump SQL via regex — less reliable than the raw table import approach but requires no staging tables.
 
 ```bash
 python3 db/sync_from_dump.py --dump /path/to/dump.sql --import-all-sessions --dry-run
-python3 db/sync_from_dump.py --dump /path/to/dump.sql --import-all-sessions
+python3 db/sync_from_dump.py --dump /path/to/dump.sql --import-all-sessions \
+  --deactivate --skip-ids 422,529,579,1647
 ```
 
 ---

@@ -6,6 +6,8 @@ Downloads the most recent file from a Google Drive folder using a service accoun
 Decompresses .gz files automatically. Writes the final SQL to dump.sql in the
 current working directory.
 
+Supports both regular Drive folders and Shared Drive folders.
+
 Required env vars:
     GDRIVE_SERVICE_ACCOUNT_JSON  — full contents of the service account JSON key
     GDRIVE_FOLDER_ID             — Google Drive folder ID
@@ -22,6 +24,9 @@ from googleapiclient.http import MediaIoBaseDownload
 
 SCOPES = ["https://www.googleapis.com/auth/drive.readonly"]
 
+# Shared Drive support flags — needed for folders on Shared Drives
+SHARED_DRIVE_PARAMS = dict(supportsAllDrives=True, includeItemsFromAllDrives=True)
+
 
 def main():
     folder_id = os.environ.get("GDRIVE_FOLDER_ID", "").strip()
@@ -32,9 +37,6 @@ def main():
         sys.exit(1)
 
     sa_info = json.loads(sa_json)
-    print(f"Service account: {sa_info.get('client_email')}")
-    print(f"Folder ID: {folder_id!r} (len={len(folder_id)})")
-
     creds = service_account.Credentials.from_service_account_info(
         sa_info, scopes=SCOPES
     )
@@ -43,30 +45,13 @@ def main():
     # Verify folder exists and is accessible
     try:
         folder_meta = service.files().get(
-            fileId=folder_id, fields="id, name, mimeType"
+            fileId=folder_id, fields="id, name, mimeType",
+            **SHARED_DRIVE_PARAMS,
         ).execute()
-        print(f"Folder name: {folder_meta.get('name')} (type: {folder_meta.get('mimeType')})")
+        print(f"Folder: {folder_meta.get('name')}")
     except Exception as e:
-        print(f"ERROR: Cannot access folder: {e}")
-        print("Trying list query as fallback...")
-        # Try listing with supportsAllDrives in case it's a shared drive
-        try:
-            results = service.files().list(
-                q=f"'{folder_id}' in parents and trashed=false",
-                pageSize=5,
-                supportsAllDrives=True,
-                includeItemsFromAllDrives=True,
-                fields="files(id, name, size, mimeType, modifiedTime)",
-            ).execute()
-            fallback_files = results.get("files", [])
-            print(f"Fallback list found {len(fallback_files)} files")
-            for ff in fallback_files:
-                print(f"  - {ff['name']}")
-        except Exception as e2:
-            print(f"Fallback also failed: {e2}")
-        print()
-        print("Make sure the folder is shared with the service account email.")
-        sys.exit(1)
+        print(f"WARNING: Cannot get folder metadata: {e}")
+        print("Continuing with list query...")
 
     # List files in the specified folder
     results = service.files().list(
@@ -75,6 +60,7 @@ def main():
         orderBy="modifiedTime desc",
         pageSize=5,
         fields="files(id, name, size, mimeType, modifiedTime)",
+        **SHARED_DRIVE_PARAMS,
     ).execute()
     files = results.get("files", [])
 
@@ -85,6 +71,7 @@ def main():
                 " and mimeType = 'application/vnd.google-apps.folder'",
             pageSize=10,
             fields="files(id, name)",
+            **SHARED_DRIVE_PARAMS,
         ).execute()
         for sub in sub_results.get("files", []):
             print(f"  Searching subfolder: {sub['name']}")
@@ -94,6 +81,7 @@ def main():
                 orderBy="modifiedTime desc",
                 pageSize=5,
                 fields="files(id, name, size, mimeType, modifiedTime)",
+                **SHARED_DRIVE_PARAMS,
             ).execute()
             files = sub_files.get("files", [])
             if files:

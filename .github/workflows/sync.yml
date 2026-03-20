@@ -44,6 +44,7 @@ jobs:
           PYTHONPATH=. python db/materialize_from_raw.py
           --skip-ids 422,529,579,1647
           --deactivate
+          --force
         env:
           DB_HOST:        ${{ secrets.DB_HOST }}
           DB_PORT:        ${{ secrets.DB_PORT }}

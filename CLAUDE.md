@@ -3,7 +3,7 @@
 **camps.ca AI Powered Camp Finder**
 Streamlit + Aiven MySQL + Claude AI. Auto-deploys to Streamlit Cloud on push to `main`.
 
-852 camps, 4,605 programs, 208K tags. Automated daily sync from OurKids via Google Drive.
+281 camps, 4,070 programs, 208K tags. Automated daily sync from OurKids via Google Drive.
 
 ---
 

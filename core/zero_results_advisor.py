@@ -25,6 +25,8 @@ def diagnose(
     is_virtual: bool = False,
     age_from: int | None = None,
     age_to: int | None = None,
+    user_lat: float | None = None,
+    user_lon: float | None = None,
 ) -> dict:
     """
     Find where the requested activity exists, closest first.
@@ -70,9 +72,28 @@ def diagnose(
         )
         args += [date_to, date_from]
 
+    # When user coordinates are available, order by distance (Haversine);
+    # otherwise fall back to program count.
+    if user_lat is not None and user_lon is not None:
+        select_extra = (
+            ", MIN(111.045 * DEGREES(ACOS(LEAST(1.0, "
+            "COS(RADIANS(%s)) * COS(RADIANS(c.lat)) "
+            "* COS(RADIANS(c.lon) - RADIANS(%s)) "
+            "+ SIN(RADIANS(%s)) * SIN(RADIANS(c.lat)))))) AS dist_km"
+        )
+        geo_args = [user_lat, user_lon, user_lat]
+        having = "HAVING dist_km IS NOT NULL"
+        order = "ORDER BY dist_km ASC"
+    else:
+        select_extra = ""
+        geo_args = []
+        having = ""
+        order = "ORDER BY program_count DESC"
+
     cursor.execute(
         f"""
         SELECT c.city, c.province, COUNT(DISTINCT p.id) AS program_count
+               {select_extra}
         FROM programs p
         JOIN program_tags pt ON p.id = pt.program_id
         JOIN camps c ON p.camp_id = c.id
@@ -83,10 +104,11 @@ def diagnose(
           AND (p.end_date IS NULL OR p.end_date >= CURDATE())
           {extra_conditions}
         GROUP BY c.city, c.province
-        ORDER BY program_count DESC
+        {having}
+        {order}
         LIMIT 10
         """,
-        args,
+        geo_args + args,
     )
 
     locations = cursor.fetchall()

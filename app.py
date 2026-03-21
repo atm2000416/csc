@@ -1152,6 +1152,8 @@ def _diagnose_zero_results(merged_params: dict) -> dict:
         is_virtual=bool(merged_params.get("is_virtual")),
         age_from=merged_params.get("age_from"),
         age_to=merged_params.get("age_to"),
+        user_lat=merged_params.get("lat"),
+        user_lon=merged_params.get("lon"),
     )
 
     ps = diagnosis.get("pending_suggestion") or {}

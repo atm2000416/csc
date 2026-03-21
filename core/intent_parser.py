@@ -215,13 +215,19 @@ def parse_intent(
             if not has_other_params:
                 parsed["recognized"] = False
 
-    # National scope — strip all geo filters so search covers all of Canada
+    # Scope handling — national_scope and us_scope can coexist.
+    # When both are set ("across Canada and international, including the US"),
+    # strip all geo filters so the search covers everything.
+    # Only set _US marker when us_scope is set WITHOUT national_scope.
     if fuzzy_hints and fuzzy_hints.get("national_scope"):
         for geo_key in ("city", "cities", "province", "lat", "lon", "radius_km"):
             parsed.pop(geo_key, None)
-
-    # US scope — strip geo filters and set province marker for CSSL
-    if fuzzy_hints and fuzzy_hints.get("us_scope"):
+        if fuzzy_hints.get("us_scope"):
+            # Both scopes: include US camps by NOT setting a province filter
+            # (no province = all camps including US)
+            pass
+    elif fuzzy_hints and fuzzy_hints.get("us_scope"):
+        # US-only scope
         for geo_key in ("city", "cities", "lat", "lon", "radius_km"):
             parsed.pop(geo_key, None)
         parsed["province"] = "_US"

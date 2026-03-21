@@ -88,6 +88,8 @@ def query(params: dict, limit: int = 100) -> tuple[list[dict], float]:
         #    specialty/category role from OurKids sitems data.
         _MAX_TAGS_FOR_ACTIVITY = 10  # activity-role tags on programs with
         #                              ≤ this many tags are trusted
+        _LOW_SUPPLY_THRESHOLD = 50   # tags with fewer active programs are
+        #                              "niche" — relax the gate
 
         has_strong_roles = _has_strong_role_assignments(tag_ids, cursor)
 
@@ -110,13 +112,21 @@ def query(params: dict, limit: int = 100) -> tuple[list[dict], float]:
                     f"     AND pt_f.tag_id IN ({fam_ph})) >= 2)"
                 )
         else:
-            def _affinity_sql(role_col: str, prog_ref: str) -> str:
-                return (
-                    f"({role_col} IN ('specialty', 'category')"
-                    f" OR (SELECT COUNT(*) FROM program_tags"
-                    f"     WHERE program_id = {prog_ref})"
-                    f"    <= {_MAX_TAGS_FOR_ACTIVITY})"
-                )
+            # Leaf tag (no multi-parent).  For niche tags with low total
+            # supply, every match matters — skip the gate so we don't
+            # discard legitimate results (e.g., circus with 20 programs).
+            is_low_supply = _count_active_programs(tag_ids, cursor) < _LOW_SUPPLY_THRESHOLD
+            if is_low_supply:
+                def _affinity_sql(role_col: str, prog_ref: str) -> str:
+                    return "1=1"
+            else:
+                def _affinity_sql(role_col: str, prog_ref: str) -> str:
+                    return (
+                        f"({role_col} IN ('specialty', 'category')"
+                        f" OR (SELECT COUNT(*) FROM program_tags"
+                        f"     WHERE program_id = {prog_ref})"
+                        f"    <= {_MAX_TAGS_FOR_ACTIVITY})"
+                    )
 
         if override_camp_ids:
             # Override camps: include only if they have an active program
@@ -535,6 +545,23 @@ def _has_strong_role_assignments(tag_ids: list[int], cursor) -> bool:
         tuple(tag_ids),
     )
     return cursor.fetchone() is not None
+
+
+def _count_active_programs(tag_ids: list[int], cursor) -> int:
+    """Count distinct active programs that carry any of the given tags."""
+    if not tag_ids:
+        return 0
+    ph = ", ".join(["%s"] * len(tag_ids))
+    cursor.execute(
+        f"SELECT COUNT(DISTINCT pt.program_id) AS cnt "
+        f"FROM program_tags pt "
+        f"JOIN programs p ON pt.program_id = p.id "
+        f"JOIN camps c ON p.camp_id = c.id "
+        f"WHERE pt.tag_id IN ({ph}) "
+        f"AND p.status = 1 AND c.status = 1",
+        tuple(tag_ids),
+    )
+    return cursor.fetchone()["cnt"]
 
 
 def resolve_category_family(

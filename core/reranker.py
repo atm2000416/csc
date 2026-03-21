@@ -68,16 +68,18 @@ def rerank(
             "ages": f"{r.get('age_from', '?')}-{r.get('age_to', '?')}",
             "desc": (r.get("mini_description") or r.get("description") or "")[:200],
             "focus": role_label,
+            "total_tags": r.get("_tag_count", 0),
         }
         compact.append(entry)
 
     prompt = (
         f"User query: {raw_query}\n\n"
         f"Rank these camp programs by relevance to the query. "
-        f"Each program has a 'focus' field: 'specialty' means the activity is the camp's "
-        f"primary focus, 'category' means it's a significant offering, 'activity' means "
-        f"it's one of many activities. Strongly prefer specialty and category programs "
-        f"over activity-level ones.\n"
+        f"Each program has a 'focus' field and 'total_tags' count. "
+        f"'specialty' (few tags) = the activity is the camp's primary focus — rank highest. "
+        f"'category' with few tags = dedicated program — rank high. "
+        f"'category' with many tags (30+) = generalist camp — rank lower. "
+        f"'activity' = one of many activities — rank lowest.\n"
         f"For each program, write a 'blurb': 1-2 sentences describing why the CAMP "
         f"(not a specific program's theme or title) matches the user's query. "
         f"Use direct, confident, factual language. "

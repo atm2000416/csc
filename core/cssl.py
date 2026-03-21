@@ -88,9 +88,8 @@ def query(params: dict, limit: int = 100) -> tuple[list[dict], float]:
         #    specialty/category role from OurKids sitems data.
         _MAX_TAGS_FOR_ACTIVITY = 10  # activity-role tags on programs with
         #                              ≤ this many tags are trusted
-        _MAX_TAGS_NICHE = 30         # relaxed limit for niche tags
         _LOW_SUPPLY_THRESHOLD = 50   # tags with fewer active programs are
-        #                              "niche" — relax the gate
+        #                              "niche" — skip the gate
 
         has_strong_roles = _has_strong_role_assignments(tag_ids, cursor)
 
@@ -114,18 +113,20 @@ def query(params: dict, limit: int = 100) -> tuple[list[dict], float]:
                 )
         else:
             # Leaf tag (no multi-parent).  For niche tags with low total
-            # supply, relax the tag-count threshold so mid-size programs
-            # pass (e.g., Oxford Learning at 19 tags) while 60-tag
-            # generalists are still filtered out.
+            # supply (<50 programs), skip the gate — every match matters
+            # and tag_count ASC ordering + reranker handle relevance.
+            # For common tags, apply the standard tag-count gate.
             is_low_supply = _count_active_programs(tag_ids, cursor) < _LOW_SUPPLY_THRESHOLD
-            max_tags = _MAX_TAGS_NICHE if is_low_supply else _MAX_TAGS_FOR_ACTIVITY
-
-            def _affinity_sql(role_col: str, prog_ref: str) -> str:
-                return (
-                    f"({role_col} IN ('specialty', 'category')"
-                    f" OR (SELECT COUNT(*) FROM program_tags"
-                    f"     WHERE program_id = {prog_ref})"
-                    f"    <= {max_tags})"
+            if is_low_supply:
+                def _affinity_sql(role_col: str, prog_ref: str) -> str:
+                    return "1=1"
+            else:
+                def _affinity_sql(role_col: str, prog_ref: str) -> str:
+                    return (
+                        f"({role_col} IN ('specialty', 'category')"
+                        f" OR (SELECT COUNT(*) FROM program_tags"
+                        f"     WHERE program_id = {prog_ref})"
+                        f"    <= {_MAX_TAGS_FOR_ACTIVITY})"
                     )
 
         if override_camp_ids:

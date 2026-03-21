@@ -977,19 +977,25 @@ def _run_search(merged_params: dict, raw_query: str, session: dict, sidebar_filt
         "but here are some that may offer virtual or hybrid sessions._\n\n"
     ) if virtual_fallback_used else ""
 
-    # Partition results by tag_role: specialty/category hits vs activity-only
+    # Partition results by tag_role: specialty/category hits vs activity-only.
+    # Always prioritize specialty/category hits; backfill with activity hits
+    # only when there aren't enough focused camps to fill the display.
     specialty_hits, activity_hits = _partition_by_role(results)
     n_specialty_camps = len({r.get("camp_id") for r in specialty_hits})
     _activity_overflow = None
-    if n_specialty_camps > 10 and activity_hits:
-        # Enough specialty camps — hold back activity-only matches for "see more"
-        _activity_overflow = activity_hits
-        results = specialty_hits
+    if specialty_hits and activity_hits:
+        if n_specialty_camps >= 10:
+            # Enough specialty camps — hold back activity-only for "see more"
+            _activity_overflow = activity_hits
+            results = specialty_hits
+        else:
+            # Not enough specialty camps to fill display — prepend them,
+            # then backfill with activity hits so specialty always ranks first.
+            results = specialty_hits + activity_hits
         record("role_partition", {
             "specialty_camps": n_specialty_camps,
-            "activity_held_back": len(activity_hits),
+            "activity_held_back": len(activity_hits) if _activity_overflow else 0,
         })
-    # else: use combined results (original behavior)
 
     ics = getattr(intent, "ics", 1.0) if intent else 1.0
     if intent:

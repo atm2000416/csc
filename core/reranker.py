@@ -57,7 +57,9 @@ def rerank(
 
     compact = []
     for r in candidates:
-        compact.append({
+        role = r.get("_role_match")
+        role_label = {0: "specialty", 1: "category", 2: "activity"}.get(role, "unknown")
+        entry = {
             "id": r["id"],
             "camp": r.get("camp_name", ""),
             "program": r.get("name", ""),
@@ -65,11 +67,17 @@ def rerank(
             "city": r.get("city", ""),
             "ages": f"{r.get('age_from', '?')}-{r.get('age_to', '?')}",
             "desc": (r.get("mini_description") or r.get("description") or "")[:200],
-        })
+            "focus": role_label,
+        }
+        compact.append(entry)
 
     prompt = (
         f"User query: {raw_query}\n\n"
-        f"Rank these camp programs by relevance to the query. Preserve specificity.\n"
+        f"Rank these camp programs by relevance to the query. "
+        f"Each program has a 'focus' field: 'specialty' means the activity is the camp's "
+        f"primary focus, 'category' means it's a significant offering, 'activity' means "
+        f"it's one of many activities. Strongly prefer specialty and category programs "
+        f"over activity-level ones.\n"
         f"For each program, write a 'blurb': 1-2 sentences describing why the CAMP "
         f"(not a specific program's theme or title) matches the user's query. "
         f"Use direct, confident, factual language. "

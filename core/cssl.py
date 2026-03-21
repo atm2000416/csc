@@ -146,14 +146,15 @@ def query(params: dict, limit: int = 100) -> tuple[list[dict], float]:
         args["age_to"] = params["age_to"]
 
     # Type — DB stores legacy numeric codes, not strings
-    # '1'='Day Camp', '2'='Overnight', '3'='Day+Overnight', '4'='Virtual'
-    # 'Day Camp' also appears as a string from the migration
-    # NULL type = unset — most camps are day camps, so Day includes NULL
+    # OurKids type codes: 1=Day Camp, 2=Overnight, 3=Program, 4=Virtual,
+    # 5=Year-round(?), 6=PA Day.  Comma-separated for multi-type sessions.
+    # Use FIND_IN_SET to match within comma-separated values.
+    # NULL type = unset — most camps are day camps, so Day includes NULL.
     _TYPE_MAP = {
-        "Day":       ("(p.type IN ('1','1,3','Day Camp') OR p.type IS NULL)", {}),
-        "Overnight": ("p.type IN ('2','3','1,3')", {}),
-        "Both":      ("p.type IN ('3','1,3')", {}),
-        "Virtual":   ("p.type = '4'", {}),
+        "Day":       ("(FIND_IN_SET('1', p.type) OR p.type = 'Day Camp' OR p.type IS NULL)", {}),
+        "Overnight": ("FIND_IN_SET('2', p.type)", {}),
+        "Both":      ("(FIND_IN_SET('1', p.type) AND FIND_IN_SET('2', p.type))", {}),
+        "Virtual":   ("FIND_IN_SET('4', p.type)", {}),
     }
     if params.get("type") and params["type"] in _TYPE_MAP:
         cond, extra_args = _TYPE_MAP[params["type"]]
@@ -225,15 +226,15 @@ def query(params: dict, limit: int = 100) -> tuple[list[dict], float]:
     # 4. Tier (gold > silver > bronze)
     # 5. Review average
     gender_db = {"Girls": 2, "Boys": 1}.get(params.get("gender", ""), 0)
-    type_db    = {"Overnight": "'2'", "Day": "'1'"}.get(params.get("type", ""), None)
+    type_code  = {"Overnight": "2", "Day": "1"}.get(params.get("type", ""), None)
 
     gender_boost = (
         f"CASE WHEN p.gender = {gender_db} THEN 0 ELSE 1 END,"
         if gender_db else ""
     )
     type_boost = (
-        f"CASE WHEN p.type = {type_db} THEN 0 ELSE 1 END,"
-        if type_db else ""
+        f"CASE WHEN FIND_IN_SET('{type_code}', p.type) THEN 0 ELSE 1 END,"
+        if type_code else ""
     )
 
     # Build boost expressions for SELECT (required by DISTINCT + ORDER BY)
@@ -242,8 +243,8 @@ def query(params: dict, limit: int = 100) -> tuple[list[dict], float]:
         if gender_db else ""
     )
     type_select = (
-        f"CASE WHEN p.type = {type_db} THEN 0 ELSE 1 END AS _type_boost,"
-        if type_db else ""
+        f"CASE WHEN FIND_IN_SET('{type_code}', p.type) THEN 0 ELSE 1 END AS _type_boost,"
+        if type_code else ""
     )
 
     # Specialty boost — ranks specialist programs above generalist programs.

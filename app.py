@@ -428,10 +428,10 @@ def _fetch_all_camp_programs(camp_id: int, exclude_program_id: int, camp_name: s
 
             # Type filter
             _TYPE_MAP = {
-                "Day":       "p.type IN ('1','1,3','Day Camp')",
-                "Overnight": "p.type IN ('2','3','1,3')",
-                "Both":      "p.type IN ('3','1,3')",
-                "Virtual":   "p.type = '4'",
+                "Day":       "(FIND_IN_SET('1', p.type) OR p.type = 'Day Camp' OR p.type IS NULL)",
+                "Overnight": "FIND_IN_SET('2', p.type)",
+                "Both":      "(FIND_IN_SET('1', p.type) AND FIND_IN_SET('2', p.type))",
+                "Virtual":   "FIND_IN_SET('4', p.type)",
             }
             if search_params.get("type") and search_params["type"] in _TYPE_MAP:
                 conditions.append(_TYPE_MAP[search_params["type"]])

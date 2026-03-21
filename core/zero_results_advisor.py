@@ -8,10 +8,10 @@ from db.connection import get_connection
 
 # Map program type labels to SQL conditions (mirrors cssl.py)
 _TYPE_SQL = {
-    "Day":       "p.type IN ('1','1,3','Day Camp')",
-    "Overnight": "p.type IN ('2','3','1,3')",
-    "Both":      "p.type IN ('3','1,3')",
-    "Virtual":   "p.type = '4'",
+    "Day":       "(FIND_IN_SET('1', p.type) OR p.type = 'Day Camp' OR p.type IS NULL)",
+    "Overnight": "FIND_IN_SET('2', p.type)",
+    "Both":      "(FIND_IN_SET('1', p.type) AND FIND_IN_SET('2', p.type))",
+    "Virtual":   "FIND_IN_SET('4', p.type)",
 }
 
 

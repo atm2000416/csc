@@ -147,15 +147,21 @@ def query(params: dict, limit: int = 500) -> tuple[list[dict], float]:
         args["age_to"] = params["age_to"]
 
     # Type — DB stores legacy numeric codes, not strings
-    # OurKids type codes: 1=Day Camp, 2=Overnight, 3=Program, 4=Virtual,
-    # 5=Year-round(?), 6=PA Day.  Comma-separated for multi-type sessions.
+    # OurKids type codes:
+    #   1 = Day Camp          2 = Overnight/Residential
+    #   3 = Enrichment        4 = PA Day
+    #   5 = Virtual/Online    6 = Marketplace listing
+    # Comma-separated for multi-type sessions (e.g. "1,3").
     # Use FIND_IN_SET to match within comma-separated values.
     # NULL type = unset — most camps are day camps, so Day includes NULL.
+    # Day also includes type=3 (enrichment programs are day-format).
     _TYPE_MAP = {
-        "Day":       ("(FIND_IN_SET('1', p.type) OR p.type = 'Day Camp' OR p.type IS NULL)", {}),
-        "Overnight": ("FIND_IN_SET('2', p.type)", {}),
-        "Both":      ("(FIND_IN_SET('1', p.type) AND FIND_IN_SET('2', p.type))", {}),
-        "Virtual":   ("FIND_IN_SET('4', p.type)", {}),
+        "Day":        ("(FIND_IN_SET('1', p.type) OR FIND_IN_SET('3', p.type) OR p.type = 'Day Camp' OR p.type IS NULL)", {}),
+        "Overnight":  ("FIND_IN_SET('2', p.type)", {}),
+        "Both":       ("(FIND_IN_SET('1', p.type) AND FIND_IN_SET('2', p.type))", {}),
+        "Virtual":    ("(FIND_IN_SET('5', p.type) OR FIND_IN_SET('4', p.type))", {}),
+        "Enrichment": ("FIND_IN_SET('3', p.type)", {}),
+        "PA Day":     ("FIND_IN_SET('4', p.type)", {}),
     }
     if params.get("type") and params["type"] in _TYPE_MAP:
         cond, extra_args = _TYPE_MAP[params["type"]]
@@ -231,7 +237,7 @@ def query(params: dict, limit: int = 500) -> tuple[list[dict], float]:
     # 4. Tier (gold > silver > bronze)
     # 5. Review average
     gender_db = {"Girls": 2, "Boys": 1}.get(params.get("gender", ""), 0)
-    type_code  = {"Overnight": "2", "Day": "1"}.get(params.get("type", ""), None)
+    type_code  = {"Overnight": "2", "Day": "1", "Enrichment": "3", "PA Day": "4", "Virtual": "5"}.get(params.get("type", ""), None)
 
     gender_boost = (
         f"CASE WHEN p.gender = {gender_db} THEN 0 ELSE 1 END,"

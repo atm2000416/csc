@@ -10,9 +10,12 @@ _PROVINCES = [
     "Quebec", "Saskatchewan",
 ]
 
-_TYPES = ["Any", "Day Camp", "Overnight", "Virtual"]
+_TYPES = ["Any", "Day Camp", "Overnight", "Enrichment", "PA Day", "Virtual"]
 
-_TYPE_TO_CSSL = {"Day Camp": "Day", "Overnight": "Overnight", "Virtual": "Virtual"}
+_TYPE_TO_CSSL = {
+    "Day Camp": "Day", "Overnight": "Overnight", "Virtual": "Virtual",
+    "Enrichment": "Enrichment", "PA Day": "PA Day",
+}
 
 
 def get_filter_values() -> dict:

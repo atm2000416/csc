@@ -99,12 +99,14 @@ Canadian province or US state full name. Examples: "Ontario", "British Columbia"
   "any province", "all provinces" → set province: null AND city: null (no geo filter — search all camps)
 
 ### type (string)
-One of: "Day", "Overnight", "Both", "Virtual" — ONLY these four values are valid.
+One of: "Day", "Overnight", "Both", "Virtual", "Enrichment", "PA Day" — ONLY these six values are valid.
 - "day camp", "day program" → "Day"
 - "overnight", "sleepaway", "sleep away", "residential", "boarding" → "Overnight"
 - "both day and overnight" → "Both"
 - "virtual", "online", "remote", "digital camp", "online camp", "virtual program", "online program" → "Virtual". Also set is_virtual: true.
-- "class", "program", "weekly program", "league", "PA day", "march break" → omit (null); use activity tags instead
+- "enrichment", "after school", "after-school", "year round", "year-round", "weekly program", "class", "classes", "lessons", "tutoring program", "league" → "Enrichment"
+- "PA day", "PD day", "PA day camp" → "PA Day"
+- "march break" → omit (null); use activity tags instead
 - If not mentioned, omit (null).
 
 ### gender (string)

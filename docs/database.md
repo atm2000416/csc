@@ -35,7 +35,7 @@ conn.close()
 | `id` | INT PK | |
 | `camp_id` | INT FK→camps | |
 | `name` | VARCHAR(300) | |
-| `type` | VARCHAR(45) | "1"=Day "2"=Overnight |
+| `type` | VARCHAR(45) | "1"=Day "2"=Overnight "3"=Enrichment "4"=PA Day "5"=Virtual "6"=Marketplace. Comma-separated for multi-type (e.g. "1,3") |
 | `age_from` / `age_to` | SMALLINT | |
 | `cost_from` / `cost_to` | SMALLINT | CAD |
 | `gender` | TINYINT | NULL=unknown, 0=Coed, 1=Boys, 2=Girls |

@@ -148,7 +148,7 @@ class QueryState:
     tags:               FieldValue | None = None   # list[str] — activity tag slugs
     exclude_tags:       FieldValue | None = None   # list[str]
     traits:             FieldValue | None = None   # list[str]
-    type:               FieldValue | None = None   # "Day" | "Overnight"
+    type:               FieldValue | None = None   # "Day" | "Overnight" | "Enrichment" | "PA Day" | "Virtual" | "Both"
 
     # --- Demographics ---
     age_from:           FieldValue | None = None   # int

@@ -573,7 +573,7 @@ Operations performed on every run:
 
 **Tag resolution pipeline:** `ok_sessions.specialty/category/activities` → `ok_sitems.item` → `WEBITEMS_TO_SLUG` bridge → `activity_tags.slug` → `program_tags` with `tag_role`. The `activities` field uses format `[sitem_id]focus_level` where the focus level maps to tag_role: **3** (intense) → `specialty`, **2** (instructional) → `category`, **1** (recreational) → `activity`. These levels are set by the camps themselves during their OurKids listing setup. Keyword inference (`infer_tags()`) as fallback for sessions with no sitems data.
 
-**Gender mapping:** OurKids `0=unset, 1=Coed, 2=Boys, 3=Girls` → CSC `0=Coed, 1=Boys, 2=Girls` via `_GENDER_MAP`. The old regex ETL accidentally filtered by the gender field (position 7), dropping all non-coed sessions.
+**Gender mapping:** OurKids `0=unset, 1=Coed, 2=Girls, 3=Boys` → CSC `0=Coed, 1=Boys, 2=Girls` via `_GENDER_MAP`. The old regex ETL accidentally filtered by the gender field (position 7), dropping all non-coed sessions.
 
 **Protected IDs** (never deactivated): `422` Canlan Etobicoke · `529` Canlan Scarborough · `579` Canlan Oakville · `1647` Idea Labs Pickering.
 

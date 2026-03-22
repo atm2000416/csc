@@ -34,7 +34,7 @@ Ephemeral, recreated each sync:
 
 ### Improvements Over Legacy Regex ETL
 
-- Gender data now imported (OurKids 1=Coed > CSC 0, 2=Boys > 1, 3=Girls > 2)
+- Gender data now imported (OurKids 1=Coed > CSC 0, 2=Girls > 2, 3=Boys > 1)
 - Mini descriptions captured from `ok_sessions.mini_description`
 - Sitems tags via SQL JOIN instead of regex field extraction
 - All OurKids columns available for inspection via `SELECT * FROM ok_sessions`
@@ -81,7 +81,7 @@ The `activities` field uses bracket format: `[71]2,[154]1,[258]1,...` where:
 
 ### Gender Mapping
 
-OurKids uses `0=unset, 1=Coed, 2=Boys, 3=Girls`; CSC uses `0=Coed, 1=Boys, 2=Girls`.
+OurKids uses `0=unset, 1=Coed, 2=Girls, 3=Boys`; CSC uses `0=Coed, 1=Boys, 2=Girls`.
 The `_GENDER_MAP` in `materialize_from_raw.py` handles conversion.
 
 ### Staging Table Compatibility

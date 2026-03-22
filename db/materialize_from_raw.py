@@ -38,9 +38,9 @@ TIER_MAP = {
 INVALID_CITIES = {'.', '', 'virtual', 'international', 'online', 'tbd', 'n/a'}
 
 # OurKids gender → CSC gender mapping
-# OurKids: 0=unset, 1=Coed, 2=Boys, 3=Girls
+# OurKids: 0=unset, 1=Coed, 2=Girls, 3=Boys
 # CSC:     0=Coed, 1=Boys, 2=Girls
-_GENDER_MAP = {0: 0, 1: 0, 2: 1, 3: 2}
+_GENDER_MAP = {0: 0, 1: 0, 2: 2, 3: 1}
 
 # Session names to skip
 _SKIP_PREFIXES = ("new program", "copy of")

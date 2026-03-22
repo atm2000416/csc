@@ -113,7 +113,7 @@ was not migrated. Gender data is therefore sparse and unreliable for filtering.
 ### `sessions` table (→ our `programs`, accessible as `ok_sessions`)
 - **`class_name`** varchar — session display name (NOT `name`; column is `class_name` in the dump)
 - **`start`/`end`** — date columns (NOT `date_from`/`date_to`)
-- **`gender`** tinyint NOT NULL DEFAULT=0 — OurKids encoding: 0=unset, 1=Coed, 2=Boys, 3=Girls. Mapped to CSC: 0=Coed, 1=Boys, 2=Girls via `_GENDER_MAP`. **Critical discovery:** the old regex ETL misidentified position 7 as `status`, accidentally filtering out all non-coed sessions.
+- **`gender`** tinyint NOT NULL DEFAULT=0 — OurKids encoding: 0=unset, 1=Coed, 2=Girls, 3=Boys. Mapped to CSC: 0=Coed, 1=Boys, 2=Girls via `_GENDER_MAP`. **Critical discovery:** the old regex ETL misidentified position 7 as `status`, accidentally filtering out all non-coed sessions.
 - **`running`** tinyint DEFAULT=0 — only 186/12864 sessions have `running=1`. NOT a status field — do not filter by this.
 - `mini_description` varchar(500) — migrated as-is
 - `type` varchar(45) — "1"=Day, "2"=Overnight (same as our programs.type)
@@ -168,7 +168,7 @@ python3 db/export_camp_tag_overrides.py
 - `SET SESSION sql_mode = ''` before loading (legacy data has zero dates `0000-00-00`)
 - `ok_sessions` uses `class_name` (not `name`), `start`/`end` (not `date_from`/`date_to`)
 - All sessions imported — no `running` or `status` filter (old regex accidentally filtered by gender field)
-- Gender mapping: OurKids `1=Coed, 2=Boys, 3=Girls` → CSC `0=Coed, 1=Boys, 2=Girls`
+- Gender mapping: OurKids `1=Coed, 2=Girls, 3=Boys` → CSC `0=Coed, 1=Boys, 2=Girls`
 
 ### Emergency fallback — legacy regex sync (`db/sync_from_dump.py`)
 

@@ -430,14 +430,20 @@ def process_results(results: list[dict], raw_query: str, intent_params: dict) ->
     bronze = [r for r in reranked if r.get("tier") == "bronze"]
 
     # Step 4: Calculate gold average score → threshold for silver/bronze
-    gold_scores = [r.get("rerank_score", 0.0) for r in gold]
-    gold_avg = sum(gold_scores) / len(gold_scores) if gold_scores else 0.5
+    # For small pools (≤5 camps), show all — the threshold is too aggressive
+    # when there aren't enough camps to fill the display.
+    if len(diverse) <= 5:
+        silver_in = silver
+        bronze_in = bronze
+    else:
+        gold_scores = [r.get("rerank_score", 0.0) for r in gold]
+        gold_avg = sum(gold_scores) / len(gold_scores) if gold_scores else 0.5
 
-    silver_threshold = gold_avg           # silver must beat gold average
-    bronze_threshold = gold_avg + 0.05    # bronze must clearly outperform
+        silver_threshold = gold_avg           # silver must beat gold average
+        bronze_threshold = gold_avg + 0.05    # bronze must clearly outperform
 
-    silver_in = [r for r in silver if r.get("rerank_score", 0.0) > silver_threshold]
-    bronze_in = [r for r in bronze if r.get("rerank_score", 0.0) > bronze_threshold]
+        silver_in = [r for r in silver if r.get("rerank_score", 0.0) > silver_threshold]
+        bronze_in = [r for r in bronze if r.get("rerank_score", 0.0) > bronze_threshold]
 
     # Step 5: Page 1 cap of 15 — gold first, then fill with silver/bronze
     PAGE_1_CAP = 15

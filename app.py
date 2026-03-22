@@ -1255,8 +1255,11 @@ def _run_search(merged_params: dict, raw_query: str, session: dict, sidebar_filt
                 final = process_results(results, raw_query, merged_params)
                 clarify_final_count = len(final)
                 clarify_msg = generate_concierge_response(final, raw_query, merged_params, "SHOW_CLARIFY", ics=ics, needs_clarification=getattr(intent, "needs_clarification", []) if intent else [])
-        elif not decision.clarification_dimensions:
-            # No results and no clarification dims — pre-diagnose before render_trace
+        else:
+            # No results — always diagnose, regardless of clarification dims.
+            # The real problem may be geographic (no camps in city), not missing
+            # activity/age. Showing a clarification widget when zero camps exist
+            # in the city creates a frustrating dead-end loop.
             zero_diag = _diagnose_zero_results(merged_params)
         record("output", {"route": "CLARIFY_LOOP", "final_count": clarify_final_count,
                           "clarification_dims": decision.clarification_dimensions,
@@ -1271,10 +1274,11 @@ def _run_search(merged_params: dict, raw_query: str, session: dict, sidebar_filt
             st.session_state["_last_search_params"] = merged_params
             if intent:
                 log_search(session, intent, rcs, clarify_final_count)
-        if decision.clarification_dimensions:
-            render_clarification(decision.clarification_dimensions)
-        elif zero_diag:
+        if zero_diag:
+            # Geo issue takes priority — tell user where camps actually exist
             _show_zero_results(zero_diag)
+        elif decision.clarification_dimensions:
+            render_clarification(decision.clarification_dimensions)
 
     # Handle clarification answer
     answer = st.session_state.pop("_clarification_answer", None)

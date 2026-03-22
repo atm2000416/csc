@@ -141,22 +141,32 @@ def merge_intent(intent: IntentResult, fuzzy_hints: dict | None = None) -> dict:
             if getattr(qs, f) is not None:
                 qs.clear_field(f)
 
-    # Rule 2b: model is confident (ics ≥ 0.7) but found NO tags, NO traits, and
-    # NO other structured parameters → user is exploring ("show me something different",
-    # "what else is there?") with zero extractable intent. Clear stale tags so prior
-    # activity doesn't silently anchor results.
-    # Guard: any structured parameter (city, type, gender, age, cost, language) means
-    # the user is REFINING, not starting fresh — do not fire in that case.
-    _has_structured_params = any([
+    # Rule 2b: model is confident (ics ≥ 0.7) but found NO tags and NO traits.
+    # Clear stale tags when the user appears to be starting a FRESH search rather
+    # than refining the current one.
+    # Fresh-search signals: new geo context (city/province change) OR new type.
+    # Refinement signals: only changing age, gender, cost, or language within
+    # the same geo/type context.
+    acc_params = session.get("accumulated_params", {})
+    _geo_changed = (
+        (new.get("city") and new["city"] != acc_params.get("city"))
+        or (new.get("cities") and set(new["cities"]) != set(acc_params.get("cities") or []))
+        or (new.get("province") and new["province"] != acc_params.get("province"))
+    )
+    _type_changed = (
+        new.get("type") and new["type"] != acc_params.get("type")
+    )
+    _no_new_context = not any([
         new.get("city"), new.get("cities"), new.get("province"),
         new.get("type"), new.get("gender"),
         new.get("age_from") is not None and new["age_from"] is not None,
         new.get("age_to") is not None and new["age_to"] is not None,
         new.get("cost_max"), new.get("language_immersion"),
     ])
+    _should_clear = _geo_changed or _type_changed or _no_new_context
     if (intent.recognized and intent.ics >= 0.7
             and not intent.tags and not intent.traits
-            and not _has_structured_params):
+            and _should_clear):
         if qs.tags is not None:
             qs.clear_field("tags")
         if qs.traits is not None:

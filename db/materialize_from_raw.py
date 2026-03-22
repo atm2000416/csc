@@ -42,6 +42,28 @@ INVALID_CITIES = {'.', '', 'virtual', 'international', 'online', 'tbd', 'n/a'}
 # CSC:     0=Coed, 1=Boys, 2=Girls
 _GENDER_MAP = {0: 0, 1: 0, 2: 2, 3: 1}
 
+# OurKids trait IDs → CSC trait IDs (inferred from justification texts)
+# OurKids: 1=Responsibility, 2=Independence, 3=Teamwork, 4=Courage,
+#          5=Resilience, 6=Interpersonal, 7=Curiosity, 8=Creativity,
+#          9=Physicality, 10=Generosity, 11=Tolerance, 12=Religious Faith
+_TRAIT_MAP = {
+    1: 15,   # Responsibility
+    2: 14,   # Independence
+    3: 10,   # Teamwork
+    4: 13,   # Courage
+    5: 11,   # Resilience
+    6: 16,   # Interpersonal Skills
+    7: 12,   # Curiosity
+    8: 17,   # Creativity
+    9: 18,   # Physicality
+    10: 19,  # Generosity
+    11: 20,  # Tolerance
+    12: 22,  # Religious Faith
+}
+
+# OurKids language_immersion sitem IDs → human-readable language names
+_LANG_SITEMS = {192: 'Mandarin', 193: 'French', 198: 'Spanish', 199: 'English', 262: 'German'}
+
 # Session names to skip
 _SKIP_PREFIXES = ("new program", "copy of")
 
@@ -258,7 +280,7 @@ def materialize_programs(cursor, conn, dry_run, dump_cids, force=False):
                (rebuilds tags from sitems data even if session names haven't changed).
     """
     stats = {"camps_synced": 0, "camps_skipped": 0, "camps_unchanged": 0,
-             "programs_inserted": 0, "tags_inserted": 0}
+             "programs_inserted": 0, "tags_inserted": 0, "traits_inserted": 0}
 
     # Load WEBITEMS bridge
     name_to_slug = _load_webitems_to_slug()
@@ -372,14 +394,15 @@ def materialize_programs(cursor, conn, dry_run, dump_cids, force=False):
         old_ids = [r["id"] for r in cursor.fetchall()]
         if old_ids:
             id_list = ",".join(str(x) for x in old_ids)
-            cursor.execute(f"DELETE FROM program_tags  WHERE program_id IN ({id_list})")
-            cursor.execute(f"DELETE FROM program_dates WHERE program_id IN ({id_list})")
-            cursor.execute(f"DELETE FROM programs      WHERE id          IN ({id_list})")
+            cursor.execute(f"DELETE FROM program_tags   WHERE program_id IN ({id_list})")
+            cursor.execute(f"DELETE FROM program_traits WHERE program_id IN ({id_list})")
+            cursor.execute(f"DELETE FROM program_dates  WHERE program_id IN ({id_list})")
+            cursor.execute(f"DELETE FROM programs       WHERE id          IN ({id_list})")
 
         # Prepare all programs and their tags in memory first, then batch insert
         program_rows = []
-        # Each entry: (session_data, tag_tuples)  where tag_tuples = [(tag_id, is_primary, tag_role), ...]
         session_tags = []
+        session_traits = []
 
         for s in sessions:
             name = s["_name"]
@@ -398,23 +421,58 @@ def materialize_programs(cursor, conn, dry_run, dump_cids, force=False):
             except (ValueError, TypeError):
                 gender = 0
             mini_desc = (str(s.get("mini_description") or ""))[:500]
+            description = s.get("description") or None
 
             is_special_needs = 1 if str(s.get("isspecialneeds", "")).strip() == "1" else 0
             is_virtual = 1 if s.get("isvirtual") in (1, "1") else 0
+            is_family = 1 if s.get("isfamily") in (1, "1") else 0
+            before_care = 1 if s.get("before_care") in (1, "1") else 0
+            after_care = 1 if s.get("after_care") in (1, "1") else 0
+
+            # Decode language_immersion: "193+283" → "French"
+            lang_immersion = None
+            li_raw = str(s.get("language_immersion") or "")
+            if li_raw and li_raw != "0":
+                for part in re.split(r'[+,]', li_raw):
+                    try:
+                        lang_name = _LANG_SITEMS.get(int(part))
+                        if lang_name and lang_name != "English":
+                            lang_immersion = lang_name
+                            break
+                    except (ValueError, TypeError):
+                        pass
 
             age_from = s.get("age_from")
             age_to = s.get("age_to")
             cost_from = s.get("cost_from")
             cost_to = s.get("cost_to")
 
+            # Collect traits for this session
+            session_trait_ids = []
+            for trait_field in ("trait1", "trait2"):
+                raw = s.get(trait_field)
+                if raw:
+                    try:
+                        csc_trait = _TRAIT_MAP.get(int(raw))
+                        if csc_trait and csc_trait not in session_trait_ids:
+                            session_trait_ids.append(csc_trait)
+                    except (ValueError, TypeError):
+                        pass
+            justification1 = s.get("justification1") or None
+            justification2 = s.get("justification2") or None
+            session_justifications = [justification1, justification2]
+
             program_rows.append((
                 camp_id, name, session_type,
                 age_from or None, age_to or None,
                 cost_from or None, cost_to or None,
                 date_from, date_to,
-                gender, mini_desc,
-                is_special_needs, is_virtual
+                gender, mini_desc, description,
+                is_special_needs, is_virtual, is_family,
+                before_care, after_care,
+                lang_immersion
             ))
+            session_traits.append((session_trait_ids, session_justifications))
 
             # Resolve tags for this session
             tags = []
@@ -484,9 +542,11 @@ def materialize_programs(cursor, conn, dry_run, dump_cids, force=False):
             """INSERT INTO programs
                (camp_id, name, type, age_from, age_to,
                 cost_from, cost_to, start_date, end_date,
-                gender, mini_description,
-                is_special_needs, is_virtual, status)
-               VALUES (%s, %s, %s, %s, %s, %s, %s, %s, %s, %s, %s, %s, %s, 1)""",
+                gender, mini_description, description,
+                is_special_needs, is_virtual, is_family,
+                before_care, after_care,
+                language_immersion, status)
+               VALUES (%s, %s, %s, %s, %s, %s, %s, %s, %s, %s, %s, %s, %s, %s, %s, %s, %s, %s, 1)""",
             program_rows
         )
         # Get the auto-increment IDs for the batch
@@ -509,6 +569,25 @@ def materialize_programs(cursor, conn, dry_run, dump_cids, force=False):
             )
             stats["tags_inserted"] += cursor.rowcount
 
+        # Batch insert traits
+        trait_rows = []
+        for prog_id, (trait_ids, justifications) in zip(prog_ids, session_traits):
+            for i, tid in enumerate(trait_ids):
+                j = justifications[i] if i < len(justifications) else None
+                # Skip stub justifications
+                if j and j.strip() in (".", ""):
+                    j = None
+                trait_rows.append((prog_id, tid, (j or "")[:500] if j else None))
+
+        if trait_rows:
+            cursor.executemany(
+                "INSERT IGNORE INTO program_traits "
+                "(program_id, trait_id, justification) "
+                "VALUES (%s, %s, %s)",
+                trait_rows
+            )
+            stats["traits_inserted"] += cursor.rowcount
+
         stats["camps_synced"] += 1
         if stats["camps_synced"] % 25 == 0:
             conn.commit()
@@ -521,7 +600,8 @@ def materialize_programs(cursor, conn, dry_run, dump_cids, force=False):
           f"Unchanged: {stats['camps_unchanged']}, "
           f"Skipped (no sessions): {stats['camps_skipped']}")
     print(f"  Programs inserted: {stats['programs_inserted']}, "
-          f"Tags inserted: {stats['tags_inserted']}")
+          f"Tags inserted: {stats['tags_inserted']}, "
+          f"Traits inserted: {stats['traits_inserted']}")
     print()
     return stats
 
@@ -982,6 +1062,7 @@ def run(dry_run, skip_ids, deactivate, force=False):
     print(f"{prefix}Materialization complete")
     print(f"  Programs inserted:  {prog_stats['programs_inserted']}")
     print(f"  Tags inserted:      {prog_stats['tags_inserted']}")
+    print(f"  Traits inserted:    {prog_stats['traits_inserted']}")
     print(f"  Dates inserted:     {date_stats['inserted']}")
     print(f"  Locations added:    {loc_stats['added']}")
     print(f"  Branch tags copied: {branch_stats['tags_copied']}")

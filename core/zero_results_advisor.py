@@ -145,9 +145,22 @@ def diagnose(
     conn.close()
 
     if not locations:
+        if language_immersion:
+            return {
+                "type": "no_supply",
+                "message": (
+                    f"We don't currently have {language_immersion}-immersion camps "
+                    f"in our directory. Try searching without the language filter, "
+                    f"or tell me what activity interests you."
+                ),
+                "pending_suggestion": None,
+            }
         return {
             "type": "no_supply",
-            "message": "We don't currently have camps for that activity in our directory.",
+            "message": (
+                "We don't currently have camps for that activity in our directory. "
+                "Try broadening your search or tell me what else interests you."
+            ),
             "pending_suggestion": None,
         }
 

@@ -28,6 +28,9 @@ def diagnose(
     user_lat: float | None = None,
     user_lon: float | None = None,
     language_immersion: str | None = None,
+    gender: str | None = None,
+    cost_max: int | None = None,
+    is_special_needs: bool = False,
 ) -> dict:
     """
     Find where the requested activity exists, closest first.
@@ -47,7 +50,7 @@ def diagnose(
             return _diagnose_geo_only(
                 searched_city, searched_province, program_type,
                 age_from, age_to, is_virtual, user_lat, user_lon,
-                language_immersion,
+                language_immersion, gender, cost_max, is_special_needs,
             )
         return {"type": "no_tags", "message": "Could not identify the activity requested."}
 
@@ -69,6 +72,19 @@ def diagnose(
     if language_immersion:
         extra_conditions += " AND p.language_immersion = %s"
         args.append(language_immersion)
+
+    _GENDER_MAP = {"Boys": 1, "Girls": 2}
+    if gender and gender in _GENDER_MAP:
+        gval = _GENDER_MAP[gender]
+        extra_conditions += f" AND (p.gender = %s OR p.gender IS NULL OR p.gender = 0)"
+        args.append(gval)
+
+    if cost_max is not None:
+        extra_conditions += " AND (p.cost_from IS NULL OR p.cost_from <= %s)"
+        args.append(cost_max)
+
+    if is_special_needs:
+        extra_conditions += " AND p.is_special_needs = 1"
 
     if age_from is not None and age_to is not None:
         extra_conditions += (
@@ -187,11 +203,15 @@ def _diagnose_geo_only(
     user_lat: float | None,
     user_lon: float | None,
     language_immersion: str | None = None,
+    gender: str | None = None,
+    cost_max: int | None = None,
+    is_special_needs: bool = False,
 ) -> dict:
     """Geo-aware diagnosis when no activity tags were parsed.
 
     Checks whether ANY camps exist in the searched city/province
-    (applying type/age/language filters) and suggests broadening if needed.
+    (applying type/age/language/gender/cost/special-needs filters)
+    and suggests broadening if needed.
     """
     conn = get_connection()
     cursor = conn.cursor(dictionary=True)
@@ -207,6 +227,16 @@ def _diagnose_geo_only(
         if language_immersion:
             extra_conditions += " AND p.language_immersion = %s"
             args.append(language_immersion)
+        _GENDER_MAP = {"Boys": 1, "Girls": 2}
+        if gender and gender in _GENDER_MAP:
+            gval = _GENDER_MAP[gender]
+            extra_conditions += " AND (p.gender = %s OR p.gender IS NULL OR p.gender = 0)"
+            args.append(gval)
+        if cost_max is not None:
+            extra_conditions += " AND (p.cost_from IS NULL OR p.cost_from <= %s)"
+            args.append(cost_max)
+        if is_special_needs:
+            extra_conditions += " AND p.is_special_needs = 1"
         if age_from is not None and age_to is not None:
             extra_conditions += (
                 " AND (p.age_from IS NULL OR p.age_from <= %s)"

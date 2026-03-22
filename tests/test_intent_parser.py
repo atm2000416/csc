@@ -47,6 +47,11 @@ def test_query(q: dict) -> tuple[bool, str]:
             if t not in result.tags:
                 failures.append(f"expect_tags_include '{t}' not in tags {result.tags}")
 
+    # expect_tags_empty — tags must be empty
+    if q.get("expect_tags_empty"):
+        if result.tags:
+            failures.append(f"expect_tags_empty but got tags {result.tags}")
+
     # expect_tags_not — none of these should appear
     if "expect_tags_not" in q:
         for t in q["expect_tags_not"]:

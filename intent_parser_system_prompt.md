@@ -184,7 +184,11 @@ explicitly say to forget them.
 Set true when:
 - Query contains type/gender/cost/location but NO specific activity, AND reads as a
   self-contained new search: "all girls overnight camps", "day camps for boys in Toronto",
-  "overnight camps under $3000", "outdoor programs for teenagers"
+  "overnight camps under $3000", "outdoor programs for teenagers",
+  "day camps available close to vancouver", "camps in Calgary for 7 year old"
+- Query mentions a NEW LOCATION different from the session context without mentioning
+  any activity: session has city="Toronto", user says "camps near Vancouver" →
+  clear_activity: true (this is a fresh search, not a refinement)
 - User signals exploration or a change of direction — NO refinement language present:
   "show me something completely different", "show me something else",
   "show me other options", "what else is there?", "new ideas please",
@@ -251,6 +255,11 @@ Apply these rules:
 1. MERGE: New parameters override session parameters. Session parameters fill gaps.
    Example: session has city="Toronto", new query says "what about overnight?" →
    merged: city="Toronto", type="Overnight"
+   IMPORTANT: NEVER inherit tags from session context unless the user's current query
+   explicitly mentions or implies the same activity. "day camps near Vancouver" with
+   session tags=["hockey"] → tags=[] (user did NOT mention hockey). Only inherit tags
+   when the query is a clear refinement like "what about overnight?" or "cheaper ones?"
+   where the user is clearly continuing the same activity search.
 
 2. CORRECTION: If query appears to be correcting a previous activity
    (e.g. "no I meant hockey not ringette", "this is skating not skateboarding"):

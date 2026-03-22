@@ -251,6 +251,14 @@ QA_QUERIES = [
         "expect_accepted_suggestion": True,
         "note": "Fix 10: affirmative accepts pending suggestion",
     },
+    {
+        "query": "day camps available close to vancouver",
+        "session_context": {"accumulated_params": {"tags": ["hockey"], "city": "Toronto", "province": "Ontario"}},
+        "expect_tags_empty": True,
+        "expect_type": "Day",
+        "expect_province": "British Columbia",
+        "note": "New location + no activity = must NOT inherit stale tags from session",
+    },
     # ── V1 QA REMEDIATION — 8 NEW CASES ─────────────────────────────────────
     {
         "query": "overnight all girls camp Ontario",

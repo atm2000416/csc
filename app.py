@@ -591,8 +591,8 @@ def display_results(results: list[dict], search_params: dict | None = None):
     if not recommended and not more:
         recommended = results
 
-    n_camps = len(results)
-    count_label = f'{n_camps} camp{"s" if n_camps != 1 else ""} found'
+    n_recommended = len(recommended)
+    count_label = f'{n_recommended} camp{"s" if n_recommended != 1 else ""} found'
     st.markdown(f'<p class="result-count">{count_label}</p>', unsafe_allow_html=True)
     render_filters()
 
@@ -608,23 +608,13 @@ def display_results(results: list[dict], search_params: dict | None = None):
         if db_extras:
             render_extra_sessions(db_extras, camp_name, r.get("tier", "bronze"))
 
-    # ── Section 2: More Camps That Match (compact cards in expander) ─────────
+    # ── Section 2: More Camps That Match (collapsed expander) ───────────────
     if more:
         n_more = len(more)
-        st.markdown(
-            f'<div style="margin:20px 0 10px 0; padding:0 0.4rem;">'
-            f'<p style="font-family:Nunito,sans-serif; font-weight:800; '
-            f'font-size:1.0rem; color:#2F4F4F; margin:0;">'
-            f'More Camps That Match</p>'
-            f'<p style="font-family:Lato,sans-serif; font-size:0.84rem; '
-            f'color:#5a7070; margin:2px 0 0 0;">'
-            f'{n_more} additional camp{"s" if n_more != 1 else ""} '
-            f'that scored well for your search</p>'
-            f'</div>',
-            unsafe_allow_html=True,
-        )
-        for r in more:
-            render_compact_card(r)
+        label = f"Show {n_more} more camp{'s' if n_more != 1 else ''} that match"
+        with st.expander(label, expanded=False):
+            for r in more:
+                render_compact_card(r)
 
 
 _BUBBLE_BASE = (

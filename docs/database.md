@@ -116,8 +116,13 @@ was not migrated. Gender data is therefore sparse and unreliable for filtering.
 - **`gender`** tinyint NOT NULL DEFAULT=0 — OurKids encoding: 0=unset, 1=Coed, 2=Girls, 3=Boys. Mapped to CSC: 0=Coed, 1=Boys, 2=Girls via `_GENDER_MAP`. **Critical discovery:** the old regex ETL misidentified position 7 as `status`, accidentally filtering out all non-coed sessions.
 - **`running`** tinyint DEFAULT=0 — only 186/12864 sessions have `running=1`. NOT a status field — do not filter by this.
 - `mini_description` varchar(500) — migrated as-is
+- `description` text — full program description (HTML), migrated to programs.description
 - `type` varchar(45) — "1"=Day, "2"=Overnight (same as our programs.type)
-- `specialty` smallint → sitems.id (99% populated), `category` tinyint → sitems.id (71%), `activities` text (`[id]priority,...`)
+- `specialty` smallint → sitems.id (99%), `specialty2` smallint (22%), `category` tinyint → sitems.id (71%), `activities` text (`[id]priority,...`)
+- `trait1`/`trait2` int — OurKids trait IDs 1-12, mapped to CSC trait IDs 10-22 via `_TRAIT_MAP`. Justifications in `justification1`/`justification2`.
+- `isfamily` tinyint — 3% populated, migrated to programs.is_family
+- `before_care`/`after_care` tinyint — 15% populated, migrated to programs columns
+- `language_immersion` varchar — encoded as `langID+levelID` (e.g. `193+283` = French+Immersion). Decoded via `_LANG_SITEMS` → programs.language_immersion.
 
 ### `extra_locations` table
 - `Lat`/`Lon` stored as `double` (unlike camps table which uses varchar)

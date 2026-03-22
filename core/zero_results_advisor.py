@@ -27,6 +27,7 @@ def diagnose(
     age_to: int | None = None,
     user_lat: float | None = None,
     user_lon: float | None = None,
+    language_immersion: str | None = None,
 ) -> dict:
     """
     Find where the requested activity exists, closest first.
@@ -46,6 +47,7 @@ def diagnose(
             return _diagnose_geo_only(
                 searched_city, searched_province, program_type,
                 age_from, age_to, is_virtual, user_lat, user_lon,
+                language_immersion,
             )
         return {"type": "no_tags", "message": "Could not identify the activity requested."}
 
@@ -63,6 +65,10 @@ def diagnose(
 
     if is_virtual:
         extra_conditions += " AND p.is_virtual = 1"
+
+    if language_immersion:
+        extra_conditions += " AND p.language_immersion = %s"
+        args.append(language_immersion)
 
     if age_from is not None and age_to is not None:
         extra_conditions += (
@@ -180,112 +186,124 @@ def _diagnose_geo_only(
     is_virtual: bool,
     user_lat: float | None,
     user_lon: float | None,
+    language_immersion: str | None = None,
 ) -> dict:
     """Geo-aware diagnosis when no activity tags were parsed.
 
     Checks whether ANY camps exist in the searched city/province
-    (applying type/age filters) and suggests broadening if needed.
+    (applying type/age/language filters) and suggests broadening if needed.
     """
     conn = get_connection()
     cursor = conn.cursor(dictionary=True)
 
-    args: list = []
-    extra_conditions = ""
+    try:
+        args: list = []
+        extra_conditions = ""
 
-    if program_type and program_type in _TYPE_SQL:
-        extra_conditions += f" AND {_TYPE_SQL[program_type]}"
-    if is_virtual:
-        extra_conditions += " AND p.is_virtual = 1"
-    if age_from is not None and age_to is not None:
-        extra_conditions += (
-            " AND (p.age_from IS NULL OR p.age_from <= %s)"
-            " AND (p.age_to IS NULL OR p.age_to >= %s)"
-        )
-        args += [age_to, age_from]
+        if program_type and program_type in _TYPE_SQL:
+            extra_conditions += f" AND {_TYPE_SQL[program_type]}"
+        if is_virtual:
+            extra_conditions += " AND p.is_virtual = 1"
+        if language_immersion:
+            extra_conditions += " AND p.language_immersion = %s"
+            args.append(language_immersion)
+        if age_from is not None and age_to is not None:
+            extra_conditions += (
+                " AND (p.age_from IS NULL OR p.age_from <= %s)"
+                " AND (p.age_to IS NULL OR p.age_to >= %s)"
+            )
+            args += [age_to, age_from]
 
-    # Check the searched city first
-    if searched_city:
-        city_args = list(args)
-        cursor.execute(
-            f"""
-            SELECT COUNT(DISTINCT p.id) AS cnt
-            FROM programs p
-            JOIN camps c ON p.camp_id = c.id
-            WHERE c.city = %s
-              AND p.status = 1 AND c.status = 1
-              AND (p.end_date IS NULL OR p.end_date >= CURDATE())
-              {extra_conditions}
-            """,
-            [searched_city] + city_args,
-        )
-        row = cursor.fetchone()
-        if row and row["cnt"] > 0:
-            # Camps exist in the city — zero results must be from other filters
-            cursor.close()
-            conn.close()
-            return {
-                "type": "no_tags",
-                "message": (
-                    f"I found camps in {searched_city}, but I'm not sure what "
-                    f"activity you're looking for. What type of camp interests you — "
-                    f"sports, arts, STEM, outdoor adventure?"
-                ),
-            }
-
-    # City has no camps — check province
-    if searched_province:
-        prov_args = list(args)
-        cursor.execute(
-            f"""
-            SELECT c.city, COUNT(DISTINCT p.id) AS program_count
-            FROM programs p
-            JOIN camps c ON p.camp_id = c.id
-            WHERE c.province = %s
-              AND p.status = 1 AND c.status = 1
-              AND (p.end_date IS NULL OR p.end_date >= CURDATE())
-              {extra_conditions}
-            GROUP BY c.city
-            ORDER BY program_count DESC
-            LIMIT 5
-            """,
-            [searched_province] + prov_args,
-        )
-        locations = cursor.fetchall()
-        cursor.close()
-        conn.close()
-
-        if locations:
-            total = sum(loc["program_count"] for loc in locations)
-            top_city = locations[0]["city"]
-            location_label = searched_city or searched_province
-            if searched_city:
-                return {
-                    "type": "geo_broaden_province",
-                    "message": (
-                        f"We don't have camps listed in {searched_city} yet, "
-                        f"but there are {total} programs across {searched_province} — "
-                        f"the nearest options are in {top_city}. "
-                        f"Want me to search across {searched_province}?"
-                    ),
-                    "pending_suggestion": {
-                        "type": "geo_broaden_province",
-                        "to_province": searched_province,
-                        "tag_ids": [],
-                    },
-                }
-            else:
+        # Check the searched city first
+        if searched_city:
+            cursor.execute(
+                f"""
+                SELECT COUNT(DISTINCT p.id) AS cnt
+                FROM programs p
+                JOIN camps c ON p.camp_id = c.id
+                WHERE c.city = %s
+                  AND p.status = 1 AND c.status = 1
+                  AND (p.end_date IS NULL OR p.end_date >= CURDATE())
+                  {extra_conditions}
+                """,
+                [searched_city] + list(args),
+            )
+            row = cursor.fetchone()
+            if row and row["cnt"] > 0:
                 return {
                     "type": "no_tags",
                     "message": (
-                        f"I found {total} camps across {searched_province}. "
-                        f"What activity interests you — sports, arts, STEM, "
-                        f"outdoor adventure?"
+                        f"I found camps in {searched_city}, but I'm not sure what "
+                        f"activity you're looking for. What type of camp interests you — "
+                        f"sports, arts, STEM, outdoor adventure?"
                     ),
                 }
 
-    cursor.close()
-    conn.close()
-    return {
-        "type": "no_tags",
-        "message": "Could not identify the activity requested.",
-    }
+        # City has no camps — check province
+        if searched_province:
+            cursor.execute(
+                f"""
+                SELECT c.city, COUNT(DISTINCT p.id) AS program_count
+                FROM programs p
+                JOIN camps c ON p.camp_id = c.id
+                WHERE c.province = %s
+                  AND p.status = 1 AND c.status = 1
+                  AND (p.end_date IS NULL OR p.end_date >= CURDATE())
+                  {extra_conditions}
+                GROUP BY c.city
+                ORDER BY program_count DESC
+                LIMIT 5
+                """,
+                [searched_province] + list(args),
+            )
+            locations = cursor.fetchall()
+
+            if locations:
+                total = sum(loc["program_count"] for loc in locations)
+                top_city = locations[0]["city"]
+                if searched_city:
+                    return {
+                        "type": "geo_broaden_province",
+                        "message": (
+                            f"We don't have camps listed in {searched_city} yet, "
+                            f"but there are {total} programs across {searched_province} — "
+                            f"the nearest options are in {top_city}. "
+                            f"Want me to search across {searched_province}?"
+                        ),
+                        "pending_suggestion": {
+                            "type": "geo_broaden_province",
+                            "to_province": searched_province,
+                            "tag_ids": [],
+                        },
+                    }
+                else:
+                    return {
+                        "type": "no_tags",
+                        "message": (
+                            f"I found {total} camps across {searched_province}. "
+                            f"What activity interests you — sports, arts, STEM, "
+                            f"outdoor adventure?"
+                        ),
+                    }
+
+        # No camps found anywhere with these filters
+        location_label = searched_city or searched_province or "your area"
+        if language_immersion:
+            return {
+                "type": "no_supply",
+                "message": (
+                    f"We don't currently have {language_immersion}-immersion camps "
+                    f"in our directory. Try searching without the language filter, "
+                    f"or tell me what activity interests you."
+                ),
+            }
+        return {
+            "type": "no_supply",
+            "message": (
+                f"We don't have camps listed in {location_label} yet. "
+                f"Try a nearby city or search province-wide."
+            ),
+        }
+    finally:
+        cursor.close()
+        conn.close()

@@ -1221,6 +1221,7 @@ def _diagnose_zero_results(merged_params: dict) -> dict:
         age_to=merged_params.get("age_to"),
         user_lat=merged_params.get("lat"),
         user_lon=merged_params.get("lon"),
+        language_immersion=merged_params.get("language_immersion"),
     )
 
     ps = diagnosis.get("pending_suggestion") or {}

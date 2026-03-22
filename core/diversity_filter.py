@@ -56,13 +56,11 @@ def _pick_best_per_camp(results: list[dict]) -> list[dict]:
         camps[cid].append(r)
 
     diverse: list[dict] = []
-    overflow: list[dict] = []
 
     for cid in camp_order:
         programs = camps[cid]
         # Pick the program with the longest description
         best = max(programs, key=_desc_length)
         diverse.append(best)
-        overflow.extend(p for p in programs if p is not best)
 
-    return diverse + overflow
+    return diverse

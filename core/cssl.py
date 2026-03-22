@@ -45,8 +45,9 @@ def query(params: dict, limit: int = 500) -> tuple[list[dict], float]:
     joins = ["JOIN camps c ON p.camp_id = c.id"]
     args = {}
 
-    # Tags — expand via categories hierarchy before resolving IDs
+    # Tags — expand via categories hierarchy, then via related_ids
     expanded_tags = expand_via_categories(params.get("tags", []), cursor)
+    expanded_tags = expand_via_related(expanded_tags, cursor)
     tag_ids = resolve_tag_ids(expanded_tags, cursor)
     if tag_ids:
         # Parallel lookup: collect override camp_ids for all expanded slugs.
@@ -437,6 +438,41 @@ def expand_via_categories(slugs: list[str], cursor) -> list[str]:
                 s = s.strip()
                 if s:
                     expanded.add(s)
+    return list(expanded)
+
+
+def expand_via_related(slugs: list[str], cursor) -> list[str]:
+    """
+    Expand tag slugs by including related tags (via related_ids in activity_tags).
+
+    For each slug, fetches related_ids (comma-separated tag IDs), resolves them
+    to slugs, and adds them to the set.  Example: "debate" (related_ids='362')
+    expands to ["debate", "public-speaking"].
+    """
+    if not slugs:
+        return slugs
+    ph = ", ".join(["%s"] * len(slugs))
+    cursor.execute(
+        f"SELECT related_ids FROM activity_tags WHERE slug IN ({ph}) AND is_active = 1",
+        tuple(slugs),
+    )
+    related_ids: set[int] = set()
+    for row in cursor.fetchall():
+        if row["related_ids"]:
+            for rid in row["related_ids"].split(","):
+                rid = rid.strip()
+                if rid.isdigit():
+                    related_ids.add(int(rid))
+    if not related_ids:
+        return slugs
+    ph2 = ", ".join(["%s"] * len(related_ids))
+    cursor.execute(
+        f"SELECT slug FROM activity_tags WHERE id IN ({ph2}) AND is_active = 1",
+        list(related_ids),
+    )
+    expanded = set(slugs)
+    for row in cursor.fetchall():
+        expanded.add(row["slug"])
     return list(expanded)
 
 

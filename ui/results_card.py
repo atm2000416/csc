@@ -53,20 +53,25 @@ def _date_range_str(start, end) -> str:
     return f"{_MONTHS[s.month-1]} {s.day}"
 
 
-_UTM = "utm_source=camps.ca&utm_medium=ai-search&utm_campaign=csc"
+_UTM_SEARCH = "utm_source=camps.ca&utm_medium=ai-search&utm_campaign=search"
+_UTM_MORE   = "utm_source=camps.ca&utm_medium=ai-search&utm_campaign=search_more"
 
 
-def _camps_url(prettyurl: str, camp_id) -> str:
-    return f"https://www.camps.ca/{prettyurl}/{camp_id}?{_UTM}"
+def _camps_url(prettyurl: str, camp_id, ourkids_session_id=None,
+               utm: str = _UTM_SEARCH) -> str:
+    base = f"https://www.camps.ca/{prettyurl}/{camp_id}"
+    if ourkids_session_id:
+        base += f"/session/{ourkids_session_id}"
+    return f"{base}?{utm}"
 
 
-def _normalise_website(url: str) -> str:
+def _normalise_website(url: str, utm: str = _UTM_SEARCH) -> str:
     if not url:
         return ""
     if not (url.startswith("http://") or url.startswith("https://")):
         url = "https://" + url
     sep = "&" if "?" in url else "?"
-    return f"{url}{sep}{_UTM}"
+    return f"{url}{sep}{utm}"
 
 
 def _cost_str(cost_from, cost_to) -> str:
@@ -85,19 +90,9 @@ def _age_str(age_from, age_to) -> str:
     return ""
 
 
-_BTN = (
-    "display:inline-flex; align-items:center; margin-right:8px; margin-bottom:6px; "
-    "padding:10px 16px; border-radius:24px; font-size:0.84rem; font-weight:700; "
-    "font-family:Nunito,sans-serif; text-decoration:none; "
-    "background:#8A9A5B; color:white; min-height:44px; "
-    "box-shadow:3px 3px 8px rgba(117,131,77,0.35);"
-)
-
-_PILL = (
-    "display:inline-block; margin:0 5px 4px 0; "
-    "padding:4px 10px; border-radius:20px; "
+_LINK_STYLE = (
     "font-size:0.82rem; font-weight:600; font-family:Nunito,sans-serif; "
-    "background:#f0f4e8; color:#4a6040; border:1px solid #d0dbb8;"
+    "color:#D93600; text-decoration:none;"
 )
 
 
@@ -118,62 +113,57 @@ def render_card(result: dict):
     rationale    = result.get("blurb") or ""
     website      = result.get("website", "")
     prettyurl    = result.get("prettyurl") or result.get("slug", "")
+    ourkids_seid = result.get("ourkids_session_id")
 
-    # ── Line 1: Session Information ────────────────────────────────────────────
+    # ── Line 1: Session name · Camp name ──────────────────────────────────────
     line1 = (
         f'<p style="margin:0 0 3px 0; font-family:Nunito,sans-serif; font-weight:800; '
-        f'font-size:1.05rem; color:#2F4F4F;">{session_name}</p>'
+        f'font-size:1.05rem; color:#333333;">{session_name} '
+        f'<span style="font-weight:600; font-size:0.92rem; color:{tier_col};">'
+        f'· {camp_name}</span></p>'
     )
 
-    # ── Line 2: Camp Name ──────────────────────────────────────────────────────
+    # ── Line 2: Dot-separated metadata ────────────────────────────────────────
+    meta_parts = [p for p in [camp_type, ages, location, cost,
+                              f"{gender} only" if gender else ""] if p]
+    meta_str = "  ·  ".join(meta_parts)
     line2 = (
-        f'<p style="margin:0 0 8px 0; font-size:0.92rem; font-weight:600; '
-        f'font-family:Nunito,sans-serif; color:{tier_col};">{camp_name}</p>'
-    )
+        f'<p style="margin:0 0 5px 0; font-size:0.85rem; color:#555555; '
+        f'font-family:Lato,sans-serif;">{meta_str}</p>'
+    ) if meta_str else ""
 
-    # ── Line 3: Session Details (pills) ───────────────────────────────────────
-    detail_pills = []
-    if camp_type:
-        detail_pills.append(f'<span style="{_PILL}">🏕 {camp_type}</span>')
-    if ages:
-        detail_pills.append(f'<span style="{_PILL}">👦 {ages}</span>')
-    if location:
-        detail_pills.append(f'<span style="{_PILL}">📍 {location}</span>')
-    if cost:
-        detail_pills.append(f'<span style="{_PILL}">💰 {cost}</span>')
-    if gender:
-        detail_pills.append(f'<span style="{_PILL}">{gender} only</span>')
-
+    # ── Line 3: AI Rationale (one sentence, no metadata repetition) ───────────
     line3 = (
-        f'<div style="margin:0 0 8px 0; line-height:1.8;">{"".join(detail_pills)}</div>'
-        if detail_pills else ""
-    )
-
-    # ── Line 4: AI Rationale ───────────────────────────────────────────────────
-    line4 = (
-        f'<p style="margin:0 0 10px 0; font-size:0.85rem; color:#4a5f5f; '
-        f'font-family:Lato,sans-serif; line-height:1.55;">'
-        f'<span style="font-weight:700; color:#8A9A5B;">✨ Why this fits:</span> '
+        f'<p style="margin:0 0 6px 0; font-size:0.85rem; color:#555555; '
+        f'font-style:italic; font-family:Lato,sans-serif; line-height:1.45;">'
         f'{rationale}</p>'
     ) if rationale else ""
 
-    # ── Buttons ────────────────────────────────────────────────────────────────
-    buttons_html = ""
+    # ── Line 4: Text links ────────────────────────────────────────────────────
+    links = []
     if prettyurl:
         camp_id = result.get("camp_id") or result.get("id", "")
-        buttons_html += f'<a href="{_camps_url(prettyurl, camp_id)}" target="_blank" style="{_BTN}">View on camps.ca →</a>'
+        url = _camps_url(prettyurl, camp_id, ourkids_seid)
+        links.append(
+            f'<a href="{url}" target="_blank" rel="noopener" '
+            f'style="{_LINK_STYLE}">View Program ↗</a>'
+        )
     if website:
-        buttons_html += f'<a href="{_normalise_website(website)}" target="_blank" style="{_BTN}">Camp Website →</a>'
-
-    buttons = f'<div style="margin-top:6px;">{buttons_html}</div>' if buttons_html else ""
+        links.append(
+            f'<a href="{_normalise_website(website)}" target="_blank" '
+            f'rel="noopener noreferrer" style="{_LINK_STYLE}">Camp Website ↗</a>'
+        )
+    line4 = (
+        f'<p style="margin:0;">{"  ·  ".join(links)}</p>'
+    ) if links else ""
 
     # ── Assemble card ──────────────────────────────────────────────────────────
     card_html = (
         f'<div style="padding:0 0.4rem; margin-bottom:10px;">'
         f'<div style="border-left:4px solid {tier_col}; border-radius:12px; '
         f'background:#ffffff; padding:14px 16px 12px 16px; '
-        f'box-shadow:0 2px 8px rgba(47,79,79,0.08);">'
-        + line1 + line2 + line3 + line4 + buttons
+        f'box-shadow:0 2px 8px rgba(0,0,0,0.06);">'
+        + line1 + line2 + line3 + line4
         + "</div></div>"
     )
 
@@ -183,22 +173,21 @@ def render_card(result: dict):
 # ── Compact row style (used inside the expander) ──────────────────────────────
 _ROW_NAME = (
     "font-family:Nunito,sans-serif; font-weight:700; font-size:0.88rem; "
-    "color:#2F4F4F; margin:0 0 2px 0;"
+    "color:#333333; margin:0 0 2px 0;"
 )
 _ROW_META = (
-    "font-family:Lato,sans-serif; font-size:0.78rem; color:#5a7070; margin:0;"
+    "font-family:Lato,sans-serif; font-size:0.78rem; color:#555555; margin:0;"
 )
 _ROW_LINK = (
     "font-size:0.75rem; font-weight:700; font-family:Nunito,sans-serif; "
-    "color:#8A9A5B; text-decoration:none; white-space:nowrap;"
+    "color:#D93600; text-decoration:none; white-space:nowrap;"
 )
 
 
 def render_compact_card(result: dict):
     """
     Render a compact camp card for the "More Camps" section.
-    Shows camp name, location, ages, cost, and a one-line description
-    with a View button — no session-level detail or blurb.
+    Slim format: session · camp, dot-separated metadata, link.
     """
     tier     = result.get("tier", "bronze")
     tier_col = _TIER_COLOUR.get(tier, _TIER_COLOUR["bronze"])
@@ -211,53 +200,38 @@ def render_compact_card(result: dict):
     cost         = _cost_str(result.get("cost_from"), result.get("cost_to"))
     ages         = _age_str(result.get("age_from"), result.get("age_to"))
     camp_type    = _TYPE_LABEL.get(str(result.get("type", "")), "")
-    desc         = (result.get("mini_description") or result.get("description") or "")
-    if desc and len(desc) > 120:
-        desc = desc[:117].rsplit(" ", 1)[0] + "…"
     prettyurl    = result.get("prettyurl") or result.get("slug", "")
-    website      = result.get("website", "")
+    ourkids_seid = result.get("ourkids_session_id")
 
-    # Compact pills
-    pills = []
-    if camp_type:
-        pills.append(f'<span style="{_PILL}">🏕 {camp_type}</span>')
-    if ages:
-        pills.append(f'<span style="{_PILL}">👦 {ages}</span>')
-    if location:
-        pills.append(f'<span style="{_PILL}">📍 {location}</span>')
-    if cost:
-        pills.append(f'<span style="{_PILL}">💰 {cost}</span>')
-    pills_html = f'<div style="margin:4px 0 4px 0; line-height:1.8;">{"".join(pills)}</div>' if pills else ""
+    meta_parts = [p for p in [camp_type, ages, location, cost] if p]
+    meta_str = "  ·  ".join(meta_parts)
 
     # Link
     link_html = ""
     if prettyurl:
         camp_id = result.get("camp_id") or result.get("id", "")
         link_html = (
-            f'<a href="{_camps_url(prettyurl, camp_id)}" target="_blank" '
-            f'style="{_ROW_LINK} font-size:0.82rem;">View on camps.ca →</a>'
+            f'<a href="{_camps_url(prettyurl, camp_id, ourkids_seid)}" '
+            f'target="_blank" rel="noopener" '
+            f'style="{_ROW_LINK} font-size:0.82rem;">View Program ↗</a>'
         )
-
-    desc_html = (
-        f'<p style="margin:0; font-size:0.84rem; color:#4a5f5f; '
-        f'font-family:Lato,sans-serif; line-height:1.4;">{desc}</p>'
-    ) if desc else ""
 
     card_html = (
         f'<div style="padding:0 0.4rem; margin-bottom:6px;">'
         f'<div style="border-left:3px solid {tier_col}; border-radius:10px; '
         f'background:#ffffff; padding:10px 14px 8px 14px; '
-        f'box-shadow:0 1px 4px rgba(47,79,79,0.06);">'
+        f'box-shadow:0 1px 4px rgba(0,0,0,0.05);">'
         f'<div style="display:flex; justify-content:space-between; align-items:flex-start;">'
         f'  <div style="flex:1; min-width:0;">'
-        f'    <p style="margin:0 0 1px 0; font-family:Nunito,sans-serif; font-weight:800; '
-        f'    font-size:0.95rem; color:#2F4F4F;">{session_name}</p>'
-        f'    <p style="margin:0 0 4px 0; font-size:0.82rem; font-weight:600; '
-        f'    font-family:Nunito,sans-serif; color:{tier_col};">{camp_name}</p>'
+        f'    <p style="margin:0 0 2px 0; font-family:Nunito,sans-serif; font-weight:800; '
+        f'    font-size:0.95rem; color:#333333;">{session_name} '
+        f'    <span style="font-weight:600; font-size:0.85rem; color:{tier_col};">'
+        f'    · {camp_name}</span></p>'
+        f'    <p style="margin:0; font-size:0.82rem; color:#555555; '
+        f'    font-family:Lato,sans-serif;">{meta_str}</p>'
         f'  </div>'
         f'  <div style="padding-top:4px; flex-shrink:0;">{link_html}</div>'
         f'</div>'
-        + pills_html + desc_html
         + '</div></div>'
     )
 
@@ -305,18 +279,20 @@ def render_extra_sessions(extra: list[dict], camp_name: str, tier: str) -> None:
             meta_str   = "  ·  ".join(meta_parts)
 
             prettyurl = r.get("prettyurl") or r.get("slug", "")
+            ourkids_seid = r.get("ourkids_session_id")
             link_html = ""
             if prettyurl:
                 camp_id = r.get("camp_id") or r.get("id", "")
                 link_html = (
-                    f'<a href="{_camps_url(prettyurl, camp_id)}" target="_blank" '
-                    f'style="{_ROW_LINK}">View →</a>'
+                    f'<a href="{_camps_url(prettyurl, camp_id, ourkids_seid, _UTM_MORE)}" '
+                    f'target="_blank" rel="noopener" '
+                    f'style="{_ROW_LINK}">View ↗</a>'
                 )
 
             rows_html.append(
                 f'<div style="display:flex; justify-content:space-between; '
                 f'align-items:flex-start; padding:8px 0; '
-                f'border-bottom:1px solid #eef1e8;">'
+                f'border-bottom:1px solid #e0e0e0;">'
                 f'  <div style="flex:1; min-width:0; padding-right:12px;">'
                 f'    <p style="{_ROW_NAME} color:{tier_col};">{name}</p>'
                 f'    <p style="{_ROW_META}">{meta_str}</p>'

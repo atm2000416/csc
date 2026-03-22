@@ -120,7 +120,7 @@ tests/
 
 ## Critical Rules
 
-1. **camps.ca URL**: `/{prettyurl}/{camp_id}` — prettyurl alone 404s. Single source of truth: `_camps_url()` in `ui/results_card.py`. See `docs/conventions.md`.
+1. **camps.ca URL**: Program deep link `/{prettyurl}/{camp_id}/session/{ourkids_session_id}`, fallback `/{prettyurl}/{camp_id}` — prettyurl alone 404s. Single source of truth: `_camps_url()` in `ui/results_card.py`. See `docs/conventions.md`.
 
 2. **Session state**: `accumulated_params` is a derived mirror — NEVER write directly. Mutate `QueryState`, then `sync_mirror()`. Only `merge_intent()` should mutate QueryState.
 

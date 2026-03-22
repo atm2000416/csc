@@ -3,11 +3,14 @@
 ## Critical Rules
 
 ### camps.ca URL Format (DO NOT CHANGE)
-**Confirmed working format:** `https://www.camps.ca/{prettyurl}/{camp_id}?{UTM}`
-- Example: `https://www.camps.ca/camp-kidstown/2020?utm_source=camps.ca&utm_medium=ai-search&utm_campaign=csc`
+**Program deep link:** `https://www.camps.ca/{prettyurl}/{camp_id}/session/{ourkids_session_id}?{UTM}`
+**Camp profile fallback:** `https://www.camps.ca/{prettyurl}/{camp_id}?{UTM}`
+- Example: `https://www.camps.ca/academic-camp-canada/1370/session/9687?utm_source=camps.ca&utm_medium=ai-search&utm_campaign=search`
 - `prettyurl` alone (no ID) -> **404**. The camp ID is required.
-- `_camps_url(prettyurl, camp_id)` in `ui/results_card.py` is the single source of truth
+- `_camps_url(prettyurl, camp_id, ourkids_session_id)` in `ui/results_card.py` is the single source of truth
+- Deep link is used when `ourkids_session_id` is available; falls back to camp profile otherwise
 - `camp_id` comes from `result.get("camp_id")` (the `camps.id` FK on programs); never use `programs.id`
+- Link labels: "View Program ↗" (not "camps.ca" — users think they're on camps.ca)
 
 ### Session State
 - `st.session_state.session_context["_query_state"]` — canonical `QueryState` instance

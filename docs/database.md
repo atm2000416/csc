@@ -40,6 +40,7 @@ conn.close()
 | `cost_from` / `cost_to` | SMALLINT | CAD |
 | `gender` | TINYINT | NULL=unknown, 0=Coed, 1=Boys, 2=Girls |
 | `status` | TINYINT | 1=active |
+| `ourkids_session_id` | INT UNSIGNED | OurKids session ID for deep links |
 | `mini_description` | VARCHAR(500) | shown in results |
 
 ### `activity_tags`

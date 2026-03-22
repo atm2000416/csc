@@ -24,18 +24,16 @@ st.markdown("""
 /* ── Base ── */
 html, body, [class*="css"] {
     font-family: 'Lato', sans-serif;
-    color: #2F4F4F;
-    background-color: #F4F7F0;
+    color: #333333;
+    background-color: #F5F5F5;
 }
 #MainMenu, footer, header { visibility: hidden; }
 [data-testid="stSidebarCollapsedControl"] { display: none !important; }
 .block-container { padding: 0 !important; max-width: 100% !important; }
 
-/* ── Custom topbar (frosted glass) ── */
+/* ── Custom topbar (navy) ── */
 .camps-topbar {
-    background: rgba(138,154,91,0.88);
-    backdrop-filter: blur(12px);
-    -webkit-backdrop-filter: blur(12px);
+    background: #336699;
     padding: 0 1.5rem;
     height: 72px;
     width: 100%;
@@ -45,7 +43,7 @@ html, body, [class*="css"] {
     top: 0;
     left: 0;
     z-index: 1000;
-    box-shadow: 0 2px 12px rgba(47,79,79,0.15);
+    box-shadow: 0 2px 12px rgba(0,0,0,0.15);
 }
 
 /* Push content below the fixed header */
@@ -65,7 +63,7 @@ html, body, [class*="css"] {
 }
 .camps-topbar .badge {
     margin-left: 10px;
-    background: rgba(255,255,255,0.25);
+    background: rgba(255,255,255,0.2);
     color: white;
     font-family: 'Nunito', sans-serif;
     font-weight: 800;
@@ -74,13 +72,60 @@ html, body, [class*="css"] {
     border-radius: 12px;
     letter-spacing: 0.3px;
     text-transform: uppercase;
-    border: 1px solid rgba(255,255,255,0.4);
+    border: 1px solid rgba(255,255,255,0.3);
+}
+
+/* ── Topbar reset button ── */
+.topbar-reset {
+    display: inline-flex;
+    align-items: center;
+    justify-content: center;
+    width: 36px;
+    height: 36px;
+    border-radius: 50%;
+    background: rgba(255,255,255,0.15);
+    color: white !important;
+    font-size: 1.1rem;
+    text-decoration: none !important;
+    border: 1px solid rgba(255,255,255,0.3);
+    cursor: pointer;
+    transition: background 0.15s ease;
+}
+.topbar-reset:hover {
+    background: rgba(255,255,255,0.3) !important;
+    color: white !important;
+    text-decoration: none !important;
+}
+
+/* ── Surprise Me chip ── */
+.surprise-chip-row {
+    text-align: center;
+    margin-bottom: 8px;
+}
+.surprise-chip {
+    display: inline-flex;
+    align-items: center;
+    padding: 6px 16px;
+    border-radius: 20px;
+    background: #F5F5F5;
+    color: #D93600 !important;
+    font-family: 'Nunito', sans-serif;
+    font-weight: 700;
+    font-size: 0.84rem;
+    text-decoration: none !important;
+    border: 1px solid #CCCCCC;
+    cursor: pointer;
+    transition: border-color 0.15s ease;
+}
+.surprise-chip:hover {
+    border-color: #D93600 !important;
+    text-decoration: none !important;
 }
 
 /* ── Sidebar ── */
 [data-testid="stSidebar"] {
     background: white !important;
-    border-right: 1px solid #d8e4d0;
+    border-right: 1px solid #CCCCCC;
 }
 [data-testid="stSidebar"] h1,
 [data-testid="stSidebar"] h2,
@@ -89,7 +134,7 @@ html, body, [class*="css"] {
     font-weight: 800;
     font-size: 0.95rem;
     color: white;
-    background: #8A9A5B;
+    background: #336699;
     margin: -1rem -1rem 1rem -1rem;
     padding: 0.9rem 1rem;
     border-radius: 0 0 12px 12px;
@@ -97,7 +142,7 @@ html, body, [class*="css"] {
 [data-testid="stSidebar"] label {
     font-size: 0.82rem !important;
     font-weight: 700 !important;
-    color: #2F4F4F !important;
+    color: #333333 !important;
     font-family: 'Nunito', sans-serif !important;
     text-transform: uppercase;
     letter-spacing: 0.5px;
@@ -125,8 +170,12 @@ html, body, [class*="css"] {
     margin-bottom: 0.4rem;
 }
 
-/* ── Chat input — remove rectangular frame, keep pill ── */
-section[data-testid="stBottom"],
+/* ── Chat input — white dock with top border ── */
+section[data-testid="stBottom"] {
+    background: #FFFFFF !important;
+    border-top: 1px solid #CCCCCC !important;
+    box-shadow: none !important;
+}
 section[data-testid="stBottom"] > div,
 [data-testid="stChatInput"],
 [data-testid="stChatInput"] > div {
@@ -135,21 +184,21 @@ section[data-testid="stBottom"] > div,
     box-shadow: none !important;
 }
 [data-testid="stChatInput"] textarea {
-    border: 2px solid #c5d4a0 !important;
+    border: 2px solid #336699 !important;
     border-radius: 28px !important;
     font-family: 'Lato', sans-serif !important;
     font-size: 0.92rem !important;
     padding: 0.55rem 1.1rem !important;
     background: white !important;
-    color: #2F4F4F !important;
-    box-shadow: 0 2px 8px rgba(47,79,79,0.08) !important;
+    color: #333333 !important;
+    box-shadow: 0 2px 8px rgba(0,0,0,0.06) !important;
 }
 [data-testid="stChatInput"] textarea:focus {
-    border-color: #8A9A5B !important;
-    box-shadow: 0 0 0 3px rgba(138,154,91,0.18) !important;
+    border-color: #D93600 !important;
+    box-shadow: 0 0 0 3px rgba(217,54,0,0.15) !important;
 }
 
-/* ── Buttons (claymorphism) ── */
+/* ── Buttons ── */
 .stButton > button {
     font-family: 'Nunito', sans-serif !important;
     font-weight: 700 !important;
@@ -158,32 +207,32 @@ section[data-testid="stBottom"] > div,
     padding: 0.4rem 1rem !important;
     border: none !important;
     color: white !important;
-    background: #8A9A5B !important;
-    box-shadow: 4px 4px 10px #75834d, -3px -3px 8px #9fb169, inset 2px 2px 6px rgba(255,255,255,0.4) !important;
+    background: #336699 !important;
+    box-shadow: 0 1px 3px rgba(0,0,0,0.12) !important;
     transition: all 0.15s ease;
 }
 .stButton > button:hover {
-    background: #7a8a4b !important;
-    box-shadow: 3px 3px 8px #75834d, -2px -2px 6px #9fb169, inset 2px 2px 6px rgba(255,255,255,0.4) !important;
+    background: #2a5580 !important;
+    box-shadow: 0 2px 6px rgba(0,0,0,0.18) !important;
     transform: translateY(-1px);
 }
 
-/* ── Link buttons (camps.ca / Camp Website) ── */
+/* ── Link buttons ── */
 .stLinkButton a {
     font-family: 'Nunito', sans-serif !important;
     font-weight: 700 !important;
     font-size: 0.78rem !important;
     border-radius: 24px !important;
-    background: #8A9A5B !important;
+    background: #336699 !important;
     color: white !important;
     border: none !important;
     padding: 0.3rem 0.9rem !important;
-    box-shadow: 3px 3px 8px rgba(117,131,77,0.35) !important;
+    box-shadow: 0 1px 3px rgba(0,0,0,0.12) !important;
     transition: all 0.15s ease;
 }
 .stLinkButton a:hover {
-    background: #7a8a4b !important;
-    box-shadow: 4px 4px 12px rgba(117,131,77,0.45) !important;
+    background: #2a5580 !important;
+    box-shadow: 0 2px 6px rgba(0,0,0,0.18) !important;
     transform: translateY(-1px);
 }
 
@@ -193,7 +242,7 @@ section[data-testid="stBottom"] > div,
     font-family: 'Nunito', sans-serif;
     font-size: 0.78rem;
     font-weight: 800;
-    color: #8A9A5B;
+    color: #336699;
     text-transform: uppercase;
     letter-spacing: 0.5px;
     margin-bottom: 0.8rem;
@@ -201,14 +250,14 @@ section[data-testid="stBottom"] > div,
 
 /* ── Spinner ── */
 .stSpinner > div {
-    border-top-color: #8A9A5B !important;
+    border-top-color: #336699 !important;
 }
 
 /* ── Selectbox / inputs ── */
 [data-testid="stSelectbox"] > div > div,
 [data-testid="stNumberInput"] input,
 [data-testid="stTextInput"] input {
-    border: 1.5px solid #c5d4a0 !important;
+    border: 1.5px solid #CCCCCC !important;
     border-radius: 10px !important;
     font-size: 0.88rem !important;
 }
@@ -220,36 +269,27 @@ section[data-testid="stBottom"] > div,
     z-index: 900;
     margin-top: 0;
     background: white;
-    border-bottom: 1px solid #d8e4d0;
-    box-shadow: 0 2px 8px rgba(47,79,79,0.06);
+    border-bottom: 1px solid #CCCCCC;
+    box-shadow: 0 2px 8px rgba(0,0,0,0.06);
 }
 
-/* ── Topbar action buttons ── */
-.topbar-btn {
-    display: inline-flex;
-    align-items: center;
-    padding: 7px 18px;
-    border-radius: 24px;
-    background: rgba(255,255,255,0.18);
-    color: white !important;
-    font-family: 'Nunito', sans-serif;
-    font-weight: 700;
-    font-size: 0.84rem;
-    text-decoration: none !important;
-    border: 1.5px solid rgba(255,255,255,0.4);
+/* ── Previous searches ── */
+.prev-search {
+    font-family: 'Lato', sans-serif;
+    font-size: 0.82rem;
+    color: #555555;
+    margin: 0 1.4rem 8px;
     cursor: pointer;
-    transition: background 0.15s ease;
-    letter-spacing: 0.2px;
-    white-space: nowrap;
 }
-.topbar-btn:hover {
-    background: rgba(255,255,255,0.32) !important;
-    color: white !important;
-    text-decoration: none !important;
+.prev-search summary {
+    list-style: none;
+}
+.prev-search summary::-webkit-details-marker {
+    display: none;
 }
 
 /* ── Dividers ── */
-hr { border-color: #d8e4d0 !important; margin: 0.8rem 0 !important; }
+hr { border-color: #CCCCCC !important; margin: 0.8rem 0 !important; }
 
 /* ── Mobile — tablet (≤768px) ── */
 @media (max-width: 768px) {
@@ -262,10 +302,6 @@ hr { border-color: #d8e4d0 !important; margin: 0.8rem 0 !important; }
     }
     .camps-topbar .badge {
         display: none;
-    }
-    .topbar-btn {
-        padding: 5px 12px;
-        font-size: 0.78rem;
     }
     .main-content {
         padding: 0 0.6rem;
@@ -296,10 +332,6 @@ hr { border-color: #d8e4d0 !important; margin: 0.8rem 0 !important; }
 
 /* ── Mobile — phone (≤480px) ── */
 @media (max-width: 480px) {
-    /* Hide topbar action buttons — use chat for navigation */
-    .topbar-btn {
-        display: none;
-    }
     .camps-topbar .logo {
         font-size: 1.15rem;
     }
@@ -512,6 +544,7 @@ def _fetch_all_camp_programs(camp_id: int, exclude_program_id: int, camp_name: s
         cursor.execute(
             f"SELECT p.id, p.name, p.type, p.age_from, p.age_to, "
             f"       p.cost_from, p.cost_to, p.start_date, p.end_date, "
+            f"       p.ourkids_session_id, "
             f"       c.camp_name, c.tier, c.city, c.province, c.slug, c.prettyurl, c.website, "
             f"       p.camp_id "
             f"FROM programs p "
@@ -592,14 +625,54 @@ def _maybe_offer_more_camps(pool: list[dict], final: list[dict],
     )
 
 
-def display_results(results: list[dict], search_params: dict | None = None):
+def _save_to_search_history(query_label: str, count: int):
+    """Push current results summary onto search history before overwriting."""
+    if not query_label:
+        return
+    history = st.session_state.setdefault("_search_history", [])
+    history.append({"query": query_label, "count": count})
+
+
+def _render_search_history():
+    """Render collapsed previous search summaries."""
+    history = st.session_state.get("_search_history", [])
+    if not history:
+        return
+    items = []
+    for entry in reversed(history):
+        items.append(
+            f'<span style="color:#555555;">&#9656; Previous: '
+            f'\'{entry["query"]}\' — {entry["count"]} results</span><br>'
+        )
+    st.markdown(
+        f'<details class="prev-search"><summary style="color:#555555; '
+        f'font-size:0.82rem; cursor:pointer;">&#9656; Previous searches '
+        f'({len(history)})</summary>'
+        f'<div style="padding:4px 0 4px 12px; font-size:0.8rem;">'
+        f'{"".join(items)}</div></details>',
+        unsafe_allow_html=True,
+    )
+
+
+def display_results(results: list[dict], search_params: dict | None = None,
+                    is_new_search: bool = False):
     if not results:
         st.info("No camps found matching your search. Try adjusting your filters.")
         return
 
+    # Save prior results to history before displaying new ones
+    if is_new_search:
+        prev_label = st.session_state.get("_last_query_label")
+        prev_results = st.session_state.get("_last_results")
+        if prev_label and prev_results:
+            _save_to_search_history(prev_label, len(prev_results))
+
     # Resolve search_params: explicit arg > session state > None (unfiltered)
     if search_params is None:
         search_params = st.session_state.get("_last_search_params")
+
+    # Render previous searches if any
+    _render_search_history()
 
     # Split into recommended vs more by _tier_section tag
     recommended = [r for r in results if r.get("_tier_section") == "recommended"]
@@ -611,6 +684,9 @@ def display_results(results: list[dict], search_params: dict | None = None):
 
     n_recommended = len(recommended)
     count_label = f'{n_recommended} camp{"s" if n_recommended != 1 else ""} found'
+
+    # Scroll anchor — user sees top of results first
+    st.markdown('<div id="results-top"></div>', unsafe_allow_html=True)
     st.markdown(f'<p class="result-count">{count_label}</p>', unsafe_allow_html=True)
     render_filters()
 
@@ -634,6 +710,14 @@ def display_results(results: list[dict], search_params: dict | None = None):
             for r in more:
                 render_compact_card(r)
 
+    # Scroll to top of results
+    import streamlit.components.v1 as components
+    components.html(
+        '<script>var el=document.getElementById("results-top");'
+        'if(el){el.scrollIntoView({behavior:"smooth"});}</script>',
+        height=0,
+    )
+
 
 _BUBBLE_BASE = (
     "padding:12px 16px; max-width:75%; "
@@ -648,8 +732,8 @@ _AVATAR_BASE = (
     "display:flex; align-items:center; justify-content:center; "
     "font-size:17px; align-self:flex-end;"
 )
-_AVATAR_AI   = f"{_AVATAR_BASE} background:#8A9A5B;"
-_AVATAR_USER = f"{_AVATAR_BASE} background:#5a7a6a;"
+_AVATAR_AI   = f"{_AVATAR_BASE} background:#336699;"
+_AVATAR_USER = f"{_AVATAR_BASE} background:#336699;"
 
 
 def _render_bubble(message: str, role: str):
@@ -661,7 +745,7 @@ def _render_bubble(message: str, role: str):
             f'<div style="display:flex; align-items:flex-end; gap:8px; '
             f'justify-content:flex-start; margin:0 0 0.8rem 0; {_BUBBLE_ROW}">'
             f'<div style="{_AVATAR_AI}">🏕</div>'
-            f'<div style="background:#FFFFFF; color:#2F4F4F; '
+            f'<div style="background:#FFFFFF; color:#333333; '
             f'border-radius:18px 18px 18px 4px; box-shadow:0 1px 6px rgba(47,79,79,0.10); {_BUBBLE_BASE}">'
             f'{message}</div></div>',
             unsafe_allow_html=True,
@@ -670,7 +754,7 @@ def _render_bubble(message: str, role: str):
         st.markdown(
             f'<div style="display:flex; align-items:flex-end; gap:8px; '
             f'justify-content:flex-end; margin:0 0 0.8rem 0; {_BUBBLE_ROW}">'
-            f'<div style="background:#8A9A5B; color:white; '
+            f'<div style="background:#336699; color:white; '
             f'border-radius:18px 18px 4px 18px; {_BUBBLE_BASE}">'
             f'{message}</div>'
             f'<div style="{_AVATAR_USER}; color:white; font-size:13px; '
@@ -739,14 +823,13 @@ def main():
 
     init_session()
 
-    # Branded topbar with action buttons
+    # Branded topbar with reset icon
     st.markdown("""
     <div class="camps-topbar">
         <span class="logo">camps<em>.ca</em></span>
         <span class="badge">AI Concierge</span>
-        <div style="margin-left:auto; display:flex; align-items:center; gap:8px;">
-            <a href="?action=surprise" target="_self" class="topbar-btn">✨ Surprise Me</a>
-            <a href="?action=reset" target="_self" class="topbar-btn">↺ Start Over</a>
+        <div style="margin-left:auto; display:flex; align-items:center;">
+            <a href="?action=reset" target="_self" class="topbar-reset" title="Start over">↺</a>
         </div>
     </div>
     <div class="main-content">
@@ -775,6 +858,15 @@ def main():
     # "You might also love..." heading (shown after a Surprise Me result)
     if st.session_state.get("_surprise_results_heading"):
         st.markdown("### You might also love...")
+
+    # Surprise Me chip — show when no results are displayed
+    if not st.session_state.get("_last_results"):
+        st.markdown(
+            '<div class="surprise-chip-row">'
+            '<a href="?action=surprise" target="_self" class="surprise-chip">'
+            '✨ Surprise Me</a></div>',
+            unsafe_allow_html=True,
+        )
 
     # Chat input
     user_input = st.chat_input("Describe what you're looking for (e.g. hockey camp Toronto for my 10 year old)")
@@ -805,8 +897,9 @@ def main():
         _render_history()
         _show_user_bubble(query_label)
         if surprise_results:
+            st.session_state["_last_query_label"] = query_label
             st.session_state["_last_results"] = surprise_results
-            display_results(surprise_results)
+            display_results(surprise_results, is_new_search=True)
         else:
             _speak("I couldn't find camps for that combination — try searching manually!")
         return
@@ -863,7 +956,8 @@ def main():
             more_final = process_results(overflow_pool, overflow_query, overflow_params)
         n_shown = len({r.get("camp_id") for r in more_final})
         _speak(f"Here are {n_shown} more camp{'s' if n_shown != 1 else ''}:")
-        display_results(more_final, search_params=overflow_params)
+        st.session_state["_last_query_label"] = overflow_query
+        display_results(more_final, search_params=overflow_params, is_new_search=True)
         st.session_state["_last_results"] = more_final
         st.session_state["_last_search_params"] = overflow_params
         return
@@ -1000,7 +1094,8 @@ def _run_search(merged_params: dict, raw_query: str, session: dict, sidebar_filt
         record("cache", {"hit": True, "result_count": len(cached["results"])})
         render_trace()
         _speak(cached.get("concierge_message", ""))
-        display_results(cached["results"], search_params=merged_params)
+        st.session_state["_last_query_label"] = raw_query
+        display_results(cached["results"], search_params=merged_params, is_new_search=True)
         st.session_state["_last_results"] = cached["results"]
         st.session_state["_last_search_params"] = merged_params
         return
@@ -1078,7 +1173,8 @@ def _run_search(merged_params: dict, raw_query: str, session: dict, sidebar_filt
                           "concierge_msg": msg[:200]})
         render_trace()
         _speak(_virtual_note + msg)
-        display_results(final, search_params=merged_params)
+        st.session_state["_last_query_label"] = raw_query
+        display_results(final, search_params=merged_params, is_new_search=True)
         _maybe_offer_more_camps(results, final, raw_query, merged_params,
                                 activity_overflow=_activity_overflow)
         st.session_state["_last_results"] = final
@@ -1115,7 +1211,8 @@ def _run_search(merged_params: dict, raw_query: str, session: dict, sidebar_filt
                                "concierge_msg": msg[:200]})
             render_trace()
             _speak(_virtual_note + msg)
-            display_results(final, search_params=merged_params)
+            st.session_state["_last_query_label"] = raw_query
+            display_results(final, search_params=merged_params, is_new_search=True)
             _maybe_offer_more_camps(all_results, final, raw_query, merged_params,
                                     activity_overflow=_activity_overflow)
             st.session_state["_last_results"] = final
@@ -1139,7 +1236,8 @@ def _run_search(merged_params: dict, raw_query: str, session: dict, sidebar_filt
                           "concierge_msg": msg[:200]})
         render_trace()
         _speak(_virtual_note + msg)
-        display_results(final, search_params=merged_params)
+        st.session_state["_last_query_label"] = raw_query
+        display_results(final, search_params=merged_params, is_new_search=True)
         _maybe_offer_more_camps(results, final, raw_query, merged_params,
                                 activity_overflow=_activity_overflow)
         st.session_state["_last_results"] = final
@@ -1167,7 +1265,8 @@ def _run_search(merged_params: dict, raw_query: str, session: dict, sidebar_filt
         render_trace()
         if results:
             _speak(_virtual_note + clarify_msg)
-            display_results(final, search_params=merged_params)
+            st.session_state["_last_query_label"] = raw_query
+            display_results(final, search_params=merged_params, is_new_search=True)
             st.session_state["_last_results"] = final
             st.session_state["_last_search_params"] = merged_params
             if intent:

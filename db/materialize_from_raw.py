@@ -470,7 +470,7 @@ def materialize_programs(cursor, conn, dry_run, dump_cids, force=False):
                 gender, mini_desc, description,
                 is_special_needs, is_virtual, is_family,
                 before_care, after_care,
-                lang_immersion
+                lang_immersion, s.get("id")
             ))
             session_traits.append((session_trait_ids, session_justifications))
 
@@ -545,8 +545,8 @@ def materialize_programs(cursor, conn, dry_run, dump_cids, force=False):
                 gender, mini_description, description,
                 is_special_needs, is_virtual, is_family,
                 before_care, after_care,
-                language_immersion, status)
-               VALUES (%s, %s, %s, %s, %s, %s, %s, %s, %s, %s, %s, %s, %s, %s, %s, %s, %s, %s, 1)""",
+                language_immersion, ourkids_session_id, status)
+               VALUES (%s, %s, %s, %s, %s, %s, %s, %s, %s, %s, %s, %s, %s, %s, %s, %s, %s, %s, %s, 1)""",
             program_rows
         )
         # Get the auto-increment IDs for the batch
@@ -810,12 +810,13 @@ def materialize_locations(cursor, conn, dry_run, dump_cids):
                 cursor.execute(
                     """INSERT INTO programs
                        (camp_id, name, type, age_from, age_to, cost_from, cost_to,
-                        mini_description, description, status)
-                       VALUES (%s,%s,%s,%s,%s,%s,%s,%s,%s,1)""",
+                        mini_description, description, ourkids_session_id, status)
+                       VALUES (%s,%s,%s,%s,%s,%s,%s,%s,%s,%s,1)""",
                     (new_camp_id, prog["name"], prog["type"],
                      prog.get("age_from"), prog.get("age_to"),
                      prog.get("cost_from"), prog.get("cost_to"),
-                     prog.get("mini_description", ""), prog.get("description", ""))
+                     prog.get("mini_description", ""), prog.get("description", ""),
+                     prog.get("ourkids_session_id"))
                 )
                 new_prog_id = cursor.lastrowid
                 cursor.execute(

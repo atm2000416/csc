@@ -295,7 +295,7 @@ def query(params: dict, limit: int = 500) -> tuple[list[dict], float]:
             p.age_from, p.age_to, p.cost_from, p.cost_to,
             p.gender, p.is_special_needs, p.is_virtual, p.language_immersion,
             p.mini_description, p.description,
-            p.start_date, p.end_date,
+            p.start_date, p.end_date, p.ourkids_session_id,
             c.camp_name, c.tier, c.review_avg, c.review_count, c.city, c.province,
             c.lat, c.lon, c.website, c.lgbtq_welcoming, c.accessibility, c.slug, c.prettyurl,
             {gender_select}

@@ -27,7 +27,7 @@ except (FileNotFoundError, json.JSONDecodeError, ValueError):
     pass  # Fail silently — program_tags path still works without overrides
 
 
-def query(params: dict, limit: int = 100) -> tuple[list[dict], float]:
+def query(params: dict, limit: int = 500) -> tuple[list[dict], float]:
     """
     Execute CSSL query with structured parameters.
 

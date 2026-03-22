@@ -336,7 +336,7 @@ from core.zero_results_advisor import diagnose
 from core.tracer import init_trace, record, render_trace
 from core.category_disambiguator import get_broad_parent, get_viable_children
 from core.concierge_response import generate as generate_concierge_response
-from ui.results_card import render_card, render_extra_sessions
+from ui.results_card import render_card, render_compact_card, render_extra_sessions
 from ui.filter_sidebar import render_filters, get_filter_values
 from ui.clarification_widget import render_clarification
 from ui.surprise_me import render_surprise_me  # noqa: F401 — kept for compat
@@ -375,9 +375,52 @@ def _check_camps_table() -> bool:
 
 # ── Result processing ─────────────────────────────────────────────────────────
 def process_results(results: list[dict], raw_query: str, intent_params: dict) -> list[dict]:
-    max_per_camp = int(get_secret("DIVERSITY_MAX_PER_CAMP", "2"))
-    diverse = diversity_filter(results, max_per_camp=max_per_camp)
-    return rerank(diverse, raw_query, intent_params, top_n=10)
+    """
+    Tiered ranking pipeline:
+      1. Diversity filter → 1 best program per camp
+      2. Rerank all camps via Claude
+      3. Gold camps: ALL shown (they paid for visibility)
+      4. Silver/Bronze: only those scoring above the gold cohort average
+         (silver > gold_avg, bronze > gold_avg + 0.05)
+      5. Return two lists via a '_tier_section' field:
+         'recommended' = gold + exceptional silver/bronze
+         'more'        = remaining silver/bronze that cleared threshold
+    """
+    # Step 1: 1 program per camp for reranking
+    diverse = diversity_filter(results, max_per_camp=1)
+
+    # Step 2: Rerank all camps (up to 75 for broad queries)
+    reranked = rerank(diverse, raw_query, intent_params, top_n=len(diverse))
+
+    # Step 3: Separate by tier
+    gold   = [r for r in reranked if r.get("tier") == "gold"]
+    silver = [r for r in reranked if r.get("tier") == "silver"]
+    bronze = [r for r in reranked if r.get("tier") == "bronze"]
+
+    # Step 4: Calculate gold average score → threshold for silver/bronze
+    gold_scores = [r.get("rerank_score", 0.0) for r in gold]
+    gold_avg = sum(gold_scores) / len(gold_scores) if gold_scores else 0.5
+
+    silver_threshold = gold_avg           # silver must beat gold average
+    bronze_threshold = gold_avg + 0.05    # bronze must clearly outperform
+
+    silver_in = [r for r in silver if r.get("rerank_score", 0.0) > silver_threshold]
+    bronze_in = [r for r in bronze if r.get("rerank_score", 0.0) > bronze_threshold]
+
+    # Step 5: Tag sections — gold are "recommended", qualifying silver/bronze are "more"
+    for r in gold:
+        r["_tier_section"] = "recommended"
+    for r in silver_in:
+        r["_tier_section"] = "more"
+    for r in bronze_in:
+        r["_tier_section"] = "more"
+
+    # Sort each group by rerank_score descending
+    gold.sort(key=lambda x: x.get("rerank_score", 0.0), reverse=True)
+    silver_in.sort(key=lambda x: x.get("rerank_score", 0.0), reverse=True)
+    bronze_in.sort(key=lambda x: x.get("rerank_score", 0.0), reverse=True)
+
+    return gold + silver_in + bronze_in
 
 
 @st.cache_data(ttl=300, show_spinner=False)
@@ -540,38 +583,48 @@ def display_results(results: list[dict], search_params: dict | None = None):
     if search_params is None:
         search_params = st.session_state.get("_last_search_params")
 
-    # Group by camp_id, preserving rank order (first occurrence = camp's rank)
-    groups: dict[int, list[dict]] = {}
-    for r in results:
-        cid = r.get("camp_id") or id(r)
-        if cid not in groups:
-            groups[cid] = []
-        groups[cid].append(r)
+    # Split into recommended vs more by _tier_section tag
+    recommended = [r for r in results if r.get("_tier_section") == "recommended"]
+    more        = [r for r in results if r.get("_tier_section") == "more"]
 
-    n_camps = len(groups)
+    # Fallback: if no _tier_section tags (e.g. cached results), show all as recommended
+    if not recommended and not more:
+        recommended = results
+
+    n_camps = len(results)
     count_label = f'{n_camps} camp{"s" if n_camps != 1 else ""} found'
     st.markdown(f'<p class="result-count">{count_label}</p>', unsafe_allow_html=True)
     render_filters()
 
-    for camp_sessions in groups.values():
-        top = camp_sessions[0]
-        render_card(top)
+    # ── Section 1: Recommended Camps (full cards) ────────────────────────────
+    for r in recommended:
+        render_card(r)
 
-        # Build the full session list for the expander:
-        # reranker extras + any remaining DB programs not yet shown
-        camp_id   = top.get("camp_id")
-        camp_name = top.get("camp_name", "")
-        shown_ids = {r.get("id") for r in camp_sessions}
-
-        db_extras = _fetch_all_camp_programs(camp_id, top.get("id", -1), camp_name,
+        # Show extra sessions from the same camp
+        camp_id   = r.get("camp_id")
+        camp_name = r.get("camp_name", "")
+        db_extras = _fetch_all_camp_programs(camp_id, r.get("id", -1), camp_name,
                                              search_params=search_params)
-        # Merge: reranker extras first (they have blurbs), then DB extras not already shown
-        reranker_extras = camp_sessions[1:]
-        db_only = [r for r in db_extras if r.get("id") not in shown_ids]
-        all_extras = reranker_extras + db_only
+        if db_extras:
+            render_extra_sessions(db_extras, camp_name, r.get("tier", "bronze"))
 
-        if all_extras:
-            render_extra_sessions(all_extras, camp_name, top.get("tier", "bronze"))
+    # ── Section 2: More Camps That Match (compact cards in expander) ─────────
+    if more:
+        n_more = len(more)
+        st.markdown(
+            f'<div style="margin:20px 0 10px 0; padding:0 0.4rem;">'
+            f'<p style="font-family:Nunito,sans-serif; font-weight:800; '
+            f'font-size:1.0rem; color:#2F4F4F; margin:0;">'
+            f'More Camps That Match</p>'
+            f'<p style="font-family:Lato,sans-serif; font-size:0.84rem; '
+            f'color:#5a7070; margin:2px 0 0 0;">'
+            f'{n_more} additional camp{"s" if n_more != 1 else ""} '
+            f'that scored well for your search</p>'
+            f'</div>',
+            unsafe_allow_html=True,
+        )
+        for r in more:
+            render_compact_card(r)
 
 
 _BUBBLE_BASE = (
@@ -930,7 +983,7 @@ def main():
 def _run_search(merged_params: dict, raw_query: str, session: dict, sidebar_filters: dict, intent=None):
     # Clear any stale "show more" state from the previous search turn.
     st.session_state.pop("_more_camps_pool", None)
-    pool_size = int(get_secret("RESULTS_POOL_SIZE", "100"))
+    pool_size = int(get_secret("RESULTS_POOL_SIZE", "500"))
 
     # Semantic cache check
     cache_key = build_cache_key({**merged_params, "_q": raw_query})

@@ -47,7 +47,7 @@ def rerank(
                 r["rerank_score"] = 1.0
         return results[:top_n]
 
-    candidates = results[:20]
+    candidates = results[:top_n]
 
     if len(candidates) <= 3:
         for r in candidates:
@@ -97,7 +97,7 @@ def rerank(
             model="claude-haiku-4-5-20251001",
             messages=[{"role": "user", "content": prompt}],
             temperature=0.1,
-            max_tokens=3000,
+            max_tokens=8000,
         )
         raw = response.content[0].text.strip()
         # Find the first { and parse from there — handles both compact {"ranked":...}

@@ -194,6 +194,76 @@ _ROW_LINK = (
 )
 
 
+def render_compact_card(result: dict):
+    """
+    Render a compact camp card for the "More Camps" section.
+    Shows camp name, location, ages, cost, and a one-line description
+    with a View button — no session-level detail or blurb.
+    """
+    tier     = result.get("tier", "bronze")
+    tier_col = _TIER_COLOUR.get(tier, _TIER_COLOUR["bronze"])
+
+    camp_name    = result.get("camp_name", "")
+    session_name = result.get("name") or "Summer Program"
+    city         = result.get("city", "")
+    province     = result.get("province", "")
+    location     = ", ".join(filter(None, [city, province]))
+    cost         = _cost_str(result.get("cost_from"), result.get("cost_to"))
+    ages         = _age_str(result.get("age_from"), result.get("age_to"))
+    camp_type    = _TYPE_LABEL.get(str(result.get("type", "")), "")
+    desc         = (result.get("mini_description") or result.get("description") or "")
+    if desc and len(desc) > 120:
+        desc = desc[:117].rsplit(" ", 1)[0] + "…"
+    prettyurl    = result.get("prettyurl") or result.get("slug", "")
+    website      = result.get("website", "")
+
+    # Compact pills
+    pills = []
+    if camp_type:
+        pills.append(f'<span style="{_PILL}">🏕 {camp_type}</span>')
+    if ages:
+        pills.append(f'<span style="{_PILL}">👦 {ages}</span>')
+    if location:
+        pills.append(f'<span style="{_PILL}">📍 {location}</span>')
+    if cost:
+        pills.append(f'<span style="{_PILL}">💰 {cost}</span>')
+    pills_html = f'<div style="margin:4px 0 4px 0; line-height:1.8;">{"".join(pills)}</div>' if pills else ""
+
+    # Link
+    link_html = ""
+    if prettyurl:
+        camp_id = result.get("camp_id") or result.get("id", "")
+        link_html = (
+            f'<a href="{_camps_url(prettyurl, camp_id)}" target="_blank" '
+            f'style="{_ROW_LINK} font-size:0.82rem;">View on camps.ca →</a>'
+        )
+
+    desc_html = (
+        f'<p style="margin:0; font-size:0.84rem; color:#4a5f5f; '
+        f'font-family:Lato,sans-serif; line-height:1.4;">{desc}</p>'
+    ) if desc else ""
+
+    card_html = (
+        f'<div style="padding:0 0.4rem; margin-bottom:6px;">'
+        f'<div style="border-left:3px solid {tier_col}; border-radius:10px; '
+        f'background:#ffffff; padding:10px 14px 8px 14px; '
+        f'box-shadow:0 1px 4px rgba(47,79,79,0.06);">'
+        f'<div style="display:flex; justify-content:space-between; align-items:flex-start;">'
+        f'  <div style="flex:1; min-width:0;">'
+        f'    <p style="margin:0 0 1px 0; font-family:Nunito,sans-serif; font-weight:800; '
+        f'    font-size:0.95rem; color:#2F4F4F;">{camp_name}</p>'
+        f'    <p style="margin:0 0 4px 0; font-size:0.82rem; font-weight:600; '
+        f'    font-family:Nunito,sans-serif; color:{tier_col};">{session_name}</p>'
+        f'  </div>'
+        f'  <div style="padding-top:4px; flex-shrink:0;">{link_html}</div>'
+        f'</div>'
+        + pills_html + desc_html
+        + '</div></div>'
+    )
+
+    st.markdown(card_html, unsafe_allow_html=True)
+
+
 def render_extra_sessions(extra: list[dict], camp_name: str, tier: str) -> None:
     """
     Render an expander below the primary card listing additional ranked sessions

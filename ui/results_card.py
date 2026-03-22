@@ -158,7 +158,7 @@ def render_card(result: dict):
     ) if links else ""
 
     # ── Assemble card ──────────────────────────────────────────────────────────
-    card_html = (
+    return (
         f'<div style="padding:0 0.4rem; margin-bottom:10px;">'
         f'<div style="border-left:4px solid {tier_col}; border-radius:12px; '
         f'background:#ffffff; padding:14px 16px 12px 16px; '
@@ -166,8 +166,6 @@ def render_card(result: dict):
         + line1 + line2 + line3 + line4
         + "</div></div>"
     )
-
-    st.markdown(card_html, unsafe_allow_html=True)
 
 
 # ── Compact row style (used inside the expander) ──────────────────────────────
@@ -235,7 +233,7 @@ def render_compact_card(result: dict):
         + '</div></div>'
     )
 
-    st.markdown(card_html, unsafe_allow_html=True)
+    return card_html
 
 
 def render_extra_sessions(extra: list[dict], camp_name: str, tier: str) -> None:
@@ -248,62 +246,57 @@ def render_extra_sessions(extra: list[dict], camp_name: str, tier: str) -> None:
     tier       — used for the accent colour on session names
     """
     if not extra:
-        return
+        return ""
 
     n      = len(extra)
     label  = f"{'1 more session' if n == 1 else f'{n} more sessions'} at {camp_name}"
     tier_col = _TIER_COLOUR.get(tier, _TIER_COLOUR["bronze"])
 
-    # Pull the expander flush against the card above it
-    st.markdown(
-        '<style>.extra-session-expander{margin-top:-14px !important;}</style>',
-        unsafe_allow_html=True,
-    )
+    rows_html = []
+    for r in extra:
+        name      = r.get("name") or "Session"
+        ages      = _age_str(r.get("age_from"), r.get("age_to"))
+        cost      = _cost_str(r.get("cost_from"), r.get("cost_to"))
+        camp_type = _TYPE_LABEL.get(str(r.get("type", "")), "")
+        # Prefer program_dates upcoming entries, fall back to program start/end
+        pdates    = r.get("program_dates") or []
+        if pdates:
+            first = pdates[0]
+            date_s = _date_range_str(first.get("start_date"), first.get("end_date"))
+        else:
+            date_s = _date_range_str(r.get("start_date"), r.get("end_date"))
 
-    with st.expander(label, expanded=False):
-        rows_html = []
-        for r in extra:
-            name      = r.get("name") or "Session"
-            ages      = _age_str(r.get("age_from"), r.get("age_to"))
-            cost      = _cost_str(r.get("cost_from"), r.get("cost_to"))
-            camp_type = _TYPE_LABEL.get(str(r.get("type", "")), "")
-            # Prefer program_dates upcoming entries, fall back to program start/end
-            pdates    = r.get("program_dates") or []
-            if pdates:
-                first = pdates[0]
-                date_s = _date_range_str(first.get("start_date"), first.get("end_date"))
-            else:
-                date_s = _date_range_str(r.get("start_date"), r.get("end_date"))
+        meta_parts = [p for p in [camp_type, ages, cost, date_s] if p]
+        meta_str   = "  ·  ".join(meta_parts)
 
-            meta_parts = [p for p in [camp_type, ages, cost, date_s] if p]
-            meta_str   = "  ·  ".join(meta_parts)
-
-            prettyurl = r.get("prettyurl") or r.get("slug", "")
-            ourkids_seid = r.get("ourkids_session_id")
-            link_html = ""
-            if prettyurl:
-                camp_id = r.get("camp_id") or r.get("id", "")
-                link_html = (
-                    f'<a href="{_camps_url(prettyurl, camp_id, ourkids_seid, _UTM_MORE)}" '
-                    f'target="_blank" rel="noopener" '
-                    f'style="{_ROW_LINK}">View ↗</a>'
-                )
-
-            rows_html.append(
-                f'<div style="display:flex; justify-content:space-between; '
-                f'align-items:flex-start; padding:8px 0; '
-                f'border-bottom:1px solid #e0e0e0;">'
-                f'  <div style="flex:1; min-width:0; padding-right:12px;">'
-                f'    <p style="{_ROW_NAME} color:{tier_col};">{name}</p>'
-                f'    <p style="{_ROW_META}">{meta_str}</p>'
-                f'  </div>'
-                f'  <div style="padding-top:2px;">{link_html}</div>'
-                f'</div>'
+        prettyurl = r.get("prettyurl") or r.get("slug", "")
+        ourkids_seid = r.get("ourkids_session_id")
+        link_html = ""
+        if prettyurl:
+            camp_id = r.get("camp_id") or r.get("id", "")
+            link_html = (
+                f'<a href="{_camps_url(prettyurl, camp_id, ourkids_seid, _UTM_MORE)}" '
+                f'target="_blank" rel="noopener" '
+                f'style="{_ROW_LINK}">View ↗</a>'
             )
 
-        # Remove bottom border from last row
-        all_rows = "".join(rows_html)
-        st.markdown(
-            f'<div style="padding:0 4px;">{all_rows}</div>',
-            unsafe_allow_html=True,
+        rows_html.append(
+            f'<div style="display:flex; justify-content:space-between; '
+            f'align-items:flex-start; padding:8px 0; '
+            f'border-bottom:1px solid #e0e0e0;">'
+            f'  <div style="flex:1; min-width:0; padding-right:12px;">'
+            f'    <p style="{_ROW_NAME} color:{tier_col};">{name}</p>'
+            f'    <p style="{_ROW_META}">{meta_str}</p>'
+            f'  </div>'
+            f'  <div style="padding-top:2px;">{link_html}</div>'
+            f'</div>'
         )
+
+    all_rows = "".join(rows_html)
+    return (
+        f'<details style="margin:-8px 0.4rem 10px; cursor:pointer;">'
+        f'<summary style="font-family:Nunito,sans-serif; font-size:0.82rem; '
+        f'font-weight:700; color:#555555; padding:6px 0;">{label}</summary>'
+        f'<div style="padding:0 4px;">{all_rows}</div>'
+        f'</details>'
+    )

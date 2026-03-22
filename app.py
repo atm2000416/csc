@@ -685,30 +685,41 @@ def display_results(results: list[dict], search_params: dict | None = None,
     n_recommended = len(recommended)
     count_label = f'{n_recommended} camp{"s" if n_recommended != 1 else ""} found'
 
-    # Scroll anchor — user sees top of results first
-    st.markdown('<div id="results-top"></div>', unsafe_allow_html=True)
-    st.markdown(f'<p class="result-count">{count_label}</p>', unsafe_allow_html=True)
-    render_filters()
+    # Build results HTML — all cards composed into a single block
+    parts = [f'<p class="result-count">{count_label}</p>']
 
-    # ── Section 1: Recommended Camps (full cards) ────────────────────────────
     for r in recommended:
-        render_card(r)
+        parts.append(render_card(r))
 
-        # Show extra sessions from the same camp
+        # Extra sessions from the same camp
         camp_id   = r.get("camp_id")
         camp_name = r.get("camp_name", "")
         db_extras = _fetch_all_camp_programs(camp_id, r.get("id", -1), camp_name,
                                              search_params=search_params)
         if db_extras:
-            render_extra_sessions(db_extras, camp_name, r.get("tier", "bronze"))
+            parts.append(render_extra_sessions(db_extras, camp_name, r.get("tier", "bronze")))
 
-    # ── Section 2: More Camps That Match (collapsed expander) ───────────────
+    # More camps section as HTML <details>
     if more:
         n_more = len(more)
         label = f"Show {n_more} more camp{'s' if n_more != 1 else ''} that match"
-        with st.expander(label, expanded=False):
-            for r in more:
-                render_compact_card(r)
+        more_cards = "".join(render_compact_card(r) for r in more)
+        parts.append(
+            f'<details style="margin:8px 0.4rem; cursor:pointer;">'
+            f'<summary style="font-family:Nunito,sans-serif; font-size:0.82rem; '
+            f'font-weight:700; color:#336699; padding:6px 0;">{label}</summary>'
+            f'{more_cards}</details>'
+        )
+
+    results_html = "".join(parts)
+
+    # Store results HTML for re-render (separate from _messages to support
+    # "replace results" behavior — only latest results shown, not all history)
+    st.session_state["_last_results_html"] = results_html
+
+    # Render as AI bubble with scroll anchor
+    st.markdown('<div id="results-top"></div>', unsafe_allow_html=True)
+    _render_bubble(results_html, "assistant")
 
     # Scroll to top of results
     import streamlit.components.v1 as components
@@ -923,11 +934,13 @@ def main():
 
     if not user_input:
         messages = st.session_state.get("_messages", [])
-        prior    = st.session_state.get("_last_results")
-        if messages or prior:
+        results_html = st.session_state.get("_last_results_html")
+        if messages or results_html:
             _render_history()
-            if prior:
-                display_results(prior)
+            if results_html:
+                _render_search_history()
+                st.markdown('<div id="results-top"></div>', unsafe_allow_html=True)
+                _render_bubble(results_html, "assistant")
             # Re-render disambiguation buttons if the user hasn't picked yet
             _render_pending_picker()
         else:

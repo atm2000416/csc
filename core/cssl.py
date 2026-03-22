@@ -308,7 +308,7 @@ def query(params: dict, limit: int = 500) -> tuple[list[dict], float]:
             {specialty_boost}
             {trait_boost}
             _tier_score ASC,
-            c.review_avg DESC
+            COALESCE(c.review_count, 0) DESC
         LIMIT %(limit)s
     """
     args["limit"] = limit

@@ -407,20 +407,38 @@ def process_results(results: list[dict], raw_query: str, intent_params: dict) ->
     silver_in = [r for r in silver if r.get("rerank_score", 0.0) > silver_threshold]
     bronze_in = [r for r in bronze if r.get("rerank_score", 0.0) > bronze_threshold]
 
-    # Step 5: Tag sections — gold are "recommended", qualifying silver/bronze are "more"
-    for r in gold:
-        r["_tier_section"] = "recommended"
-    for r in silver_in:
-        r["_tier_section"] = "more"
-    for r in bronze_in:
-        r["_tier_section"] = "more"
+    # Step 5: Page 1 cap of 15 — gold first, then fill with silver/bronze
+    PAGE_1_CAP = 15
 
-    # Sort each group by rerank_score descending
     gold.sort(key=lambda x: x.get("rerank_score", 0.0), reverse=True)
     silver_in.sort(key=lambda x: x.get("rerank_score", 0.0), reverse=True)
     bronze_in.sort(key=lambda x: x.get("rerank_score", 0.0), reverse=True)
 
-    return gold + silver_in + bronze_in
+    # Gold gets priority slots, silver/bronze fill remaining up to cap
+    recommended = []
+    more = []
+
+    if len(gold) <= PAGE_1_CAP:
+        # All gold fit on page 1 — fill remaining slots with best silver/bronze
+        recommended = list(gold)
+        remaining = PAGE_1_CAP - len(gold)
+        # Merge silver + bronze by score for the fill slots
+        fill_pool = sorted(silver_in + bronze_in,
+                           key=lambda x: x.get("rerank_score", 0.0), reverse=True)
+        recommended.extend(fill_pool[:remaining])
+        more = fill_pool[remaining:]
+    else:
+        # More gold than cap — top 15 gold on page 1, rest overflow
+        recommended = gold[:PAGE_1_CAP]
+        more = gold[PAGE_1_CAP:] + silver_in + bronze_in
+        more.sort(key=lambda x: x.get("rerank_score", 0.0), reverse=True)
+
+    for r in recommended:
+        r["_tier_section"] = "recommended"
+    for r in more:
+        r["_tier_section"] = "more"
+
+    return recommended + more
 
 
 @st.cache_data(ttl=300, show_spinner=False)

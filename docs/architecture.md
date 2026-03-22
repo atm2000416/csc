@@ -293,10 +293,10 @@ The `tag_role` values come from OurKids focus levels set by the camps themselves
 | Gender | Soft match: exact requested gender OR coed (`gender=0`) OR NULL |
 | Cost | `p.cost_from ≤ cost_max` |
 | Date range | JOIN `program_dates` with slot overlap check |
-| Traits | `program_traits.trait_id IN (…)` |
+| Traits | `program_traits.trait_id IN (…)` — ranking boost only, not a hard filter |
 | Special needs | `p.is_special_needs = 1` |
 | Virtual | `p.is_virtual = 1` |
-| Language | `p.language_immersion = ?` |
+| Language | Boost only — `language_immersion` column has 24 programmes; most language camps found via `language-instruction` tag |
 
 **Result Confidence Score (RCS):**
 
@@ -432,14 +432,22 @@ A cache hit replays the stored response in <100ms. Cache misses continue through
 
 **Role:** When all routes fail to produce usable results, diagnose why and offer a specific recovery action.
 
+**Critical design rule:** The advisor must apply **all the same filters as CSSL** (type, gender, cost, age, language_immersion, is_special_needs, is_virtual). If the advisor counts programmes without a filter that CSSL applies, it will suggest broadening that cannot help — creating an **endless loop** (advisor suggests city → CSSL gets 0 → advisor suggests province → CSSL gets 0 → repeat).
+
+**Two diagnostic paths:**
+
+1. **Tag-based path** (`tag_ids` non-empty): Queries for programmes matching the tags with all CSSL filters applied, grouped by city. Used when the user asked for a specific activity.
+2. **Geo-only path** (`tag_ids` empty): Checks whether ANY camps exist in the searched city/province with all filters applied. Used when the user provided location/age/gender but no activity.
+
 **Failure types and responses:**
 
 | Type | Cause | Response |
 |------|-------|---------|
-| `geo_too_narrow` | City search with no camps in that city | Offer to broaden to province |
-| `tags_no_match` | Activity tag exists but no camps offer it | Suggest related activities |
-| `filters_too_strict` | Age/cost/type filters eliminated all results | Suggest relaxing filters |
-| `no_data` | Completely unrecognised query | Ask user to rephrase |
+| `geo_broaden_specific` | Activity exists in another city in the same province | "No results in [city], but I found N programmes in [nearby city]. Want me to show those?" |
+| `geo_broaden_province` | City has no camps at all | "We don't have camps in [city] yet, but there are N programmes across [province]" |
+| `no_supply` | Activity/filter combination has zero results anywhere | "We don't currently have [X] camps in our directory" — names the blocking filter (e.g., "French-immersion camps") |
+| `no_tags` (with geo) | No activity identified but camps exist in area | "I found camps in [city], what type of camp interests you?" |
+| `no_tags` (no geo) | Nothing useful extracted | "Could not identify the activity requested" |
 
 Recovery actions are stored as `PendingAction` in `QueryState`. If the user says "yes" on the next turn, the action is applied and CSSL is re-run without going through the LLM again.
 
@@ -506,12 +514,12 @@ The 10 reranked programs are grouped by `camp_id` for display, preserving rank o
 | Table | Key Columns | Purpose |
 |-------|-------------|---------|
 | `camps` | `id, camp_name, tier, city, province, lat, lon, slug, website, status, review_avg` | Camp master record |
-| `programs` | `id, camp_id, name, type, age_from, age_to, cost_from, cost_to, status, start_date, end_date, gender, is_special_needs, is_virtual, language_immersion` | Individual programme / session offering |
+| `programs` | `id, camp_id, name, type, age_from, age_to, cost_from, cost_to, gender, is_special_needs, is_virtual, is_family, before_care, after_care, language_immersion, mini_description, description, start_date, end_date, status` | Individual programme / session offering |
 | `program_dates` | `program_id, start_date, end_date` | Scheduled date slots per programme |
 | `activity_tags` | `id, slug, is_active, related_ids` | Taxonomy of activities; `related_ids` powers CASL |
-| `program_tags` | `program_id, tag_id, is_primary` | Many-to-many; `is_primary` marks the camp's core activity |
-| `traits` | `id, slug` | Character traits (teamwork, resilience, courage, etc.) |
-| `program_traits` | `program_id, trait_id` | Many-to-many trait assignments |
+| `program_tags` | `program_id, tag_id, is_primary, tag_role, source` | Many-to-many; `is_primary` marks core activity; `tag_role` = specialty/category/activity; `source` = ourkids/scraper/manual |
+| `traits` | `id, name, slug` | 12 character traits (Teamwork, Resilience, Creativity, etc.) |
+| `program_traits` | `program_id, trait_id, justification` | Many-to-many trait assignments with camp-authored justification text |
 | `categories` | `slug, filter_activity_tags, is_active` | Hierarchical tag expansion for CSSL |
 
 ### 7.2 Taxonomy Mapping (`taxonomy_mapping.py`)
@@ -566,14 +574,107 @@ Operations performed on every run:
 | Load raw tables | DROP + CREATE `ok_*` staging tables from dump SQL (MyISAM→InnoDB, zero-date mode) |
 | Upsert active camps | INSERT new, UPDATE tier/meta/prettyurl for existing from `ok_camps` |
 | Sync programs | DELETE + reinsert all programs from `ok_sessions` (all sessions imported, no status filter) |
-| Sync program_tags | 3-tier tagging from sitems: specialty → category → activities with **focus level mapping** (`[ID]level` → tag_role), keyword fallback |
+| Sync program_tags | 4-source tagging: specialty, specialty2, category, activities with **focus level mapping** (`[ID]level` → tag_role), keyword fallback |
+| Sync program_traits | `ok_sessions.trait1/trait2` → `program_traits` via `_TRAIT_MAP` with justification text |
 | Sync program_dates | Refresh future date rows from `ok_session_date` |
 | Sync locations | Multi-location camps via `ok_extra_locations` |
 | Deactivate departed | `--deactivate` flag: status=0 for camps in Aiven but not in dump |
 
-**Tag resolution pipeline:** `ok_sessions.specialty/category/activities` → `ok_sitems.item` → `WEBITEMS_TO_SLUG` bridge → `activity_tags.slug` → `program_tags` with `tag_role`. The `activities` field uses format `[sitem_id]focus_level` where the focus level maps to tag_role: **3** (intense) → `specialty`, **2** (instructional) → `category`, **1** (recreational) → `activity`. These levels are set by the camps themselves during their OurKids listing setup. Keyword inference (`infer_tags()`) as fallback for sessions with no sitems data.
+#### Field-by-field materialization from `ok_sessions` → `programs`
+
+The following table documents every field materialized from OurKids' `ok_sessions` staging table into the CSC `programs` table. This mapping is the contract between the OurKids data model and CSC — any new platform connecting to CSC must provide equivalent fields.
+
+| ok_sessions column | CSC programs column | Transform | Coverage |
+|--------------------|--------------------|-----------|---------:|
+| `class_name` | `name` | Direct copy (NOT `name` — OurKids uses `class_name`) | 100% |
+| `type` | `type` | Direct copy: `'1'`=Day, `'2'`=Overnight, `'4'`=Virtual, comma-separated for multiple | 100% |
+| `gender` | `gender` | `_GENDER_MAP`: OurKids `0=unset,1=Coed,2=Girls,3=Boys` → CSC `0=Coed,1=Boys,2=Girls` | 98% |
+| `age_from` / `age_to` | `age_from` / `age_to` | Direct copy | 100% |
+| `cost_from` / `cost_to` | `cost_from` / `cost_to` | Direct copy | 97% |
+| `start` / `end` | `start_date` / `end_date` | Rename; zero dates (`0000-00-00`) → NULL | 98% |
+| `mini_description` | `mini_description` | Truncated to 500 chars | 100% |
+| `description` | `description` | Direct copy (HTML text, full programme description) | 93% |
+| `isspecialneeds` | `is_special_needs` | `'1'` → 1, else 0 | 100% |
+| `isvirtual` | `is_virtual` | `1/'1'` → 1, else 0 | 100% |
+| `isfamily` | `is_family` | `1/'1'` → 1, else 0 | 3% |
+| `before_care` | `before_care` | `1/'1'` → 1, else 0 | 14% |
+| `after_care` | `after_care` | `1/'1'` → 1, else 0 | 15% |
+| `language_immersion` | `language_immersion` | Decoded from sitem ID encoding (e.g. `'193+283'` → `'French'`) via `_LANG_SITEMS`. Only non-English languages stored. | 2.5% raw → 24 programmes |
+
+#### Tag resolution pipeline
+
+`ok_sessions` provides four tag sources, resolved in priority order:
+
+```
+ok_sessions.specialty     → ok_sitems.item → WEBITEMS_TO_SLUG → program_tags (tag_role='specialty')
+ok_sessions.category      → ok_sitems.item → WEBITEMS_TO_SLUG → program_tags (tag_role='category')
+ok_sessions.specialty2    → ok_sitems.item → WEBITEMS_TO_SLUG → program_tags (tag_role='category')
+ok_sessions.activities    → [sitem_id]focus_level → tag_role mapping → program_tags
+                            focus_level: 3=intense→specialty, 2=instructional→category, 1=recreational→activity
+```
+
+`specialty2` was added in March 2026 — a second specialty sitem declared by 22% of sessions. It adds ~500 additional tags, primarily in STEM, arts-crafts, technology, and nature categories.
+
+Keyword inference (`infer_tags()`) is the fallback for sessions with no sitems data.
+
+All tag sources write to `program_tags` with a `source` column: `ourkids` (from sitems), `scraper` (from camps.ca pages), `manual`. The 20K-floor safety gate in `materialize_from_raw.py` aborts if total tag count drops below 20,000.
+
+#### Trait materialization
+
+`ok_sessions.trait1` and `trait2` are OurKids trait IDs (1–12) that identify character development outcomes the camp associates with each programme. These map to the CSC `traits` table (IDs 10–22) via `_TRAIT_MAP`:
+
+| OurKids ID | Trait | CSC ID |
+|:---:|-------|:---:|
+| 1 | Responsibility | 15 |
+| 2 | Independence | 14 |
+| 3 | Teamwork | 10 |
+| 4 | Courage | 13 |
+| 5 | Resilience | 11 |
+| 6 | Interpersonal Skills | 16 |
+| 7 | Curiosity | 12 |
+| 8 | Creativity | 17 |
+| 9 | Physicality | 18 |
+| 10 | Generosity | 19 |
+| 11 | Tolerance | 20 |
+| 12 | Religious Faith | 22 |
+
+Each trait comes with a `justification` field (from `ok_sessions.justification1/justification2`) — a camp-authored explanation of how the programme develops that trait (e.g., *"Campers learn the art of group living and independent problem-solving"*). Stub justifications (`.` or empty) are stored as NULL.
+
+**Coverage:** ~3,999 programme-trait assignments across 30% of active sessions. Most common: Creativity (847), Curiosity (605), Interpersonal Skills (603).
+
+#### Language immersion decoding
+
+`ok_sessions.language_immersion` stores encoded sitem ID pairs (e.g., `'193+283'` = French + Immersion, `'199+284'` = English + ESL). The `_LANG_SITEMS` map decodes the language component:
+
+| Sitem ID | Language |
+|:---:|----------|
+| 192 | Mandarin |
+| 193 | French |
+| 198 | Spanish |
+| 199 | English |
+| 262 | German |
+| 283 | (Immersion modifier) |
+| 284 | (Second-language support modifier) |
+
+Only non-English languages are stored in `programs.language_immersion`. Result: 20 French, 2 Spanish, 2 German programmes. The `language-instruction` activity tag provides broader coverage (308 programmes) and is the primary search mechanism for language queries.
 
 **Gender mapping:** OurKids `0=unset, 1=Coed, 2=Girls, 3=Boys` → CSC `0=Coed, 1=Boys, 2=Girls` via `_GENDER_MAP`. The old regex ETL accidentally filtered by the gender field (position 7), dropping all non-coed sessions.
+
+#### Adapting to other OurKids platforms
+
+The materialization pipeline is designed to be reusable for other verticals OurKids manages (e.g., tutoring, private schools). The key integration points:
+
+1. **`load_raw_tables.py`** — platform-agnostic; imports any mysqldump as `ok_*` staging tables. No field assumptions.
+2. **`materialize_from_raw.py`** — platform-specific; the field mapping table above is the contract. A new platform needs:
+   - A session/programme table with at minimum: name, type, age range, cost, dates, description
+   - A sitems/taxonomy table for tag resolution (or equivalent tagging system)
+   - The `WEBITEMS_TO_SLUG` bridge mapping platform-specific activity IDs → CSC activity tag slugs
+   - Gender, trait, and language mappings if the platform uses different encoding schemes
+3. **`_GENDER_MAP`, `_TRAIT_MAP`, `_LANG_SITEMS`** — encoding-specific lookup tables. Each platform may use different integer codes for the same concepts. These maps must be verified against real data (e.g., find a known boys-only listing and confirm its raw gender code).
+4. **`WEBITEMS_TO_SLUG`** in `tag_from_campsca_pages.py` — bridges platform-specific sitem IDs to CSC's unified tag slugs. Currently 188 mappings for camps. A new platform would need its own bridge table or extend the existing one.
+5. **Safety gates** — the 20K-floor tag count check prevents bulk data corruption. Adjust the threshold per platform based on expected tag volume.
+
+**What stays constant across platforms:** The search pipeline (CSSL, CASL, decision matrix, reranker, concierge) is platform-agnostic. It operates on `programs`, `program_tags`, `program_traits`, and `camps` — the canonical CSC schema. Only the materialization layer changes per platform.
 
 **Protected IDs** (never deactivated): `422` Canlan Etobicoke · `529` Canlan Scarborough · `579` Canlan Oakville · `1647` Idea Labs Pickering.
 

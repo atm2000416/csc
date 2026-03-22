@@ -721,6 +721,9 @@ def display_results(results: list[dict], search_params: dict | None = None,
     st.markdown('<div id="results-top"></div>', unsafe_allow_html=True)
     _render_bubble(results_html, "assistant")
 
+    # Filter bar + debug — rendered outside bubble as Streamlit widgets
+    render_filters()
+
     # Scroll to top of results
     import streamlit.components.v1 as components
     components.html(
@@ -941,6 +944,7 @@ def main():
                 _render_search_history()
                 st.markdown('<div id="results-top"></div>', unsafe_allow_html=True)
                 _render_bubble(results_html, "assistant")
+                render_filters()
             # Re-render disambiguation buttons if the user hasn't picked yet
             _render_pending_picker()
         else:

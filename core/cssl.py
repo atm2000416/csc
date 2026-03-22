@@ -187,10 +187,12 @@ def query(params: dict, limit: int = 500) -> tuple[list[dict], float]:
     if params.get("is_virtual"):
         conditions.append("p.is_virtual = 1")
 
-    # Language immersion
-    if params.get("language_immersion"):
-        conditions.append("p.language_immersion = %(language_immersion)s")
-        args["language_immersion"] = params["language_immersion"]
+    # Language immersion — column is not populated in current data pipeline.
+    # French/Spanish camps are found via tags (e.g. language-instruction).
+    # Keeping the param for future use but not filtering on an empty column.
+    # if params.get("language_immersion"):
+    #     conditions.append("p.language_immersion = %(language_immersion)s")
+    #     args["language_immersion"] = params["language_immersion"]
 
     # Date range — only match programs with a scheduled slot overlapping the window
     # (Programs with no program_dates are excluded when this filter is active;

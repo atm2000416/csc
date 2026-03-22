@@ -187,9 +187,11 @@ def query(params: dict, limit: int = 500) -> tuple[list[dict], float]:
     if params.get("is_virtual"):
         conditions.append("p.is_virtual = 1")
 
-    # Language immersion — column is not populated in current data pipeline.
-    # French/Spanish camps are found via tags (e.g. language-instruction).
-    # Keeping the param for future use but not filtering on an empty column.
+    # Language immersion — use as a ranking boost, not a hard filter.
+    # Only 24 programs have the column populated, so filtering would miss
+    # camps found via tags (language-instruction). Instead, boost exact
+    # matches in ORDER BY so French-immersion camps rank above general
+    # language camps.
     # if params.get("language_immersion"):
     #     conditions.append("p.language_immersion = %(language_immersion)s")
     #     args["language_immersion"] = params["language_immersion"]

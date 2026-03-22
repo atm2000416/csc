@@ -95,8 +95,12 @@ def _ensure_unique_slug(cursor, slug_base):
 
 
 def _name_related(a, b):
-    stop = {"camp", "the", "of", "at", "in", "and", "&", "-", "summer",
-            "day", "sports", "inc", "ltd", "school", "schools"}
+    stop = {"camp", "camps", "the", "of", "at", "in", "and", "&", "-",
+            "summer", "day", "sports", "inc", "ltd", "school", "schools",
+            "programs", "program", "programme", "programmes",
+            "centre", "center", "academy", "club", "classes", "courses",
+            "studio", "studios", "arts", "music", "kids", "learning",
+            "college", "for", "march", "break"}
     a_sig = set(a.lower().split()) - stop
     b_sig = set(b.lower().split()) - stop
     return bool(a_sig & b_sig) if a_sig and b_sig else False
@@ -332,16 +336,20 @@ def materialize_programs(cursor, conn, dry_run, dump_cids, force=False):
         r["_name"] = name
         sessions_by_camp[cid].append(r)
 
-    # Deduplicate by cleaned name per camp
+    # Deduplicate by cleaned name per camp — prefer session with richer tag data
     for cid in list(sessions_by_camp.keys()):
         seen = {}
-        deduped = []
         for s in sessions_by_camp[cid]:
             clean_key = re.sub(r'\s+', ' ', s["_name"].strip().lower())
             if clean_key not in seen:
-                seen[clean_key] = True
-                deduped.append(s)
-        sessions_by_camp[cid] = deduped
+                seen[clean_key] = s
+            else:
+                # Keep the session with more tag data (activities field)
+                existing_acts = len(str(seen[clean_key].get("activities") or ""))
+                new_acts = len(str(s.get("activities") or ""))
+                if new_acts > existing_acts:
+                    seen[clean_key] = s
+        sessions_by_camp[cid] = list(seen.values())
 
     total_sessions = sum(len(v) for v in sessions_by_camp.values())
     camps_with = len(sessions_by_camp)
@@ -707,9 +715,81 @@ def materialize_dates(cursor, conn, dry_run):
     return stats
 
 
+def _refresh_branch(cursor, primary_id, branch_id, loc_ids=None):
+    """Refresh a location-branch camp's programs from its primary.
+
+    Deletes stale programs on the branch and copies current programs
+    (with tags) from the primary.  Also ensures the branch is active
+    if the primary is active.
+
+    loc_ids: if provided (set of ok_extra_locations.id ints), only copy
+    programs whose ok_sessions.locs includes at least one of these IDs.
+    If None, copies all programs from the primary.
+    """
+    # Ensure branch is active
+    cursor.execute("UPDATE camps SET status = 1 WHERE id = %s AND status = 0",
+                   (branch_id,))
+
+    # Delete old branch programs + their tags/traits/dates
+    cursor.execute("SELECT id FROM programs WHERE camp_id = %s", (branch_id,))
+    old_ids = [r["id"] for r in cursor.fetchall()]
+    if old_ids:
+        id_list = ",".join(str(x) for x in old_ids)
+        cursor.execute(f"DELETE FROM program_tags  WHERE program_id IN ({id_list})")
+        cursor.execute(f"DELETE FROM program_dates WHERE program_id IN ({id_list})")
+        cursor.execute(f"DELETE FROM programs      WHERE id          IN ({id_list})")
+
+    # Build set of ourkids_session_ids that run at this location
+    session_ids_at_loc = None
+    if loc_ids:
+        cursor.execute(
+            "SELECT id, locs FROM ok_sessions WHERE cid = %s AND locs IS NOT NULL",
+            (primary_id,))
+        session_ids_at_loc = set()
+        for row in cursor.fetchall():
+            sess_locs = {int(x.strip()) for x in row["locs"].split(",")
+                         if x.strip().isdigit()}
+            if sess_locs & loc_ids:
+                session_ids_at_loc.add(row["id"])
+
+    # Copy current programs from primary
+    cursor.execute(
+        "SELECT * FROM programs WHERE camp_id = %s AND status = 1", (primary_id,))
+    for prog in cursor.fetchall():
+        # If we have location data, only copy programs that run at this branch
+        if session_ids_at_loc is not None:
+            sess_id = prog.get("ourkids_session_id")
+            if sess_id and sess_id not in session_ids_at_loc:
+                continue
+
+        cursor.execute(
+            """INSERT INTO programs
+               (camp_id, name, type, age_from, age_to, cost_from, cost_to,
+                mini_description, description, ourkids_session_id, status)
+               VALUES (%s,%s,%s,%s,%s,%s,%s,%s,%s,%s,1)""",
+            (branch_id, prog["name"], prog["type"],
+             prog.get("age_from"), prog.get("age_to"),
+             prog.get("cost_from"), prog.get("cost_to"),
+             prog.get("mini_description", ""), prog.get("description", ""),
+             prog.get("ourkids_session_id")))
+        new_prog_id = cursor.lastrowid
+        cursor.execute(
+            "SELECT tag_id, is_primary, tag_role, source "
+            "FROM program_tags WHERE program_id = %s",
+            (prog["id"],))
+        for tag_row in cursor.fetchall():
+            cursor.execute(
+                "INSERT IGNORE INTO program_tags "
+                "(program_id, tag_id, is_primary, tag_role, source) "
+                "VALUES (%s,%s,%s,%s,%s)",
+                (new_prog_id, tag_row["tag_id"],
+                 tag_row["is_primary"], tag_row["tag_role"],
+                 tag_row.get("source", "ourkids")))
+
+
 def materialize_locations(cursor, conn, dry_run, dump_cids):
-    """Create location-branch camps from ok_extra_locations."""
-    stats = {"added": 0}
+    """Create or refresh location-branch camps from ok_extra_locations."""
+    stats = {"added": 0, "refreshed": 0}
 
     print("=== Extra locations ===")
 
@@ -735,6 +815,7 @@ def materialize_locations(cursor, conn, dry_run, dump_cids):
         except (ValueError, TypeError):
             lat = lon = None
         dump_locs[r.get("cid")].append({
+            "loc_id": r.get("id"),
             "city": city, "province": province,
             "lat": lat, "lon": lon,
             "address": (r.get("address") or "").strip(),
@@ -773,6 +854,19 @@ def materialize_locations(cursor, conn, dry_run, dump_cids):
             related = [m for m in all_matches
                        if _name_related(primary["camp_name"], m["camp_name"])]
             if related:
+                # Branch already exists — refresh its programs and ensure active.
+                # Collect all loc_ids for this city so we only copy programs
+                # that actually run at this branch's location(s).
+                city_loc_ids = {l["loc_id"] for l in locs
+                                if l["city"].lower() == loc["city"].lower()
+                                and l.get("loc_id")}
+                if not dry_run:
+                    for branch in related:
+                        if branch["id"] == cid:
+                            continue  # skip the primary itself
+                        _refresh_branch(cursor, cid, branch["id"],
+                                        loc_ids=city_loc_ids or None)
+                        stats["refreshed"] += 1
                 continue
 
             camp_name = f"{primary['camp_name']} - {loc['city']}"
@@ -850,8 +944,10 @@ def materialize_locations(cursor, conn, dry_run, dump_cids):
         conn.commit()
 
     stats["added"] = added
-    if not added:
+    if not added and not stats["refreshed"]:
         print("  No missing locations.")
+    elif stats["refreshed"]:
+        print(f"  Refreshed {stats['refreshed']} existing branches")
     print()
     return stats
 
@@ -1066,6 +1162,7 @@ def run(dry_run, skip_ids, deactivate, force=False):
     print(f"  Traits inserted:    {prog_stats['traits_inserted']}")
     print(f"  Dates inserted:     {date_stats['inserted']}")
     print(f"  Locations added:    {loc_stats['added']}")
+    print(f"  Branches refreshed: {loc_stats['refreshed']}")
     print(f"  Branch tags copied: {branch_stats['tags_copied']}")
     print("=" * 60)
 
